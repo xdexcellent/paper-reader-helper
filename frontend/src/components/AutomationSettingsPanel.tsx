@@ -3,7 +3,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { fetchAutomationSettings, updateAutomationSettings } from '../lib/api'
 import type { AutomationSettings } from '../types'
 
-export function AutomationSettingsPanel() {
+export function AutomationSettingsPanel({
+  onSaved,
+}: {
+  onSaved?: (settings: AutomationSettings) => void | Promise<void>
+}) {
   const [open, setOpen] = useState(false)
   const [settings, setSettings] = useState<AutomationSettings | null>(null)
   const [status, setStatus] = useState('')
@@ -36,6 +40,9 @@ export function AutomationSettingsPanel() {
     try {
       const next = await updateAutomationSettings(settings)
       setSettings(next)
+      if (onSaved) {
+        await onSaved(next)
+      }
       setStatus('设置已保存')
       setOpen(false)
     } catch (error) {

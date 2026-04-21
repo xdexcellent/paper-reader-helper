@@ -640,6 +640,39 @@ test('可以在工作看板更新自动化设置并触发今天补跑', async ()
     briefing_enabled: true,
     project_sidebar_enabled: false,
   })
+  apiMocks.fetchAutomationStatusToday.mockResolvedValueOnce({
+    local_today: '2026-04-19',
+    enabled: true,
+    briefing_enabled: true,
+    schedule_time: '13:00',
+    timezone: 'Asia/Shanghai',
+    today_run: {
+      id: 1,
+      status: 'completed',
+      trigger_type: 'scheduled',
+      started_at: '2026-04-19T12:00:00+08:00',
+      completed_at: '2026-04-19T12:05:00+08:00',
+      error_message: null,
+    },
+    today_briefing_exists: true,
+    fallback_used: false,
+    fallback_briefing_date: null,
+  })
+  apiMocks.fetchBriefing.mockResolvedValueOnce({
+    briefing_date: '2026-04-19',
+    status: 'completed',
+    generated_at: '2026-04-19T12:00:00+08:00',
+    daily_run_id: 1,
+    trigger_type: 'scheduled',
+    summary_markdown: '今日精选',
+    paper_count: 0,
+    project_count: 0,
+    source_count: 0,
+    fallback_used: false,
+    top_papers: [],
+    projects: [],
+  })
+  apiMocks.fetchBriefingHistory.mockResolvedValueOnce([])
   apiMocks.runTodayBriefing.mockResolvedValueOnce({ run_id: 7, status: 'completed' })
   apiMocks.fetchAutomationStatusToday.mockResolvedValueOnce({
     local_today: '2026-04-19',
@@ -705,6 +738,8 @@ test('可以在工作看板更新自动化设置并触发今天补跑', async ()
   }))
   await waitFor(() => expect(apiMocks.runTodayBriefing).toHaveBeenCalled())
   expect(await screen.findAllByText('补跑完成')).not.toHaveLength(0)
+  expect(await screen.findByText('计划时间 13:00')).toBeInTheDocument()
+  expect(screen.getByText('Asia/Shanghai')).toBeInTheDocument()
 })
 
 test('自动化关闭且回退旧日报时会展示状态说明', async () => {
@@ -751,7 +786,84 @@ test('自动化关闭且回退旧日报时会展示状态说明', async () => {
   renderApp(['/briefing'])
 
   expect(await screen.findByText('自动化已关闭')).toBeInTheDocument()
-  expect(screen.getByText('当前展示 2026-04-18 的回退日报')).toBeInTheDocument()
+  expect(screen.getByText('今日 2026-04-19 暂无成功日报，当前展示 2026-04-18 的回退日报')).toBeInTheDocument()
+})
+
+test('静默刷新失败时会保留当前日报内容', async () => {
+  apiMocks.fetchPapers.mockResolvedValueOnce([])
+  apiMocks.fetchBriefing.mockResolvedValueOnce({
+    briefing_date: '2026-04-19',
+    status: 'completed',
+    generated_at: '2026-04-19T12:00:00+08:00',
+    daily_run_id: 1,
+    trigger_type: 'scheduled',
+    summary_markdown: '初始日报',
+    paper_count: 0,
+    project_count: 0,
+    source_count: 0,
+    fallback_used: false,
+    top_papers: [],
+    projects: [],
+  })
+  apiMocks.fetchBriefingHistory.mockResolvedValueOnce([])
+  apiMocks.fetchAutomationStatusToday.mockResolvedValueOnce({
+    local_today: '2026-04-19',
+    enabled: true,
+    briefing_enabled: true,
+    schedule_time: '12:00',
+    timezone: 'Asia/Shanghai',
+    today_run: {
+      id: 1,
+      status: 'completed',
+      trigger_type: 'scheduled',
+      started_at: '2026-04-19T12:00:00+08:00',
+      completed_at: '2026-04-19T12:05:00+08:00',
+      error_message: null,
+    },
+    today_briefing_exists: true,
+    fallback_used: false,
+    fallback_briefing_date: null,
+  })
+  apiMocks.updateAutomationSettings.mockResolvedValueOnce({
+    enabled: true,
+    schedule_time: '13:00',
+    timezone: 'Asia/Shanghai',
+    top_n: 5,
+    briefing_enabled: true,
+    project_sidebar_enabled: true,
+  })
+  apiMocks.fetchAutomationStatusToday.mockResolvedValueOnce({
+    local_today: '2026-04-19',
+    enabled: true,
+    briefing_enabled: true,
+    schedule_time: '13:00',
+    timezone: 'Asia/Shanghai',
+    today_run: {
+      id: 1,
+      status: 'completed',
+      trigger_type: 'scheduled',
+      started_at: '2026-04-19T12:00:00+08:00',
+      completed_at: '2026-04-19T12:05:00+08:00',
+      error_message: null,
+    },
+    today_briefing_exists: true,
+    fallback_used: false,
+    fallback_briefing_date: null,
+  })
+  apiMocks.fetchBriefing.mockRejectedValueOnce(new Error('刷新每日速览失败'))
+  apiMocks.fetchBriefingHistory.mockRejectedValueOnce(new Error('history unavailable'))
+
+  renderApp(['/briefing'])
+
+  expect(await screen.findByText('初始日报')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: '自动化设置' }))
+  fireEvent.change(await screen.findByLabelText('生成时间'), { target: { value: '13:00' } })
+  fireEvent.click(screen.getByRole('button', { name: '保存设置' }))
+
+  expect(await screen.findByText('刷新每日速览失败')).toBeInTheDocument()
+  expect(screen.getByText('初始日报')).toBeInTheDocument()
+  expect(screen.getByText('计划时间 13:00')).toBeInTheDocument()
 })
 
 test('可以切换到数据统计并展示统计壳层', async () => {

@@ -9,6 +9,7 @@ import {
   runTodayBriefing,
 } from '../lib/api'
 import type {
+  AutomationSettings,
   AutomationTodayStatus,
   DailyBriefingHistoryItem,
   DailyBriefingSnapshot,
@@ -20,14 +21,35 @@ import { BriefingProjectsSidebar } from './BriefingProjectsSidebar'
 import { BriefingTopPapers } from './BriefingTopPapers'
 import { StatusBadge } from './StatusBadge'
 
+const BRIEFING_POLL_ATTEMPTS = 15
+const BRIEFING_POLL_INTERVAL_MS = 2000
+
 function getAutomationStatusLabel(status: AutomationTodayStatus | null): string {
   if (!status) return 'waiting'
   if (!status.enabled || !status.briefing_enabled) return 'disabled'
   if (status.today_run?.status === 'failed') return 'failed'
   if (status.today_run?.status === 'running') return 'running'
-  if (status.today_run?.status === 'completed') return 'completed'
-  if (status.fallback_used) return 'fallback'
+  if (status.fallback_used && !status.today_briefing_exists) return 'fallback'
+  if (status.today_run?.status === 'completed' || status.today_briefing_exists) return 'completed'
   return 'waiting'
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback
+}
+
+function isActiveRunStatus(status: string | null | undefined): boolean {
+  const normalized = status?.toLowerCase() ?? ''
+  return normalized === 'queued'
+    || normalized === 'pending'
+    || normalized === 'running'
+    || normalized === 'processing'
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => {
+    window.setTimeout(resolve, ms)
+  })
 }
 
 export function DailyBriefingShell({
@@ -51,8 +73,9 @@ export function DailyBriefingShell({
   const serverToday = automationStatus?.local_today ?? clientToday
   const isTodaySelected = selectedDate === serverToday
 
-  async function loadPage(targetDate: string, options?: { silent?: boolean }) {
+  async function loadPage(targetDate: string, options?: { silent?: boolean; preserveCurrent?: boolean }) {
     const silent = options?.silent ?? false
+    const preserveCurrent = options?.preserveCurrent ?? false
     if (silent) {
       setRefreshing(true)
     } else {
@@ -60,17 +83,28 @@ export function DailyBriefingShell({
     }
     setError('')
     try {
-      const [statusData, historyData, briefingData] = await Promise.all([
-        fetchAutomationStatusToday(),
-        fetchBriefingHistory(),
-        fetchBriefing(targetDate === (automationStatus?.local_today ?? clientToday) ? undefined : targetDate),
-      ])
+      const statusData = await fetchAutomationStatusToday()
       setAutomationStatus(statusData)
-      setHistory(historyData)
-      setBriefing(briefingData)
+
+      const [historyResult, briefingResult] = await Promise.allSettled([
+        fetchBriefingHistory(),
+        fetchBriefing(targetDate === statusData.local_today ? undefined : targetDate),
+      ])
+
+      if (historyResult.status === 'fulfilled') {
+        setHistory(historyResult.value)
+      }
+      if (briefingResult.status === 'fulfilled') {
+        setBriefing(briefingResult.value)
+        return
+      }
+
+      throw briefingResult.reason
     } catch (e) {
-      setBriefing(null)
-      setError(e instanceof Error ? e.message : '加载每日速览失败')
+      if (!preserveCurrent) {
+        setBriefing(null)
+      }
+      setError(getErrorMessage(e, '加载每日速览失败'))
     } finally {
       if (silent) {
         setRefreshing(false)
@@ -91,20 +125,33 @@ export function DailyBriefingShell({
     }
   }, [selectedDate])
 
-  async function pollTodayResult() {
-    for (let attempt = 0; attempt < 6; attempt += 1) {
+  async function pollTodayResult(expectedRunId: number | null) {
+    for (let attempt = 0; attempt < BRIEFING_POLL_ATTEMPTS; attempt += 1) {
       const statusData = await fetchAutomationStatusToday()
       setAutomationStatus(statusData)
-      if (statusData.today_run?.status !== 'running') {
-        const [historyData, briefingData] = await Promise.all([
-          fetchBriefingHistory(),
-          fetchBriefing(),
-        ])
-        setHistory(historyData)
-        setBriefing(briefingData)
+
+      const todayRun = statusData.today_run
+      if (todayRun === null || (expectedRunId !== null && todayRun.id !== expectedRunId)) {
+        await sleep(BRIEFING_POLL_INTERVAL_MS)
+        continue
+      }
+
+      if (!isActiveRunStatus(todayRun.status)) {
+        try {
+          const [historyData, briefingData] = await Promise.all([
+            fetchBriefingHistory(),
+            fetchBriefing(),
+          ])
+          setHistory(historyData)
+          setBriefing(briefingData)
+          setError('')
+        } catch (error) {
+          setError(getErrorMessage(error, '刷新每日速览失败'))
+        }
         return statusData
       }
-      await new Promise(resolve => setTimeout(resolve, 1000))
+
+      await sleep(BRIEFING_POLL_INTERVAL_MS)
     }
     return null
   }
@@ -115,26 +162,30 @@ export function DailyBriefingShell({
     setRunStatus('正在补跑...')
     try {
       const run = await runTodayBriefing()
-      const polled = await pollTodayResult()
+      const polled = await pollTodayResult(run.run_id)
       if (polled?.today_run?.status === 'completed') {
         setRunStatus('补跑完成')
       } else if (polled?.today_run?.status === 'failed') {
         setRunStatus(polled.today_run.error_message || '补跑失败')
       } else {
-        setRunStatus(`补跑已触发：${run.status}`)
-        await loadPage(serverToday, { silent: true })
+        setRunStatus('补跑已触发，后台仍在处理中，可稍后刷新查看最新结果')
+        await loadPage(serverToday, { silent: true, preserveCurrent: true })
       }
     } catch (e) {
-      setRunStatus(e instanceof Error ? e.message : '补跑失败')
+      setRunStatus(getErrorMessage(e, '补跑失败'))
     } finally {
       setRunningToday(false)
     }
   }
 
+  async function handleSettingsSaved(_settings: AutomationSettings) {
+    await loadPage(selectedDate, { silent: true, preserveCurrent: true })
+  }
+
   const statusLabel = getAutomationStatusLabel(automationStatus)
   const runModeLabel = briefing?.trigger_type === 'manual' ? '手动补跑' : briefing?.trigger_type === 'scheduled' ? '自动生成' : ''
 
-  if (loading) {
+  if (loading && !briefing) {
     return (
       <section className="panel-card briefing-shell">
         <div className="paper-detail-loading" style={{ minHeight: 200 }}>
@@ -145,7 +196,7 @@ export function DailyBriefingShell({
     )
   }
 
-  if (error || !briefing) {
+  if (!briefing) {
     return (
       <section className="panel-card briefing-shell">
         <div className="briefing-empty">{error || '暂无每日速览'}</div>
@@ -164,7 +215,7 @@ export function DailyBriefingShell({
           </p>
         </div>
         <div className="briefing-header-actions">
-          <AutomationSettingsPanel />
+          <AutomationSettingsPanel onSaved={handleSettingsSaved} />
           <button type="button" className="btn btn-primary" disabled={runningToday} onClick={() => void handleRunToday()}>
             {runningToday ? '补跑中' : '立即补跑今天日报'}
           </button>
@@ -194,7 +245,12 @@ export function DailyBriefingShell({
           <div className="briefing-status-note">自动化已关闭</div>
         ) : null}
         {automationStatus?.fallback_used && automationStatus.fallback_briefing_date ? (
-          <div className="briefing-status-note">当前展示 {automationStatus.fallback_briefing_date} 的回退日报</div>
+          <div className="briefing-status-note">
+            今日 {automationStatus.local_today} 暂无成功日报，当前展示 {automationStatus.fallback_briefing_date} 的回退日报
+          </div>
+        ) : null}
+        {!automationStatus?.today_briefing_exists && !automationStatus?.fallback_used && automationStatus?.enabled && automationStatus?.briefing_enabled ? (
+          <div className="briefing-status-note">今日 {automationStatus.local_today} 还没有可展示的日报</div>
         ) : null}
         {automationStatus?.today_run?.error_message ? (
           <div className="briefing-status-note error">{automationStatus.today_run.error_message}</div>
@@ -203,6 +259,8 @@ export function DailyBriefingShell({
 
       {runStatus ? <div className="sync-indicator briefing-run-status">{runStatus}</div> : null}
       {refreshing ? <div className="sync-indicator briefing-run-status">正在刷新最新结果...</div> : null}
+      {loading ? <div className="sync-indicator briefing-run-status">正在加载所选日报...</div> : null}
+      {error ? <div className="briefing-status-note error">{error}</div> : null}
 
       <div className="briefing-grid">
         <article className="briefing-main">
@@ -212,6 +270,7 @@ export function DailyBriefingShell({
             <span>来源 {briefing.source_count}</span>
             {briefing.trigger_type ? <span>{briefing.trigger_type === 'manual' ? '手动补跑' : '自动生成'}</span> : null}
             {briefing.fallback_used ? <span>回退内容</span> : null}
+            {!isTodaySelected ? <span>历史日报</span> : null}
           </div>
 
           <div className="prose briefing-summary">
