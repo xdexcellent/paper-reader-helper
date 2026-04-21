@@ -63,3 +63,51 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: 优化工作看板体验并定位后端阻塞
+
+**Date**: 2026-04-21
+**Task**: 优化工作看板体验并定位后端阻塞
+**Branch**: `master`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Frontend | 优化 `/briefing` 的补跑轮询、静默刷新失败保留内容、回退提示文案与历史态提示 |
+| Settings | 自动化设置保存后立即刷新状态卡，确保计划时间与时区即时同步 |
+| Testing | 更新工作看板前端测试，覆盖设置联动、回退提示与静默刷新失败保留内容 |
+| Findings | 排查确认两个后端后续问题：今日日报按本次 run 产物筛选导致可能出现空日报；删除论文时因关联记录未清理触发外键失败 |
+
+**Updated Files**:
+- `frontend/src/components/DailyBriefingShell.tsx`
+- `frontend/src/components/AutomationSettingsPanel.tsx`
+- `frontend/src/App.test.tsx`
+
+**Follow-ups Identified**:
+- `backend/app/services/daily_briefing_service.py` 当前只从本次 `daily_run` 的 `IngestionItem` 中挑选 `ready + completed` 的论文进入日报
+- `backend/app/api/routes/papers.py` 删除论文时仅清理 `PaperContent` 与 `PaperSummary`，尚未处理 `paper_embedding`、`chat_session`、`ingestion_item`、`daily_briefing_paper_item` 等引用
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9a206ca` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
