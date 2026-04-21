@@ -1,0 +1,32 @@
+{
+  "count": 1,
+  "notes": [
+    {
+      "id": "or-note-1",
+      "forum": "or-note-1",
+      "invitation": "ICLR.cc/2026/Conference/-/Submission",
+      "cdate": 1713088800000,
+      "pdate": 1713092400000,
+      "content": {
+        "title": {
+          "value": "OpenReview Paper"
+        },
+        "authors": {
+          "value": [
+            "Alice",
+            "Bob"
+          ]
+        },
+        "abstract": {
+          "value": "OpenReview abstract"
+        },
+        "pdf": {
+          "value": "/pdf?id=or-note-1"
+        },
+        "venueid": {
+          "value": "ICLR.cc/2026/Conference"
+        }
+      }
+    }
+  ]
+}

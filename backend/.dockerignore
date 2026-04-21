@@ -1,0 +1,11 @@
+.env
+.venv
+data
+test-data
+__pycache__
+*.pyc
+*.db
+*.log
+.pytest_cache
+.ruff_cache
+paper_reader_backend.egg-info
