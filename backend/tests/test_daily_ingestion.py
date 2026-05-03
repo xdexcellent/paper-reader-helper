@@ -27,6 +27,14 @@ class _FakeAdapter:
         return list(self._candidates)
 
 
+class _FailingAdapter:
+    def __init__(self, error: Exception) -> None:
+        self._error = error
+
+    def fetch_candidates(self, subscription: Subscription) -> list[SourceCandidate]:
+        raise self._error
+
+
 class _FakePipelineService:
     def __init__(self) -> None:
         self.parse_calls: list[int] = []
@@ -361,33 +369,29 @@ def test_run_for_date_can_manage_default_database_session(
 
 
 def test_run_today_endpoint_triggers_manual_ingestion(client, monkeypatch: pytest.MonkeyPatch) -> None:
-    calls = {}
+    background_calls: list[tuple[int, date]] = []
 
-    class StubDailyIngestionService:
-        def run_for_date(self, run_date: date, trigger_type: str = "scheduled") -> DailyRun:
-            calls["run_date"] = run_date
-            calls["trigger_type"] = trigger_type
-            return DailyRun(
-                id=7,
-                run_date=run_date,
-                scheduled_for=datetime(2026, 4, 20, 4, 0, tzinfo=timezone.utc),
-                status="completed",
-                trigger_type=trigger_type,
-            )
+    def fake_background(run_id: int, run_date: date) -> None:
+        background_calls.append((run_id, run_date))
 
     monkeypatch.setattr(
         automation_routes,
-        "DailyIngestionService",
-        StubDailyIngestionService,
+        "_run_ingestion_background",
+        fake_background,
         raising=False,
     )
 
     response = client.post("/automation/runs/today")
 
     assert response.status_code == 202
-    assert response.json() == {"run_id": 7, "status": "completed"}
-    assert calls["trigger_type"] == "manual"
-    assert isinstance(calls["run_date"], date)
+    body = response.json()
+    assert body["status"] == "queued"
+    assert body["run_id"] is not None
+
+    # Verify background was dispatched with the correct run_id
+    assert len(background_calls) == 1
+    assert background_calls[0][0] == body["run_id"]
+    assert isinstance(background_calls[0][1], date)
 
 
 def test_run_for_date_generates_daily_briefing_snapshot(session_factory, tmp_path: Path) -> None:
@@ -435,7 +439,45 @@ def test_run_for_date_generates_daily_briefing_snapshot(session_factory, tmp_pat
     assert project_items == []
 
 
-def test_run_for_date_generates_empty_briefing_snapshot_when_no_ready_papers(session_factory, tmp_path: Path) -> None:
+def test_run_for_date_briefing_counts_active_subscription_even_without_candidates(
+    session_factory,
+    tmp_path: Path,
+) -> None:
+    candidate = SourceCandidate(
+        artifact_type="paper",
+        source_kind="arxiv",
+        external_id="2404.20002",
+        title="Only Candidate Paper",
+        authors="Alice",
+        abstract_raw="Paper abstract",
+        canonical_url="https://arxiv.org/abs/2404.20002",
+        pdf_url="https://arxiv.org/pdf/2404.20002.pdf",
+        published_at=datetime(2026, 4, 18, 8, 0, tzinfo=timezone.utc),
+    )
+
+    with Session(session_factory) as session:
+        _configure_settings(session, schedule_time="08:30", timezone_name="Asia/Shanghai")
+        _make_subscription(session, "arxiv", query="cat:cs.AI")
+        _make_subscription(session, "rss", query="https://example.com/empty.xml")
+        service = _make_service(
+            session,
+            tmp_path,
+            {
+                "arxiv": _FakeAdapter([candidate]),
+                "rss": _FakeAdapter([]),
+            },
+        )
+
+        run = service.run_for_date(date(2026, 4, 18))
+        session.refresh(run)
+
+        briefing = session.exec(select(DailyBriefing).where(DailyBriefing.daily_run_id == run.id)).one()
+
+    assert json.loads(run.stats_json)["subscriptions_total"] == 2
+    assert briefing.source_count == 2
+
+
+def test_run_for_date_keeps_failed_paper_candidate_in_briefing_snapshot(session_factory, tmp_path: Path) -> None:
     candidate = SourceCandidate(
         artifact_type="paper",
         source_kind="openreview",
@@ -462,11 +504,62 @@ def test_run_for_date_generates_empty_briefing_snapshot_when_no_ready_papers(ses
         paper_items = session.exec(select(DailyBriefingPaperItem).where(DailyBriefingPaperItem.briefing_id == briefing.id)).all()
 
     assert briefing.status == "completed"
-    assert briefing.paper_count == 0
+    assert briefing.paper_count == 1
     assert briefing.project_count == 0
     assert briefing.source_count == 1
     assert briefing.summary_markdown
-    assert paper_items == []
+    assert len(paper_items) == 1
+    assert paper_items[0].paper_id is None
+    assert "PDF" in paper_items[0].reason
+
+
+def test_manual_rerun_keeps_same_day_ready_papers_when_current_run_only_deduplicates(
+    session_factory,
+    tmp_path: Path,
+) -> None:
+    candidate = SourceCandidate(
+        artifact_type="paper",
+        source_kind="arxiv",
+        external_id="2404.30001",
+        title="Same Day Paper",
+        authors="Alice",
+        abstract_raw="Paper abstract",
+        canonical_url="https://arxiv.org/abs/2404.30001",
+        pdf_url="https://arxiv.org/pdf/2404.30001.pdf",
+        published_at=datetime(2026, 4, 18, 8, 0, tzinfo=timezone.utc),
+    )
+
+    with Session(session_factory) as session:
+        _configure_settings(session, schedule_time="08:30", timezone_name="Asia/Shanghai")
+        _make_subscription(session, "arxiv", query="cat:cs.AI")
+        service = _make_service(
+            session,
+            tmp_path,
+            {"arxiv": _FakeAdapter([candidate])},
+        )
+
+        first_run = service.run_for_date(date(2026, 4, 18))
+        session.refresh(first_run)
+
+        second_run = service.run_for_date(date(2026, 4, 18), trigger_type="manual")
+        session.refresh(second_run)
+
+        first_briefing = session.exec(select(DailyBriefing).where(DailyBriefing.daily_run_id == first_run.id)).one()
+        second_briefing = session.exec(select(DailyBriefing).where(DailyBriefing.daily_run_id == second_run.id)).one()
+        second_items = session.exec(
+            select(DailyBriefingPaperItem).where(DailyBriefingPaperItem.briefing_id == second_briefing.id)
+        ).all()
+        second_run_ingestion_items = session.exec(
+            select(IngestionItem).where(IngestionItem.daily_run_id == second_run.id)
+        ).all()
+
+    assert first_briefing.paper_count == 1
+    assert second_run.trigger_type == "manual"
+    assert len(second_run_ingestion_items) == 1
+    assert second_run_ingestion_items[0].status == "deduplicated"
+    assert second_briefing.paper_count == 1
+    assert len(second_items) == 1
+    assert second_items[0].paper_id == second_run_ingestion_items[0].paper_id
 
 
 def test_run_for_date_populates_stats_json_with_major_counters(session_factory, tmp_path: Path) -> None:
@@ -534,3 +627,25 @@ def test_run_for_date_populates_stats_json_with_major_counters(session_factory, 
         "failed_items": 1,
         "processed_papers": 1,
     }
+
+
+def test_run_for_date_records_fetch_error_on_subscription(session_factory, tmp_path: Path) -> None:
+    import httpx
+
+    with Session(session_factory) as session:
+        _configure_settings(session)
+        sub = _make_subscription(session, "github_trending", config={"since": "daily"})
+        service = _make_service(
+            session,
+            tmp_path,
+            {"github_trending": _FailingAdapter(httpx.ConnectError("[WinError 10061] actively refused"))},
+        )
+
+        run = service.run_for_date(date(2026, 4, 18))
+        session.refresh(run)
+        sub = session.get(Subscription, sub.id)
+
+    assert run.status == "completed"
+    assert sub is not None
+    assert sub.last_error is not None
+    assert "10061" in sub.last_error

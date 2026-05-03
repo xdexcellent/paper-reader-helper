@@ -133,7 +133,7 @@ export async function parsePaper(id: number): Promise<Record<string, unknown>> {
   return readJson(response)
 }
 
-export async function summarizePaper(id: number, model: string = 'gpt-5.4-mini'): Promise<Record<string, unknown>> {
+export async function summarizePaper(id: number, model: string = 'gpt-5.4'): Promise<Record<string, unknown>> {
   const response = await fetch(`${API_BASE}/papers/${id}/summarize?model=${encodeURIComponent(model)}`, {
     method: 'POST',
     headers: getAuthHeaders(),
@@ -387,10 +387,26 @@ export interface RecommendationItem {
   tag?: string
   priority_icon?: string
   future_direction?: string
+  category?: 'read_now' | 'summarize_next' | 'process_next' | 'recover' | string
+  category_label?: string
+  status_label?: string
+  action_label?: string
+  action_hint?: string
+  confidence?: number
+  signals?: string[]
+  score_breakdown?: string[]
 }
 
-export async function fetchRecommendations(): Promise<RecommendationItem[]> {
-  const response = await fetch(`${API_BASE}/recommendations`, { headers: getAuthHeaders() })
+export async function fetchRecommendations(options?: {
+  force?: boolean
+  model?: string
+}): Promise<RecommendationItem[]> {
+  const params = new URLSearchParams()
+  if (options?.force) params.set('force', 'true')
+  if (options?.model) params.set('model', options.model)
+  const qs = params.toString()
+  const url = `${API_BASE}/recommendations${qs ? `?${qs}` : ''}`
+  const response = await fetch(url, { headers: getAuthHeaders() })
   return readJson(response)
 }
 

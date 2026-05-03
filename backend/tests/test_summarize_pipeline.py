@@ -22,6 +22,15 @@ def test_summarize_paper_extracts_sections_and_persists_summary(
     )
     paper_id = create_response.json()["id"]
 
+    mocker.patch(
+        "app.services.mineru_client.MineruClient.parse_pdf",
+        return_value={
+            "full_markdown": "# Summary Me\n\n## Abstract\nThis is the abstract.\n\n## Introduction\nThis is the introduction.\n\n## Methods\nThis is the methods section.\n\n## Conclusion\nThis is the conclusion.",
+            "content_json_path": "data/storage/mineru/content.json",
+            "full_zip_path": "data/storage/mineru/full.zip",
+        },
+    )
+
     parse_response = client.post(f"/papers/{paper_id}/parse")
     assert parse_response.status_code == 202
     parse_task = wait_for_task(client, parse_response.json()["task_id"])

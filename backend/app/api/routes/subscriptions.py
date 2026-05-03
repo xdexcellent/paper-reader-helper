@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlmodel import Session, select
 
 from app.core.db import get_session
+from app.models.ingestion_item import IngestionItem
 from app.models.subscription import Subscription
 from app.services.arxiv_client import search_arxiv
 
@@ -48,6 +49,16 @@ class SubscriptionCreate(BaseModel):
                 f"query is required for supported source_kind '{resolved_source_kind}'"
             )
         return self
+
+
+class SubscriptionUpdate(BaseModel):
+    name: str | None = None
+    query: str | None = None
+    source_kind: SupportedSourceKind | None = None
+    display_name: str | None = None
+    config: dict | None = None
+    fetch_limit: int | None = Field(default=None, ge=1, le=20)
+    is_active: bool | None = None
 
 
 class SubscriptionResponse(BaseModel):
@@ -103,11 +114,65 @@ def list_subscriptions(db: Session = Depends(get_session)) -> list[SubscriptionR
     return [_to_response(s) for s in subs]
 
 
+@router.patch("/{sub_id}", response_model=SubscriptionResponse)
+def update_subscription(
+    sub_id: int,
+    req: SubscriptionUpdate,
+    db: Session = Depends(get_session),
+) -> SubscriptionResponse:
+    sub = db.get(Subscription, sub_id)
+    if sub is None:
+        raise HTTPException(status_code=404, detail="订阅不存在")
+
+    payload = req.model_dump(exclude_unset=True)
+
+    if "source_kind" in payload and payload["source_kind"]:
+        sub.source_kind = payload["source_kind"]
+        sub.type = payload["source_kind"]
+
+    if "name" in payload and payload["name"] is not None:
+        sub.name = payload["name"]
+
+    if "display_name" in payload and payload["display_name"] is not None:
+        sub.display_name = payload["display_name"]
+
+    if "query" in payload and payload["query"] is not None:
+        sub.query = payload["query"].strip()
+
+    if "config" in payload and payload["config"] is not None:
+        sub.config_json = json.dumps(payload["config"], ensure_ascii=False)
+
+    if "fetch_limit" in payload and payload["fetch_limit"] is not None:
+        sub.fetch_limit = payload["fetch_limit"]
+
+    if "is_active" in payload and payload["is_active"] is not None:
+        sub.is_active = payload["is_active"]
+
+    resolved_source_kind = sub.source_kind or sub.type
+    if resolved_source_kind in QUERY_REQUIRED_SOURCE_KINDS and not (sub.query or "").strip():
+        raise HTTPException(
+            status_code=422,
+            detail=f"query is required for supported source_kind '{resolved_source_kind}'",
+        )
+
+    db.add(sub)
+    db.commit()
+    db.refresh(sub)
+    return _to_response(sub)
+
+
 @router.delete("/{sub_id}")
 def delete_subscription(sub_id: int, db: Session = Depends(get_session)) -> dict:
     sub = db.get(Subscription, sub_id)
     if sub is None:
         raise HTTPException(status_code=404, detail="订阅不存在")
+
+    # 先将历史 IngestionItem 的 subscription_id 置空，保留 run 历史但解除外键引用
+    for item in db.exec(select(IngestionItem).where(IngestionItem.subscription_id == sub_id)).all():
+        item.subscription_id = None
+        db.add(item)
+    db.flush()
+
     db.delete(sub)
     db.commit()
     return {"success": True}

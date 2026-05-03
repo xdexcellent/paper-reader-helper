@@ -87,3 +87,82 @@ def test_migrate_add_columns_backfills_legacy_subscription_table(tmp_path, monke
     assert row.fetch_limit == 10
     assert row.last_success_at is None
     assert row.last_error is None
+
+
+def test_migrate_add_columns_upgrades_legacy_automation_settings_table(tmp_path, monkeypatch) -> None:
+    db_path = tmp_path / "legacy_automation_settings.db"
+    test_engine = create_engine(
+        f"sqlite:///{db_path}",
+        connect_args={"check_same_thread": False},
+    )
+    monkeypatch.setattr(db_module, "engine", test_engine)
+
+    with test_engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE automation_settings (
+                    id INTEGER PRIMARY KEY,
+                    enabled BOOLEAN NOT NULL DEFAULT 1,
+                    schedule_time TEXT NOT NULL,
+                    timezone TEXT NOT NULL,
+                    top_n INTEGER NOT NULL DEFAULT 5,
+                    briefing_enabled BOOLEAN NOT NULL DEFAULT 1,
+                    project_sidebar_enabled BOOLEAN NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP NOT NULL,
+                    updated_at TIMESTAMP NOT NULL
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO automation_settings (
+                    id,
+                    enabled,
+                    schedule_time,
+                    timezone,
+                    top_n,
+                    briefing_enabled,
+                    project_sidebar_enabled,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    1,
+                    1,
+                    '12:00',
+                    'Asia/Shanghai',
+                    5,
+                    1,
+                    1,
+                    '2026-04-19 00:00:00',
+                    '2026-04-19 00:00:00'
+                )
+                """
+            )
+        )
+
+    db_module._migrate_add_columns()
+
+    with test_engine.connect() as conn:
+        columns = {
+            row[1]: row[2]
+            for row in conn.execute(text("PRAGMA table_info(automation_settings)"))
+        }
+        row = conn.execute(
+            text(
+                """
+                SELECT
+                    http_proxy,
+                    https_proxy
+                FROM automation_settings
+                WHERE id = 1
+                """
+            )
+        ).one()
+
+    assert "http_proxy" in columns
+    assert "https_proxy" in columns
+    assert row.http_proxy is None
+    assert row.https_proxy is None

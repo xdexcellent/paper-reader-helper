@@ -19,6 +19,43 @@ import { PaperActions } from './PaperActions'
 import { PaperDetail } from './PaperDetail'
 import { PaperList } from './PaperList'
 
+type BulkActionFailure = {
+  paper: Paper
+  message: string
+}
+
+async function runBulkPaperAction(
+  papers: Paper[],
+  action: (paper: Paper) => Promise<unknown>,
+): Promise<{ succeeded: Paper[]; failed: BulkActionFailure[] }> {
+  const results = await Promise.allSettled(papers.map((paper) => action(paper)))
+  const succeeded: Paper[] = []
+  const failed: BulkActionFailure[] = []
+
+  results.forEach((result, index) => {
+    const paper = papers[index]
+    if (result.status === 'fulfilled') {
+      succeeded.push(paper)
+      return
+    }
+    failed.push({
+      paper,
+      message: result.reason instanceof Error ? result.reason.message : '请求失败，请稍后重试',
+    })
+  })
+
+  return { succeeded, failed }
+}
+
+function formatBulkActionError(prefix: string, failed: BulkActionFailure[]): string {
+  if (failed.length === 0) return ''
+  const sample = failed
+    .slice(0, 2)
+    .map(({ paper, message }) => `${paper.title}：${message}`)
+    .join('；')
+  return `${prefix}失败 ${failed.length} 篇${sample ? `，${sample}` : ''}`
+}
+
 function filterCategoriesByScope(categories: Category[], scope: CategoryScope): Category[] {
   if (scope === 'system') return categories.filter(category => category.is_system)
   if (scope === 'custom') return categories.filter(category => !category.is_system)
@@ -49,6 +86,8 @@ export function PaperManagementPage({
   const [isRunningSummarize, setIsRunningSummarize] = useState(false)
   const [isRunningEmbed, setIsRunningEmbed] = useState(false)
   const [isUpdatingCategory, setIsUpdatingCategory] = useState(false)
+  const [isRetryingParseFailed, setIsRetryingParseFailed] = useState(false)
+  const [isDeletingParseFailed, setIsDeletingParseFailed] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [isCreateCategoryOpen, setIsCreateCategoryOpen] = useState(false)
   const [isSubmittingCategory, setIsSubmittingCategory] = useState(false)
@@ -58,13 +97,27 @@ export function PaperManagementPage({
   const [feedbackMessage, setFeedbackMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedModel, setSelectedModel] = useState('gpt-5.4-mini')
+  const [selectedModel, setSelectedModel] = useState('gpt-5.4')
   const [categoryScope, setCategoryScope] = useState<CategoryScope>('all')
   const latestDetailRequestRef = useRef(0)
+  const suppressedRoutePaperIdRef = useRef<number | null>(null)
+
+  function clearSelectedPaper(targetPaperId: number | null) {
+    if (targetPaperId !== null) {
+      suppressedRoutePaperIdRef.current = targetPaperId
+    }
+    setSelectedPaperId(null)
+    setDetail(null)
+    navigate('/', { replace: true })
+  }
 
   const visibleCategories = useMemo(
     () => filterCategoriesByScope(categories, categoryScope),
     [categories, categoryScope],
+  )
+  const parseFailedPapers = useMemo(
+    () => papers.filter((paper) => paper.status === 'parse_failed'),
+    [papers],
   )
   const selectedCategory = useMemo(
     () => categories.find(category => category.id === selectedCategoryId) ?? null,
@@ -97,9 +150,7 @@ export function PaperManagementPage({
   useEffect(() => {
     if (selectedPaperId === null) return
     if (visiblePapers.some(paper => paper.id === selectedPaperId)) return
-    setSelectedPaperId(null)
-    setDetail(null)
-    navigate('/', { replace: true })
+    clearSelectedPaper(selectedPaperId)
   }, [visiblePapers, selectedPaperId, navigate])
 
   async function loadPaperDetail(
@@ -130,8 +181,12 @@ export function PaperManagementPage({
   }
 
   useEffect(() => {
-    if (!paramPaperId) return
+    if (!paramPaperId) {
+      suppressedRoutePaperIdRef.current = null
+      return
+    }
     const id = Number(paramPaperId)
+    if (suppressedRoutePaperIdRef.current === id && selectedPaperId === null) return
     if (id && (id !== selectedPaperId || (detail?.id !== id && !isLoadingDetail))) {
       loadPaperDetail(id).catch(() => {})
     }
@@ -171,9 +226,7 @@ export function PaperManagementPage({
     try {
       await deletePaper(paper.id)
       if (selectedPaperId === paper.id) {
-        setSelectedPaperId(null)
-        setDetail(null)
-        navigate('/')
+        clearSelectedPaper(paper.id)
       }
       await refreshLibrary()
       setFeedbackMessage('论文已删除')
@@ -230,12 +283,20 @@ export function PaperManagementPage({
 
   async function handlePrimaryCategoryChange(categoryId: number) {
     if (!detail || detail.primary_category_id === categoryId) return
+    const nextPaperId = detail.id
+    const activeCategoryId = selectedCategoryId
     setIsUpdatingCategory(true)
     setErrorMessage('')
     try {
-      await updatePaperCategory(detail.id, categoryId)
+      const updatedPaper = await updatePaperCategory(nextPaperId, categoryId)
       await refreshLibrary()
-      await loadPaperDetail(detail.id)
+      const staysVisible = activeCategoryId === null || updatedPaper.primary_category_id === activeCategoryId
+      if (!staysVisible) {
+        clearSelectedPaper(nextPaperId)
+        setFeedbackMessage('主分类已更新，论文已移出当前目录')
+        return
+      }
+      await loadPaperDetail(nextPaperId)
       setFeedbackMessage('主分类已更新')
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '更新主分类失败')
@@ -320,9 +381,69 @@ export function PaperManagementPage({
     }
   }
 
+  async function handleRetryAllParseFailed() {
+    if (parseFailedPapers.length === 0) return
+
+    setIsRetryingParseFailed(true)
+    setErrorMessage('')
+    setFeedbackMessage('正在批量提交失败论文的重新解析任务...')
+
+    try {
+      const { succeeded, failed } = await runBulkPaperAction(parseFailedPapers, (paper) => parsePaper(paper.id))
+      await refreshLibrary()
+
+      if (selectedPaperId !== null && succeeded.some((paper) => paper.id === selectedPaperId)) {
+        await loadPaperDetail(selectedPaperId)
+      }
+
+      setFeedbackMessage(
+        succeeded.length > 0
+          ? `已提交 ${succeeded.length} 篇失败论文的重新解析任务`
+          : '',
+      )
+      setErrorMessage(formatBulkActionError('重新解析', failed))
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '批量重新解析失败')
+      setFeedbackMessage('')
+    } finally {
+      setIsRetryingParseFailed(false)
+    }
+  }
+
+  async function handleDeleteAllParseFailed() {
+    if (parseFailedPapers.length === 0) return
+    if (!window.confirm(`确定删除全部 ${parseFailedPapers.length} 篇解析失败论文吗？`)) return
+
+    setIsDeletingParseFailed(true)
+    setErrorMessage('')
+    setFeedbackMessage('正在删除解析失败论文...')
+
+    try {
+      const { succeeded, failed } = await runBulkPaperAction(parseFailedPapers, (paper) => deletePaper(paper.id))
+
+      if (selectedPaperId !== null && succeeded.some((paper) => paper.id === selectedPaperId)) {
+        clearSelectedPaper(selectedPaperId)
+      }
+
+      await refreshLibrary()
+      setFeedbackMessage(
+        succeeded.length > 0
+          ? `已删除 ${succeeded.length} 篇解析失败论文`
+          : '',
+      )
+      setErrorMessage(formatBulkActionError('删除', failed))
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '批量删除失败')
+      setFeedbackMessage('')
+    } finally {
+      setIsDeletingParseFailed(false)
+    }
+  }
+
   const pageTitle = '论文管理'
   const pageSubtitle = '受控分类目录管理主分类，多标签继续保留为辅助语义。'
   const totalPending = papers.filter(paper => paper.category_status === 'pending_review').length
+  const parseFailedCount = parseFailedPapers.length
   const categoryPaperCount = selectedCategory ? selectedCategory.paper_count : visiblePapers.length
   const categoryPendingCount = selectedCategory ? selectedCategory.pending_count : totalPending
 
@@ -408,6 +529,32 @@ export function PaperManagementPage({
                 新建分类
               </button>
             </div>
+            {parseFailedCount > 0 && (
+              <div className="parse-failed-manager" role="status" aria-live="polite">
+                <div className="parse-failed-manager-summary">
+                  <span className="parse-failed-manager-label">解析失败 {parseFailedCount} 篇</span>
+                  <small>支持统一重试解析，或一键清理失败记录。</small>
+                </div>
+                <div className="parse-failed-manager-actions">
+                  <button
+                    type="button"
+                    className="btn btn-action"
+                    onClick={handleRetryAllParseFailed}
+                    disabled={isRetryingParseFailed || isDeletingParseFailed}
+                  >
+                    {isRetryingParseFailed ? '重试提交中...' : '全部重试解析'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-action parse-failed-delete-btn"
+                    onClick={handleDeleteAllParseFailed}
+                    disabled={isDeletingParseFailed || isRetryingParseFailed}
+                  >
+                    {isDeletingParseFailed ? '删除中...' : '全部删除失败论文'}
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="management-toolbar-note">
               <span>待确认 {totalPending}</span>
             </div>

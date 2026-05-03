@@ -21,6 +21,8 @@ def test_get_automation_settings_bootstraps_singleton_record(client) -> None:
         "top_n": 5,
         "briefing_enabled": True,
         "project_sidebar_enabled": True,
+        "http_proxy": None,
+        "https_proxy": None,
     }
 
     with Session(engine) as session:
@@ -54,6 +56,8 @@ def test_put_automation_settings_updates_schedule_top_n_and_sidebar_flag(client)
         "top_n": 10,
         "briefing_enabled": True,
         "project_sidebar_enabled": False,
+        "http_proxy": None,
+        "https_proxy": None,
     }
 
     with Session(engine) as session:
@@ -201,6 +205,88 @@ def test_create_subscription_rejects_fetch_limit_above_cap(client) -> None:
 
     assert response.status_code == 422
     assert "fetch_limit" in response.text
+
+
+def test_patch_subscription_updates_name_query_and_fetch_limit(client) -> None:
+    create_response = client.post(
+        "/subscriptions",
+        json={"name": "Original", "source_kind": "arxiv", "query": "cat:cs.LG", "fetch_limit": 5},
+    )
+    sub_id = create_response.json()["id"]
+
+    patch_response = client.patch(
+        f"/subscriptions/{sub_id}",
+        json={"name": "Updated Name", "query": "cat:cs.CV", "fetch_limit": 12},
+    )
+
+    assert patch_response.status_code == 200
+    payload = patch_response.json()
+    assert payload["name"] == "Updated Name"
+    assert payload["query"] == "cat:cs.CV"
+    assert payload["fetch_limit"] == 12
+    assert payload["source_kind"] == "arxiv"
+
+    with Session(engine) as session:
+        saved = session.get(Subscription, sub_id)
+        assert saved.name == "Updated Name"
+        assert saved.query == "cat:cs.CV"
+        assert saved.fetch_limit == 12
+
+
+def test_patch_subscription_switches_source_kind_and_config(client) -> None:
+    create_response = client.post(
+        "/subscriptions",
+        json={"name": "Will Switch", "source_kind": "arxiv", "query": "cat:cs.AI"},
+    )
+    sub_id = create_response.json()["id"]
+
+    patch_response = client.patch(
+        f"/subscriptions/{sub_id}",
+        json={
+            "source_kind": "github_trending",
+            "query": "",
+            "config": {"language": "python", "since": "weekly"},
+        },
+    )
+
+    assert patch_response.status_code == 200
+    payload = patch_response.json()
+    assert payload["source_kind"] == "github_trending"
+    assert payload["type"] == "github_trending"
+    assert payload["config"] == {"language": "python", "since": "weekly"}
+    assert payload["query"] == ""
+
+
+def test_patch_subscription_rejects_empty_query_for_arxiv(client) -> None:
+    create_response = client.post(
+        "/subscriptions",
+        json={"name": "Keep Query", "source_kind": "arxiv", "query": "cat:cs.LG"},
+    )
+    sub_id = create_response.json()["id"]
+
+    patch_response = client.patch(f"/subscriptions/{sub_id}", json={"query": "   "})
+
+    assert patch_response.status_code == 422
+    assert "query" in patch_response.text
+
+
+def test_patch_subscription_returns_404_for_missing_id(client) -> None:
+    response = client.patch("/subscriptions/9999", json={"name": "nope"})
+    assert response.status_code == 404
+
+
+def test_patch_subscription_toggles_is_active(client) -> None:
+    create_response = client.post(
+        "/subscriptions",
+        json={"name": "Toggle Me", "source_kind": "arxiv", "query": "cat:cs.LG"},
+    )
+    sub_id = create_response.json()["id"]
+    assert create_response.json()["is_active"] is True
+
+    patch_response = client.patch(f"/subscriptions/{sub_id}", json={"is_active": False})
+
+    assert patch_response.status_code == 200
+    assert patch_response.json()["is_active"] is False
 
 
 def test_get_automation_settings_recovers_from_concurrent_bootstrap(monkeypatch, tmp_path) -> None:

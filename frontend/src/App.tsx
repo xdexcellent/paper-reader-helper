@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, Route, Routes, useLocation } from 'react-router-dom'
+import { Link, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 
 import { useAuth } from './components/AuthContext'
 import { AiAssistantShell } from './components/AiAssistantShell'
@@ -36,7 +36,8 @@ function Sidebar({ theme, setTheme }: { theme: 'dark' | 'light'; setTheme: (t: '
           <span className="side-nav-icon" aria-hidden="true"><Icon name="dashboard" /></span>
           <span className="side-nav-text">
             <strong>工作看板</strong>
-            <small>最新动态和统计</small>
+            <small>每日动态和统计</small>
+            {isActive('/briefing') ? <em className="side-nav-context">当前模块</em> : null}
           </span>
         </Link>
 
@@ -44,7 +45,8 @@ function Sidebar({ theme, setTheme }: { theme: 'dark' | 'light'; setTheme: (t: '
           <span className="side-nav-icon" aria-hidden="true"><Icon name="assistant" /></span>
           <span className="side-nav-text">
             <strong>AI 研究助手</strong>
-            <small>智能对话助手</small>
+            <small>智能对话与解读</small>
+            {isActive('/assistant') ? <em className="side-nav-context">当前模块</em> : null}
           </span>
         </Link>
 
@@ -97,6 +99,7 @@ function Sidebar({ theme, setTheme }: { theme: 'dark' | 'light'; setTheme: (t: '
 
 export default function App() {
   const { isAuthenticated, requiresPassword, isLoading: authLoading } = useAuth()
+  const navigate = useNavigate()
   const [papers, setPapers] = useState<Paper[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [isLoadingLibrary, setIsLoadingLibrary] = useState(true)
@@ -167,15 +170,18 @@ export default function App() {
           />
           <Route path="/briefing" element={
             <div className="workspace-panel">
-              <DailyBriefingShell papers={papers} />
+              <DailyBriefingShell
+                papers={papers}
+                onOpenPaper={(paperId) => navigate(`/paper/${paperId}`)}
+              />
             </div>
           } />
           <Route path="/assistant" element={
             <>
-              <header className="workspace-header">
+              <header className="workspace-header assistant-workspace-header">
                 <div className="workspace-title-block">
                   <h1>AI 研究助手</h1>
-                  <p>围绕论文库做检索、对话、追问与阅读辅助。</p>
+                  <p>带论文上下文的研究对话工作台。</p>
                 </div>
                 <div className="workspace-header-right">
                   <span className="online-indicator">在线运行</span>

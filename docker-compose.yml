@@ -1,0 +1,30 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-sqlite:///./data/paper_reader.db}
+      STORAGE_ROOT: ${STORAGE_ROOT:-./data/storage}
+      MINERU_API_BASE: ${MINERU_API_BASE:-https://mineru.net}
+      MINERU_API_TOKEN: ${MINERU_API_TOKEN:-}
+      DEEPSEEK_API_BASE: ${DEEPSEEK_API_BASE:-https://api.deepseek.com}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      SERVER_BASE_URL: ${SERVER_BASE_URL:-http://localhost:8000}
+      APP_PASSWORD: ${APP_PASSWORD:-}
+      JWT_SECRET: ${JWT_SECRET:-change-this-to-a-long-random-value}
+      EMBEDDING_MODEL_PATH: ${EMBEDDING_MODEL_PATH:-BAAI/bge-m3}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/data:/app/data
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend

@@ -96,7 +96,7 @@ class CategoryClassifier:
         )
 
         try:
-            reply = self.deepseek_client.chat([{"role": "user", "content": prompt}], model="gpt-5.4-mini")
+            reply = self.deepseek_client.chat([{"role": "user", "content": prompt}], model="gpt-5.4")
             start = reply.find("{")
             end = reply.rfind("}") + 1
             if start == -1 or end <= 0:

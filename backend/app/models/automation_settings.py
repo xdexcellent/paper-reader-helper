@@ -17,5 +17,8 @@ class AutomationSettings(SQLModel, table=True):
     top_n: int = 5
     briefing_enabled: bool = True
     project_sidebar_enabled: bool = True
+    # Proxy settings for external API calls
+    http_proxy: str | None = None
+    https_proxy: str | None = None
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)

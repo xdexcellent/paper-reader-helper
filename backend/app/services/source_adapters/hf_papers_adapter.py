@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-import logging
 import re
 from collections.abc import Callable
 from urllib.parse import urljoin
 
-import httpx
-
 from app.models.subscription import Subscription
+from app.services.http_client_factory import get_http_client
 from app.services.source_adapters.base import SourceAdapter, SourceCandidate, clean_text, strip_html
-
-logger = logging.getLogger(__name__)
 
 HF_PAPERS_URL = "https://huggingface.co/papers"
 _ARTICLE_RE = re.compile(r"<article\b(?P<attrs>[^>]*)>(?P<body>.*?)</article>", re.IGNORECASE | re.DOTALL)
@@ -26,6 +22,7 @@ _AUTHOR_RE = re.compile(
 )
 _ANCHOR_RE = re.compile(r"<a\b[^>]*href=[\"'](?P<href>[^\"']+)[\"'][^>]*>", re.IGNORECASE)
 _ARXIV_ID_RE = re.compile(r"arxiv\.org/(?:abs|pdf)/(?P<id>[^/?#]+)")
+_ARXIV_ID_PATTERN = re.compile(r"^\d{4}\.\d{4,6}(v\d+)?$")
 
 
 class HFPapersAdapter(SourceAdapter):
@@ -41,11 +38,7 @@ class HFPapersAdapter(SourceAdapter):
 
     def fetch_candidates(self, subscription: Subscription) -> list[SourceCandidate]:
         page_url = str(subscription.config.get("url") or HF_PAPERS_URL)
-        try:
-            html = self._fetch_text(page_url)
-        except Exception:
-            logger.exception("HF papers adapter fetch failed for %s", page_url)
-            return []
+        html = self._fetch_text(page_url)
 
         candidates: list[SourceCandidate] = []
         for attrs, body in _ARTICLE_RE.findall(html):
@@ -55,7 +48,7 @@ class HFPapersAdapter(SourceAdapter):
 
             canonical_url = urljoin(HF_PAPERS_URL, title_match.group("href"))
             external_id = _data_id(attrs) or canonical_url.rstrip("/").rsplit("/", 1)[-1]
-            pdf_url = _pdf_url_from_article(body)
+            pdf_url = _pdf_url_from_article(body, external_id)
             candidates.append(
                 SourceCandidate(
                     artifact_type=self.artifact_type,
@@ -75,9 +68,13 @@ class HFPapersAdapter(SourceAdapter):
 
 
 def _default_fetch_text(url: str) -> str:
-    response = httpx.get(url, timeout=30, follow_redirects=True)
-    response.raise_for_status()
-    return response.text
+    client = get_http_client(timeout=30, follow_redirects=True)
+    try:
+        response = client.get(url)
+        response.raise_for_status()
+        return response.text
+    finally:
+        client.close()
 
 
 def _data_id(attrs: str) -> str:
@@ -94,11 +91,21 @@ def _paragraph_text(body: str) -> str:
     return strip_html(match.group("value"))
 
 
-def _pdf_url_from_article(body: str) -> str:
+def _pdf_url_from_article(body: str, external_id: str = "") -> str:
+    """Extract PDF URL from HF article body, falling back to external_id (arxiv id).
+
+    HF Paper page IDs are arxiv IDs (e.g., '2510.12345'), so when the article body
+    doesn't contain an explicit arxiv link, we can construct the PDF URL from the
+    paper's external_id directly.
+    """
     for href in _ANCHOR_RE.findall(body):
         match = _ARXIV_ID_RE.search(href)
         if match is None:
             continue
         arxiv_id = match.group("id").removesuffix(".pdf")
         return f"https://arxiv.org/pdf/{arxiv_id}.pdf"
+    # Fallback: HF paper IDs are arxiv IDs
+    candidate_id = external_id.strip().removesuffix(".pdf")
+    if candidate_id and _ARXIV_ID_PATTERN.match(candidate_id):
+        return f"https://arxiv.org/pdf/{candidate_id}.pdf"
     return ""

@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 
 from app.models.subscription import Subscription
 from app.services.arxiv_client import search_arxiv
 from app.services.source_adapters.base import SourceAdapter, SourceCandidate, parse_datetime
-
-logger = logging.getLogger(__name__)
 
 
 class ArxivAdapter(SourceAdapter):
@@ -17,7 +14,11 @@ class ArxivAdapter(SourceAdapter):
     def __init__(
         self,
         *,
-        search_fn: Callable[[str, int], list[dict]] = search_arxiv,
+        search_fn: Callable[[str, int], list[dict]] = lambda query, limit: search_arxiv(
+            query,
+            limit,
+            raise_on_error=True,
+        ),
     ) -> None:
         self._search_fn = search_fn
 
@@ -26,11 +27,7 @@ class ArxivAdapter(SourceAdapter):
         if not query:
             return []
 
-        try:
-            papers = self._search_fn(query, subscription.fetch_limit)
-        except Exception:
-            logger.exception("arXiv adapter fetch failed for query %s", query)
-            return []
+        papers = self._search_fn(query, subscription.fetch_limit)
 
         candidates: list[SourceCandidate] = []
         for paper in papers[: subscription.fetch_limit]:

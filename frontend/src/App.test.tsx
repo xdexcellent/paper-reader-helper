@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom/vitest'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, vi } from 'vitest'
 
@@ -410,7 +410,7 @@ test('点击解析与生成摘要后调用对应 API 并刷新详情', async () 
 
   await waitFor(() => expect(apiMocks.parsePaper).toHaveBeenCalledWith(1))
   await waitFor(() => expect(apiMocks.waitForTaskCompletion).toHaveBeenCalledWith('parse-task'))
-  await waitFor(() => expect(apiMocks.summarizePaper).toHaveBeenCalledWith(1, 'gpt-5.4-mini'))
+  await waitFor(() => expect(apiMocks.summarizePaper).toHaveBeenCalledWith(1, 'gpt-5.4'))
   await waitFor(() => expect(apiMocks.waitForTaskCompletion).toHaveBeenCalledWith('summary-task'))
   expect(await screen.findByText('一句话摘要')).toBeInTheDocument()
 })
@@ -531,6 +531,7 @@ test('可以切换到每日速览并展示速览壳层', async () => {
       summary_status: 'completed',
       embedding_status: 'pending',
       local_pdf_path: '/tmp/briefing.pdf',
+      tags: ['AI coding'],
     },
   ])
   apiMocks.fetchBriefing.mockResolvedValueOnce({
@@ -539,18 +540,59 @@ test('可以切换到每日速览并展示速览壳层', async () => {
     generated_at: '2026-04-19T12:00:00+08:00',
     daily_run_id: 1,
     trigger_type: 'scheduled',
-    summary_markdown: '今日精选\n\n- 重点看扩散模型与 AI coding 方向。',
-    paper_count: 1,
+    summary_markdown: [
+      '# 背景',
+      '',
+      '今日精选',
+      '',
+      '## 关键发现',
+      '',
+      '- [Briefing Paper](https://arxiv.org/abs/1234.5678) 值得优先阅读。',
+      '',
+      '## 行动项',
+      '',
+      '- 标记为已审阅。',
+    ].join('\n'),
+    paper_count: 4,
     project_count: 1,
-    source_count: 2,
+    source_count: 7,
     fallback_used: false,
     top_papers: [
       {
         paper_id: 1,
         rank: 1,
-        score: 0.95,
+        score: 163,
         reason: '与 AI coding 高相关',
         source_kind: 'arxiv',
+        canonical_url: 'https://arxiv.org/abs/1234.5678',
+        summary_text: '中文摘要：覆盖全部订阅论文',
+      },
+      {
+        paper_id: 2,
+        rank: 2,
+        score: 141,
+        reason: '补充研究方向的基础模型线索',
+        source_kind: 'arxiv',
+        title: 'Ranking Paper 2',
+        summary_text: '第二篇摘要默认展示在关键建议内。',
+      },
+      {
+        paper_id: 3,
+        rank: 3,
+        score: 128,
+        reason: '可作为近期实验设计参考',
+        source_kind: 'openreview',
+        title: 'Ranking Paper 3',
+        summary_text: '第三篇摘要默认展示在关键建议内。',
+      },
+      {
+        paper_id: null,
+        rank: 4,
+        score: 91,
+        reason: '信息不完整，展开后再确认是否处理',
+        source_kind: 'rss',
+        title: 'Ranking Paper 4',
+        summary_text: '第四篇摘要默认折叠，避免右栏噪音。',
       },
     ],
     projects: [
@@ -582,11 +624,149 @@ test('可以切换到每日速览并展示速览壳层', async () => {
   fireEvent.click(await screen.findByRole('link', { name: /工作看板/ }))
 
   expect(await screen.findByText('今日精选')).toBeInTheDocument()
+  const heroHeading = screen.getByRole('heading', { name: '每日速览' })
+  expect(heroHeading.closest('.briefing-hero')).not.toBeNull()
+  expect(screen.getByLabelText('搜索论文、项目或关键词')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '通知' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: '日报控制台' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: '今日研究快照' })).not.toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '2026-04-19', level: 3 })).toBeInTheDocument()
+  expect(screen.getByText('当前展示今天日报')).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '先看这三条结论' })).toBeInTheDocument()
+  expect(screen.getByText('已筛选 4 篇论文，生成 1 个项目观察，发现 7 个订阅源热点。')).toBeInTheDocument()
+  expect(screen.getByText('最后生成：12:00')).toBeInTheDocument()
+  expect(screen.getByText(/阅读进度：/)).toBeInTheDocument()
+  expect(screen.getByText('今日关键词')).toBeInTheDocument()
+  expect(screen.getByText('风险等级')).toBeInTheDocument()
+  expect(screen.getByText('推荐阅读顺序')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '查看关键建议' })).toHaveAttribute('href', '#briefing-recommendations')
+  expect(screen.getByRole('button', { name: '生成报告' })).toBeInTheDocument()
+  expect(screen.getByText('聚合今日论文、项目与风险信号，用于快速决定阅读和处理顺序。')).toBeInTheDocument()
+  expect(screen.getByText('当前模块')).toBeInTheDocument()
+  const summaryHeading = screen.getByRole('heading', { name: '今日论文汇总' })
+  expect(summaryHeading.closest('.briefing-main')).not.toBeNull()
+  expect(screen.getByText('日报内容')).toBeInTheDocument()
+  expect(screen.getByRole('navigation', { name: '文档目录' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '背景' })).toHaveAttribute('href', '#briefing-section-背景')
+  expect(screen.getByRole('link', { name: '关键发现' })).toHaveAttribute('href', '#briefing-section-关键发现')
+  expect(screen.getByRole('link', { name: '关键发现' })).toHaveAttribute('title', '关键发现')
+  expect(screen.getByText('滚动标记')).toBeInTheDocument()
+  expect(screen.getByLabelText('4 条建议 / 0 个风险 / 1 条参考')).toBeInTheDocument()
+  expect(screen.getByLabelText('蓝色：论文')).toBeInTheDocument()
+  expect(screen.getByLabelText('绿色：项目')).toBeInTheDocument()
+  expect(screen.getByLabelText('红色：风险')).toBeInTheDocument()
+  expect(screen.getByLabelText('黄色：重点')).toBeInTheDocument()
+  expect(screen.getByLabelText('滚动锚点')).toBeInTheDocument()
+  const briefingPaperLink = screen.getByRole('link', { name: 'Briefing Paper' })
+  expect(briefingPaperLink).toHaveAttribute('href', '/paper/1')
   expect(screen.getByText('与 AI coding 高相关')).toBeInTheDocument()
-  expect(screen.getByText('相关项目')).toBeInTheDocument()
+  const rankingHeading = screen.getByText('关键建议')
+  expect(rankingHeading.closest('.briefing-side-stack')).not.toBeNull()
+  expect(screen.queryByText('今日论文候选')).not.toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '风险点' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '参考资料' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '历史记录' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '下一步建议' })).toBeInTheDocument()
+  expect(screen.getAllByText('高优先级').length).toBeGreaterThan(0)
+  expect(screen.getAllByText('建议动作').length).toBeGreaterThan(0)
+  expect(screen.getByText('优先精读')).toBeInTheDocument()
+  expect(screen.getAllByText('为什么推荐').length).toBeGreaterThan(0)
+  expect(screen.getAllByText('适合谁看').length).toBeGreaterThan(0)
+  expect(screen.queryByText('Ranking Paper 4')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: '展开全部 4 条建议' }))
+  expect(screen.getByText('Ranking Paper 4')).toBeInTheDocument()
+  expect(screen.getAllByText('待确认').length).toBeGreaterThan(0)
+  fireEvent.click(screen.getByRole('button', { name: '标记为已审阅' }))
+  expect(screen.getByRole('button', { name: '已审阅' })).toBeInTheDocument()
+  const projectButton = screen.getByRole('button', { name: /相关项目/ })
+  expect(projectButton).toBeInTheDocument()
+  expect(screen.queryByText('openai/codex')).not.toBeInTheDocument()
+  fireEvent.click(projectButton)
+  expect(await screen.findByRole('dialog', { name: '相关项目简介' })).toBeInTheDocument()
   expect(screen.getByText('openai/codex')).toBeInTheDocument()
+  expect(screen.getByText('AI coding agent')).toBeInTheDocument()
+  expect(screen.getByText('中文摘要：覆盖全部订阅论文')).toBeInTheDocument()
+  expect(screen.getAllByText('关联主题：').length).toBeGreaterThan(0)
+  expect(screen.getByText('AI coding')).toBeInTheDocument()
+  expect(screen.getAllByRole('button', { name: /展开摘要/ }).length).toBeGreaterThan(0)
+  expect(screen.queryByText('优先级 163')).not.toBeInTheDocument()
+  expect(screen.queryByText('16300 分')).not.toBeInTheDocument()
+  expect(screen.getByText('论文候选 4')).toBeInTheDocument()
+  expect(screen.getByText('订阅源 7')).toBeInTheDocument()
   expect(screen.queryByText('运行中')).not.toBeInTheDocument()
   expect(screen.getAllByText('完成').length).toBeGreaterThan(0)
+})
+
+test('每日速览中的论文链接会跳转到论文管理详情', async () => {
+  apiMocks.fetchPapers.mockResolvedValueOnce([
+    {
+      id: 1,
+      title: 'Briefing Paper',
+      source: 'https://arxiv.org/abs/1234.5678',
+      status: 'ready',
+      parse_status: 'completed',
+      summary_status: 'completed',
+      embedding_status: 'pending',
+      local_pdf_path: '/tmp/briefing.pdf',
+    },
+  ])
+  apiMocks.fetchBriefing.mockResolvedValueOnce({
+    briefing_date: '2026-04-19',
+    status: 'completed',
+    generated_at: '2026-04-19T12:00:00+08:00',
+    daily_run_id: 1,
+    trigger_type: 'scheduled',
+    summary_markdown: '今日精选\n\n- [Briefing Paper](https://arxiv.org/abs/1234.5678) 值得优先阅读。',
+    paper_count: 1,
+    project_count: 0,
+    source_count: 1,
+    fallback_used: false,
+    top_papers: [
+      {
+        paper_id: 1,
+        rank: 1,
+        score: 163,
+        reason: '与 AI coding 高相关',
+        source_kind: 'arxiv',
+        title: 'Briefing Paper',
+        canonical_url: 'https://arxiv.org/abs/1234.5678',
+        summary_text: '中文摘要：覆盖全部订阅论文',
+      },
+    ],
+    projects: [],
+  })
+  apiMocks.fetchPaperDetail.mockResolvedValueOnce({
+    id: 1,
+    title: 'Briefing Paper',
+    source: 'https://arxiv.org/abs/1234.5678',
+    status: 'ready',
+    parse_status: 'completed',
+    summary_status: 'completed',
+    embedding_status: 'pending',
+    local_pdf_path: '/tmp/briefing.pdf',
+    full_markdown: '# Briefing Paper\n\n正文内容',
+    abstract_md: '摘要章节',
+    introduction_md: '引言章节',
+    method_md: '方法章节',
+    conclusion_md: '结论章节',
+    one_line_summary: '一句话摘要',
+    core_contributions: '核心贡献',
+    method_summary: '方法概述',
+    use_cases: '应用场景',
+    limitations: '局限性',
+    relevance_note: '相关性',
+  })
+
+  const view = renderApp(['/briefing'])
+
+  await waitFor(() => expect(view.container.querySelector('.briefing-summary')).not.toBeNull())
+  const summary = view.container.querySelector('.briefing-summary') as HTMLElement
+  const briefingPaperLink = await within(summary).findByRole('link', { name: 'Briefing Paper' })
+  expect(briefingPaperLink).toHaveAttribute('href', '/paper/1')
+  expect(fireEvent.click(briefingPaperLink)).toBe(false)
+
+  expect(await screen.findByRole('heading', { name: '论文管理' })).toBeInTheDocument()
+  await waitFor(() => expect(apiMocks.fetchPaperDetail).toHaveBeenCalledWith(1))
 })
 
 test('可以在工作看板更新自动化设置并触发今天补跑', async () => {
@@ -726,7 +906,7 @@ test('可以在工作看板更新自动化设置并触发今天补跑', async ()
   fireEvent.change(await screen.findByLabelText('生成时间'), { target: { value: '13:00' } })
   fireEvent.click(await screen.findByLabelText('显示相关项目'))
   fireEvent.click(screen.getByRole('button', { name: '保存设置' }))
-  fireEvent.click(screen.getByRole('button', { name: '立即补跑今天日报' }))
+  fireEvent.click(screen.getByRole('button', { name: '生成报告' }))
 
   await waitFor(() => expect(apiMocks.updateAutomationSettings).toHaveBeenCalledWith({
     enabled: true,
@@ -739,7 +919,160 @@ test('可以在工作看板更新自动化设置并触发今天补跑', async ()
   await waitFor(() => expect(apiMocks.runTodayBriefing).toHaveBeenCalled())
   expect(await screen.findAllByText('补跑完成')).not.toHaveLength(0)
   expect(await screen.findByText('计划时间 13:00')).toBeInTheDocument()
-  expect(screen.getByText('Asia/Shanghai')).toBeInTheDocument()
+  expect(screen.getAllByText('Asia/Shanghai').length).toBeGreaterThan(0)
+})
+
+test('每日日报顶部控件区使用 command deck 并可展开历史日报', async () => {
+  apiMocks.fetchPapers.mockResolvedValueOnce([])
+  apiMocks.fetchAutomationStatusToday.mockResolvedValueOnce({
+    local_today: '2026-04-19',
+    enabled: true,
+    briefing_enabled: true,
+    schedule_time: '12:00',
+    timezone: 'Asia/Shanghai',
+    today_run: {
+      id: 1,
+      status: 'completed',
+      trigger_type: 'scheduled',
+      started_at: '2026-04-19T12:00:00+08:00',
+      completed_at: '2026-04-19T12:05:00+08:00',
+      error_message: null,
+      progress: 100,
+      progress_message: '',
+      subscription_issues: [
+        {
+          subscription_id: 4,
+          subscription_name: 'arXiv AI RSS',
+          source_kind: 'rss',
+          severity: 'warning',
+          message: '该订阅源本次没有返回任何候选条目',
+        },
+      ],
+    },
+    today_briefing_exists: true,
+    fallback_used: false,
+    fallback_briefing_date: null,
+  })
+  apiMocks.fetchBriefing.mockResolvedValueOnce({
+    briefing_date: '2026-04-19',
+    status: 'completed',
+    generated_at: '2026-04-19T12:05:00+08:00',
+    daily_run_id: 1,
+    trigger_type: 'scheduled',
+    summary_markdown: '今日日报',
+    paper_count: 4,
+    project_count: 2,
+    source_count: 3,
+    fallback_used: false,
+    top_papers: [],
+    projects: [],
+  })
+  apiMocks.fetchBriefingHistory.mockResolvedValueOnce([
+    {
+      briefing_date: '2026-04-18',
+      status: 'completed',
+      generated_at: '2026-04-18T12:05:00+08:00',
+      daily_run_id: 2,
+      trigger_type: 'manual',
+      summary_markdown: '昨日日报',
+      paper_count: 2,
+      project_count: 1,
+      source_count: 2,
+    },
+  ])
+
+  renderApp(['/briefing'])
+
+  expect(await screen.findByText('日期切换')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '选择日报日期' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /历史日报（1）/ })).toBeInTheDocument()
+  expect(screen.getByText('计划时间 12:00')).toBeInTheDocument()
+  expect(screen.getByText('订阅源问题反馈')).toBeInTheDocument()
+  expect(screen.getAllByText('arXiv AI RSS').length).toBeGreaterThan(0)
+
+  fireEvent.click(screen.getByRole('button', { name: /历史日报（1）/ }))
+
+  expect(await screen.findByRole('button', { name: '浏览日报日期' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /2026-04-18/ })).toBeInTheDocument()
+})
+
+test('补跑完成但今日日报仍是旧快照时不会误报成功', async () => {
+  apiMocks.fetchPapers.mockResolvedValueOnce([])
+  apiMocks.fetchAutomationStatusToday.mockResolvedValueOnce({
+    local_today: '2026-04-19',
+    enabled: true,
+    briefing_enabled: true,
+    schedule_time: '12:00',
+    timezone: 'Asia/Shanghai',
+    today_run: {
+      id: 1,
+      status: 'completed',
+      trigger_type: 'scheduled',
+      started_at: '2026-04-19T12:00:00+08:00',
+      completed_at: '2026-04-19T12:01:00+08:00',
+      error_message: null,
+    },
+    today_briefing_exists: true,
+    fallback_used: false,
+    fallback_briefing_date: null,
+  })
+  apiMocks.fetchBriefing.mockResolvedValueOnce({
+    briefing_date: '2026-04-19',
+    status: 'completed',
+    generated_at: '2026-04-19T12:01:00+08:00',
+    daily_run_id: 1,
+    trigger_type: 'scheduled',
+    summary_markdown: '旧日报',
+    paper_count: 0,
+    project_count: 0,
+    source_count: 0,
+    fallback_used: false,
+    top_papers: [],
+    projects: [],
+  })
+  apiMocks.fetchBriefingHistory.mockResolvedValueOnce([])
+  apiMocks.runTodayBriefing.mockResolvedValueOnce({ run_id: 7, status: 'completed' })
+  apiMocks.fetchAutomationStatusToday.mockResolvedValue({
+    local_today: '2026-04-19',
+    enabled: true,
+    briefing_enabled: true,
+    schedule_time: '12:00',
+    timezone: 'Asia/Shanghai',
+    today_run: {
+      id: 7,
+      status: 'completed',
+      trigger_type: 'manual',
+      started_at: '2026-04-19T13:00:00+08:00',
+      completed_at: '2026-04-19T13:00:05+08:00',
+      error_message: null,
+    },
+    today_briefing_exists: true,
+    fallback_used: false,
+    fallback_briefing_date: null,
+  })
+  apiMocks.fetchBriefingHistory.mockResolvedValue([])
+  apiMocks.fetchBriefing.mockResolvedValue({
+    briefing_date: '2026-04-19',
+    status: 'completed',
+    generated_at: '2026-04-19T12:01:00+08:00',
+    daily_run_id: 1,
+    trigger_type: 'scheduled',
+    summary_markdown: '旧日报',
+    paper_count: 0,
+    project_count: 0,
+    source_count: 0,
+    fallback_used: false,
+    top_papers: [],
+    projects: [],
+  })
+
+  renderApp(['/briefing'])
+
+  fireEvent.click(await screen.findByRole('button', { name: '生成报告' }))
+
+  await waitFor(() => expect(apiMocks.runTodayBriefing).toHaveBeenCalled())
+  expect(await screen.findByText('补跑已完成，但最新日报尚未刷新到当前结果，请稍后再试')).toBeInTheDocument()
+  expect(screen.queryByText('补跑完成')).not.toBeInTheDocument()
 })
 
 test('自动化关闭且回退旧日报时会展示状态说明', async () => {
@@ -861,7 +1194,7 @@ test('静默刷新失败时会保留当前日报内容', async () => {
   fireEvent.change(await screen.findByLabelText('生成时间'), { target: { value: '13:00' } })
   fireEvent.click(screen.getByRole('button', { name: '保存设置' }))
 
-  expect(await screen.findByText('刷新每日速览失败')).toBeInTheDocument()
+  expect((await screen.findAllByText('刷新每日速览失败')).length).toBeGreaterThan(0)
   expect(screen.getByText('初始日报')).toBeInTheDocument()
   expect(screen.getByText('计划时间 13:00')).toBeInTheDocument()
 })
@@ -913,16 +1246,34 @@ test('可以从侧栏切换到 AI 研究助手壳层', async () => {
 })
 
 test('可以从侧栏切换到 AI 智能推荐壳层', async () => {
-  apiMocks.fetchPapers.mockResolvedValueOnce([
+  const paper = {
+    id: 1,
+    title: 'Recommend Me',
+    source: 'manual',
+    status: 'ready',
+    parse_status: 'completed',
+    summary_status: 'completed',
+    embedding_status: 'pending',
+    local_pdf_path: '/tmp/recommend.pdf',
+    tags: ['LLM'],
+  }
+  apiMocks.fetchPapers.mockResolvedValueOnce([paper])
+  apiMocks.fetchRecommendations.mockResolvedValueOnce([
     {
-      id: 1,
-      title: 'Recommend Me',
-      source: 'manual',
-      status: 'ready',
-      parse_status: 'completed',
-      summary_status: 'completed',
-      embedding_status: 'pending',
-      local_pdf_path: '/tmp/recommend.pdf',
+      paper,
+      score: 188,
+      reason: '已完成摘要且与当前研究方向高度相关，适合优先阅读。',
+      tag: 'LLM',
+      priority_icon: 'target',
+      future_direction: '可继续检索智能体评测方向论文。',
+      category: 'read_now',
+      category_label: '优先阅读',
+      status_label: '已就绪',
+      action_label: '开始阅读',
+      action_hint: '已有摘要和状态信号，适合作为当前阅读入口。',
+      confidence: 96,
+      signals: ['已有中文摘要', '标签：LLM'],
+      score_breakdown: ['状态已就绪 +100', '摘要完成 +30'],
     },
   ])
 
@@ -931,21 +1282,37 @@ test('可以从侧栏切换到 AI 智能推荐壳层', async () => {
   fireEvent.click(await screen.findByRole('link', { name: /AI 智能推荐/ }))
 
   expect(await screen.findByRole('heading', { name: '个性化论文推荐', level: 2 })).toBeInTheDocument()
-  expect(screen.getByText('Recommend Me')).toBeInTheDocument()
+  expect(screen.getAllByText('Recommend Me').length).toBeGreaterThan(0)
+  expect(screen.getByText('AI Reading Radar')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /全部推荐/ })).toBeInTheDocument()
+  expect(screen.getByText('为什么推荐')).toBeInTheDocument()
+  expect(screen.getAllByText('已有中文摘要').length).toBeGreaterThan(0)
+  expect(screen.getByRole('button', { name: '开始阅读' })).toBeInTheDocument()
 })
 
 test('点击新订阅进入订阅管理视图', async () => {
+  const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  )
   apiMocks.fetchPapers.mockResolvedValueOnce([])
 
-  renderApp()
+  try {
+    renderApp()
 
-  fireEvent.click(await screen.findByRole('link', { name: /AI 研究助手/ }))
-  expect(await screen.findByText('对话历史')).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('link', { name: /AI 研究助手/ }))
+    expect(await screen.findByText('对话历史')).toBeInTheDocument()
 
-  fireEvent.click(screen.getByRole('link', { name: /新订阅/ }))
+    fireEvent.click(screen.getByRole('link', { name: /新订阅/ }))
 
-  expect(await screen.findByText('订阅管理')).toBeInTheDocument()
-  expect(screen.getByText('arXiv 快速搜索')).toBeInTheDocument()
+    expect(await screen.findByText('订阅管理')).toBeInTheDocument()
+    expect(screen.getByText('arXiv 快速搜索')).toBeInTheDocument()
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled())
+  } finally {
+    fetchSpy.mockRestore()
+  }
 })
 test('可以按左侧分类目录筛选论文管理列表', async () => {
   const dispatchEventMock = vi.spyOn(window, 'dispatchEvent').mockImplementation(() => true)
@@ -1028,6 +1395,161 @@ test('可以按左侧分类目录筛选论文管理列表', async () => {
     expect(screen.queryByText('Forecast Lab')).not.toBeInTheDocument()
   } finally {
     dispatchEventMock.mockRestore()
+  }
+})
+
+test('可以一键重试所有 parse_failed 论文的解析任务', async () => {
+  apiMocks.checkAuthStatus.mockResolvedValueOnce({ requires_password: false })
+  apiMocks.fetchPapers
+    .mockResolvedValueOnce([
+      {
+        id: 1,
+        title: 'Broken Parse A',
+        source: 'arxiv',
+        status: 'parse_failed',
+        parse_status: 'failed',
+        summary_status: 'pending',
+        embedding_status: 'pending',
+        local_pdf_path: '/tmp/a.pdf',
+      },
+      {
+        id: 2,
+        title: 'Broken Parse B',
+        source: 'manual',
+        status: 'parse_failed',
+        parse_status: 'failed',
+        summary_status: 'pending',
+        embedding_status: 'pending',
+        local_pdf_path: '/tmp/b.pdf',
+      },
+      {
+        id: 3,
+        title: 'Ready Paper',
+        source: 'manual',
+        status: 'ready',
+        parse_status: 'completed',
+        summary_status: 'completed',
+        embedding_status: 'pending',
+        local_pdf_path: '/tmp/c.pdf',
+      },
+    ])
+    .mockResolvedValueOnce([
+      {
+        id: 1,
+        title: 'Broken Parse A',
+        source: 'arxiv',
+        status: 'parsing',
+        parse_status: 'processing',
+        summary_status: 'pending',
+        embedding_status: 'pending',
+        local_pdf_path: '/tmp/a.pdf',
+      },
+      {
+        id: 2,
+        title: 'Broken Parse B',
+        source: 'manual',
+        status: 'parsing',
+        parse_status: 'processing',
+        summary_status: 'pending',
+        embedding_status: 'pending',
+        local_pdf_path: '/tmp/b.pdf',
+      },
+      {
+        id: 3,
+        title: 'Ready Paper',
+        source: 'manual',
+        status: 'ready',
+        parse_status: 'completed',
+        summary_status: 'completed',
+        embedding_status: 'pending',
+        local_pdf_path: '/tmp/c.pdf',
+      },
+    ])
+
+  apiMocks.parsePaper
+    .mockResolvedValueOnce({ task_id: 'retry-task-1' })
+    .mockResolvedValueOnce({ task_id: 'retry-task-2' })
+
+  renderApp()
+
+  expect(await screen.findByRole('status')).toHaveTextContent('解析失败 2 篇')
+
+  fireEvent.click(screen.getByRole('button', { name: '全部重试解析' }))
+
+  await waitFor(() => {
+    expect(apiMocks.parsePaper).toHaveBeenCalledTimes(2)
+  })
+  expect(apiMocks.parsePaper).toHaveBeenNthCalledWith(1, 1)
+  expect(apiMocks.parsePaper).toHaveBeenNthCalledWith(2, 2)
+  expect(apiMocks.waitForTaskCompletion).not.toHaveBeenCalled()
+  expect(await screen.findByText('已提交 2 篇失败论文的重新解析任务')).toBeInTheDocument()
+})
+
+test('可以一键删除所有 parse_failed 论文', async () => {
+  const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+  apiMocks.checkAuthStatus.mockResolvedValueOnce({ requires_password: false })
+  apiMocks.fetchPapers
+    .mockResolvedValueOnce([
+      {
+        id: 1,
+        title: 'Broken Parse A',
+        source: 'arxiv',
+        status: 'parse_failed',
+        parse_status: 'failed',
+        summary_status: 'pending',
+        embedding_status: 'pending',
+        local_pdf_path: '/tmp/a.pdf',
+      },
+      {
+        id: 2,
+        title: 'Broken Parse B',
+        source: 'manual',
+        status: 'parse_failed',
+        parse_status: 'failed',
+        summary_status: 'pending',
+        embedding_status: 'pending',
+        local_pdf_path: '/tmp/b.pdf',
+      },
+      {
+        id: 3,
+        title: 'Ready Paper',
+        source: 'manual',
+        status: 'ready',
+        parse_status: 'completed',
+        summary_status: 'completed',
+        embedding_status: 'pending',
+        local_pdf_path: '/tmp/c.pdf',
+      },
+    ])
+    .mockResolvedValueOnce([
+      {
+        id: 3,
+        title: 'Ready Paper',
+        source: 'manual',
+        status: 'ready',
+        parse_status: 'completed',
+        summary_status: 'completed',
+        embedding_status: 'pending',
+        local_pdf_path: '/tmp/c.pdf',
+      },
+    ])
+
+  try {
+    renderApp()
+
+    expect(await screen.findByRole('status')).toHaveTextContent('解析失败 2 篇')
+
+    fireEvent.click(screen.getByRole('button', { name: '全部删除失败论文' }))
+
+    await waitFor(() => {
+      expect(apiMocks.deletePaper).toHaveBeenCalledTimes(2)
+    })
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(apiMocks.deletePaper).toHaveBeenNthCalledWith(1, 1)
+    expect(apiMocks.deletePaper).toHaveBeenNthCalledWith(2, 2)
+    expect(await screen.findByText('已删除 2 篇解析失败论文')).toBeInTheDocument()
+  } finally {
+    confirmSpy.mockRestore()
   }
 })
 
@@ -1214,6 +1736,154 @@ test('可以在论文详情里手动调整主分类', async () => {
     fireEvent.change(await screen.findByLabelText('主分类'), { target: { value: '2' } })
 
     await waitFor(() => expect(apiMocks.updatePaperCategory).toHaveBeenCalledWith(1, 2))
+  } finally {
+    dispatchEventMock.mockRestore()
+  }
+})
+
+test('手动调整主分类后若论文移出当前目录则返回空态而不继续加载详情', async () => {
+  const dispatchEventMock = vi.spyOn(window, 'dispatchEvent').mockImplementation(() => true)
+  apiMocks.fetchCategories
+    .mockResolvedValueOnce([
+      {
+        id: 1,
+        name: '待确认',
+        slug: '待确认',
+        description: 'Needs manual review',
+        is_system: true,
+        is_active: true,
+        is_pending_bucket: true,
+        paper_count: 1,
+        pending_count: 1,
+      },
+      {
+        id: 2,
+        name: '强化学习',
+        slug: '强化学习',
+        description: 'RL papers',
+        is_system: true,
+        is_active: true,
+        is_pending_bucket: false,
+        paper_count: 0,
+        pending_count: 0,
+      },
+    ])
+    .mockResolvedValueOnce([
+      {
+        id: 1,
+        name: '待确认',
+        slug: '待确认',
+        description: 'Needs manual review',
+        is_system: true,
+        is_active: true,
+        is_pending_bucket: true,
+        paper_count: 0,
+        pending_count: 0,
+      },
+      {
+        id: 2,
+        name: '强化学习',
+        slug: '强化学习',
+        description: 'RL papers',
+        is_system: true,
+        is_active: true,
+        is_pending_bucket: false,
+        paper_count: 1,
+        pending_count: 0,
+      },
+    ])
+  apiMocks.fetchPapers
+    .mockResolvedValueOnce([
+      {
+        id: 1,
+        title: 'Needs Review',
+        source: 'manual',
+        status: 'ready',
+        parse_status: 'completed',
+        summary_status: 'completed',
+        embedding_status: 'pending',
+        local_pdf_path: '/tmp/sample.pdf',
+        primary_category_id: 1,
+        category_status: 'pending_review',
+        category_confidence: 0.2,
+        category_reason: 'Low confidence',
+        tags: ['物理模拟'],
+      },
+    ])
+    .mockResolvedValueOnce([
+      {
+        id: 1,
+        title: 'Needs Review',
+        source: 'manual',
+        status: 'ready',
+        parse_status: 'completed',
+        summary_status: 'completed',
+        embedding_status: 'pending',
+        local_pdf_path: '/tmp/sample.pdf',
+        primary_category_id: 2,
+        category_status: 'manual_locked',
+        category_confidence: 1,
+        category_reason: 'Manual assignment',
+        tags: ['物理模拟'],
+      },
+    ])
+  apiMocks.fetchPaperDetail.mockResolvedValueOnce({
+    id: 1,
+    title: 'Needs Review',
+    source: 'manual',
+    status: 'ready',
+    parse_status: 'completed',
+    summary_status: 'completed',
+    embedding_status: 'pending',
+    local_pdf_path: '/tmp/sample.pdf',
+    primary_category_id: 1,
+    category_status: 'pending_review',
+    category_confidence: 0.2,
+    category_reason: 'Low confidence',
+    tags: ['物理模拟'],
+    full_markdown: '# Needs Review\n\nBody',
+    abstract_md: 'Abstract',
+    introduction_md: '',
+    method_md: '',
+    conclusion_md: '',
+    one_line_summary: 'One line',
+    core_contributions: 'Contrib',
+    method_summary: 'Method',
+    use_cases: '',
+    limitations: '',
+    relevance_note: '',
+  })
+  apiMocks.updatePaperCategory.mockResolvedValueOnce({
+    id: 1,
+    title: 'Needs Review',
+    source: 'manual',
+    status: 'ready',
+    parse_status: 'completed',
+    summary_status: 'completed',
+    embedding_status: 'pending',
+    local_pdf_path: '/tmp/sample.pdf',
+    primary_category_id: 2,
+    category_status: 'manual_locked',
+    category_confidence: 1,
+    category_reason: 'Manual assignment',
+    tags: ['物理模拟'],
+  })
+
+  try {
+    renderApp()
+
+    fireEvent.click(await screen.findByRole('button', { name: /待确认 \(1\)/ }))
+    fireEvent.click(await screen.findByText('Needs Review'))
+    const primaryCategoryField = await screen.findByLabelText('主分类')
+    const detailLoadCountBeforeChange = apiMocks.fetchPaperDetail.mock.calls.length
+    fireEvent.change(primaryCategoryField, { target: { value: '2' } })
+
+    await waitFor(() => expect(apiMocks.updatePaperCategory).toHaveBeenCalledWith(1, 2))
+    await waitFor(() => expect(screen.getByText('请选择左侧论文，或先导入新论文')).toBeInTheDocument())
+
+    expect(apiMocks.fetchPaperDetail).toHaveBeenCalledTimes(detailLoadCountBeforeChange)
+    expect(screen.queryByText('Failed to fetch')).not.toBeInTheDocument()
+    expect(screen.getByText('主分类已更新，论文已移出当前目录')).toBeInTheDocument()
   } finally {
     dispatchEventMock.mockRestore()
   }

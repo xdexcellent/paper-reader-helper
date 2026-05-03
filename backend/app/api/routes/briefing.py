@@ -7,6 +7,7 @@ from app.core.db import get_session
 from app.core.timezone import get_local_today
 from app.models.automation_settings import AutomationSettings
 from app.schemas.briefing import (
+    BriefingFailedItem,
     BriefingPaperItem,
     BriefingProjectItem,
     DailyBriefingHistoryItem,
@@ -34,6 +35,7 @@ def _to_response(
 ) -> DailyBriefingResponse:
     papers = service.get_paper_items(session, briefing.id)
     projects = service.get_project_items(session, briefing.id)
+    failed = service.get_failed_items_for_run(session, briefing.daily_run_id)
     run = session.get(DailyRun, briefing.daily_run_id) if briefing.daily_run_id is not None else None
     return DailyBriefingResponse(
         briefing_date=briefing.briefing_date.isoformat(),
@@ -53,6 +55,10 @@ def _to_response(
                 score=item.score,
                 reason=item.reason or item.summary_text,
                 source_kind=item.source_kind,
+                title=item.title or "",
+                summary_text=item.summary_text or "",
+                canonical_url=item.canonical_url or "",
+                pdf_url=item.pdf_url or "",
             )
             for item in papers
         ],
@@ -65,6 +71,16 @@ def _to_response(
                 source_kind=item.source_kind,
             )
             for item in projects
+        ],
+        failed_items=[
+            BriefingFailedItem(
+                title=item.title or item.external_id or "未命名候选",
+                source_kind=item.source_kind,
+                canonical_url=item.canonical_url or "",
+                pdf_url=item.pdf_url or "",
+                reason=service.friendly_failure_reason(item.error_message),
+            )
+            for item in failed
         ],
     )
 

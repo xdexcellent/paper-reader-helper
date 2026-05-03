@@ -18,6 +18,8 @@ class DailyRun(SQLModel, table=True):
     completed_at: Optional[datetime] = None
     status: str = "pending"
     trigger_type: str = "scheduled"
+    progress: int = 0
+    progress_message: str = ""
     stats_json: str = "{}"
     error_message: Optional[str] = None
     created_at: datetime = Field(default_factory=_utcnow)

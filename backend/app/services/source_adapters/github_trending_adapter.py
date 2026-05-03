@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-import logging
 import re
 from collections.abc import Callable
 from urllib.parse import quote, urlencode
 
-import httpx
-
 from app.models.subscription import Subscription
+from app.services.http_client_factory import get_http_client
 from app.services.source_adapters.base import SourceAdapter, SourceCandidate, clean_text, strip_html
-
-logger = logging.getLogger(__name__)
 
 GITHUB_TRENDING_BASE_URL = "https://github.com/trending"
 _ARTICLE_RE = re.compile(
@@ -45,11 +41,7 @@ class GitHubTrendingAdapter(SourceAdapter):
 
     def fetch_candidates(self, subscription: Subscription) -> list[SourceCandidate]:
         page_url = _build_trending_url(subscription.config)
-        try:
-            html = self._fetch_text(page_url)
-        except Exception:
-            logger.exception("GitHub trending adapter fetch failed for %s", page_url)
-            return []
+        html = self._fetch_text(page_url)
 
         candidates: list[SourceCandidate] = []
         for match in _ARTICLE_RE.finditer(html):
@@ -83,9 +75,13 @@ class GitHubTrendingAdapter(SourceAdapter):
 
 
 def _default_fetch_text(url: str) -> str:
-    response = httpx.get(url, timeout=30, follow_redirects=True)
-    response.raise_for_status()
-    return response.text
+    client = get_http_client(timeout=30, follow_redirects=True)
+    try:
+        response = client.get(url)
+        response.raise_for_status()
+        return response.text
+    finally:
+        client.close()
 
 
 def _build_trending_url(config: dict) -> str:

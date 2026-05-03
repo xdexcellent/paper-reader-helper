@@ -5,8 +5,12 @@ import type { AutomationSettings } from '../types'
 
 export function AutomationSettingsPanel({
   onSaved,
+  buttonClassName,
+  buttonLabel = '自动化设置',
 }: {
   onSaved?: (settings: AutomationSettings) => void | Promise<void>
+  buttonClassName?: string
+  buttonLabel?: string
 }) {
   const [open, setOpen] = useState(false)
   const [settings, setSettings] = useState<AutomationSettings | null>(null)
@@ -54,8 +58,12 @@ export function AutomationSettingsPanel({
 
   return (
     <div className="automation-settings">
-      <button type="button" className="btn btn-action" onClick={() => setOpen(v => !v)}>
-        自动化设置
+      <button
+        type="button"
+        className={buttonClassName ?? 'btn btn-action'}
+        onClick={() => setOpen(v => !v)}
+      >
+        {buttonLabel}
       </button>
       {open && settings ? (
         <div className="automation-settings-card">
@@ -114,6 +122,32 @@ export function AutomationSettingsPanel({
               onChange={(event) => setSettings({ ...settings, top_n: Number(event.target.value) })}
             />
           </label>
+          <div className="automation-settings-section">
+            <h4>代理设置（用于访问 HuggingFace、GitHub 等外部服务）</h4>
+            <p className="automation-settings-summary">
+              如果后台出现 WinError 10061，通常表示代理地址已被使用，但本机代理程序未启动或端口不一致。
+            </p>
+            <label>
+              <span>HTTP Proxy</span>
+              <input
+                aria-label="HTTP Proxy"
+                type="text"
+                placeholder="http://127.0.0.1:7890"
+                value={settings.http_proxy || ''}
+                onChange={(event) => setSettings({ ...settings, http_proxy: event.target.value || null })}
+              />
+            </label>
+            <label>
+              <span>HTTPS Proxy</span>
+              <input
+                aria-label="HTTPS Proxy"
+                type="text"
+                placeholder="http://127.0.0.1:7890"
+                value={settings.https_proxy || ''}
+                onChange={(event) => setSettings({ ...settings, https_proxy: event.target.value || null })}
+              />
+            </label>
+          </div>
           {scheduleSummary ? <div className="automation-settings-summary">{scheduleSummary}</div> : null}
           <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void handleSave()}>
             {saving ? '保存中' : '保存设置'}

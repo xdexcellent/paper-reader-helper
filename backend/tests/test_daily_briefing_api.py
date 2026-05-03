@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
@@ -100,6 +101,10 @@ def test_briefing_today_returns_latest_snapshot_payload(client: TestClient) -> N
             "score": 0.9,
             "reason": "值得优先阅读",
             "source_kind": "arxiv",
+            "title": "",
+            "summary_text": "",
+            "canonical_url": "",
+            "pdf_url": "",
         }
     ]
     assert body["projects"] == [
@@ -182,3 +187,38 @@ def test_today_automation_status_returns_today_run_when_snapshot_exists(client: 
     assert body["today_briefing_exists"] is True
     assert body["fallback_used"] is False
     assert body["fallback_briefing_date"] is None
+
+
+def test_today_automation_status_returns_subscription_issues(client: TestClient) -> None:
+    today = _local_today()
+    with Session(engine) as session:
+        run = DailyRun(
+            run_date=today,
+            scheduled_for=datetime(2026, 4, 19, 4, 0, tzinfo=timezone.utc),
+            status="running",
+            trigger_type="manual",
+            stats_json=json.dumps(
+                {
+                    "subscription_issues": [
+                        {
+                            "subscription_id": 7,
+                            "subscription_name": "HF Daily Papers",
+                            "source_kind": "hf_papers",
+                            "severity": "error",
+                            "message": "连接外部服务失败",
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+        )
+        session.add(run)
+        session.commit()
+
+    response = client.get("/automation/status/today")
+
+    assert response.status_code == 200
+    issue = response.json()["today_run"]["subscription_issues"][0]
+    assert issue["subscription_name"] == "HF Daily Papers"
+    assert issue["severity"] == "error"
+    assert issue["message"] == "连接外部服务失败"

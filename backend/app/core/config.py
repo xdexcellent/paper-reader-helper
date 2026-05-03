@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     jwt_secret: str = "paper-reader-secret-change-me"
     app_password: str = ""
     embedding_model_path: str = "BAAI/bge-m3"
+    # Proxy settings (fallback when DB settings not available)
+    http_proxy: str | None = None
+    https_proxy: str | None = None
 
     model_config = SettingsConfigDict(env_file=str(ENV_FILE), extra="ignore")
 

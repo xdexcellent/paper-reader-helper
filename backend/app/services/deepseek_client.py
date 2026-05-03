@@ -1,29 +1,67 @@
 import json
 import logging
+import re
 
 import httpx
 
 from app.core.config import settings
+from app.services.http_client_factory import get_http_client
 
 logger = logging.getLogger(__name__)
 
+
+def _is_meaningful_chinese(text: str | None) -> bool:
+    """Validate that text is meaningful Chinese content, not English or section labels.
+    
+    Checks:
+    1. At least 20 characters
+    2. Contains Chinese characters (\u4e00-\u9fff)
+    3. Not just section labels like "Abstract", "Introduction"
+    """
+    if not text:
+        return False
+    stripped = text.strip()
+    if len(stripped) < 20:
+        return False
+    # Must contain at least some Chinese characters
+    if not re.search(r'[\u4e00-\u9fff]', stripped):
+        return False
+    # Reject common English section labels
+    lower = stripped.lower()
+    if lower in {"abstract", "introduction", "methods", "method", 
+                 "conclusion", "results", "discussion", "summary",
+                 "background", "related work", "none", "n/a", "null", "tbd"}:
+        return False
+    return True
+
 _SUMMARY_SYSTEM_PROMPT = """\
-你是一个学术论文分析助手。请根据用户提供的论文各章节内容，生成结构化的论文摘要。
+你是一个专业的学术论文分析助手，读者是中文科研工作者。请根据用户提供的论文各章节内容，生成结构化的中文摘要。
 
 请严格以 JSON 格式返回结果，包含以下 6 个字段：
 {
-  "one_line_summary": "一句话总结论文的核心发现或贡献（50字以内）",
-  "core_contributions": "核心贡献，列出论文的主要创新点（100-200字）",
-  "method_summary": "方法概述，简要描述论文使用的技术方法和实验设计（100-200字）",
-  "use_cases": "应用场景，论文成果可以应用在哪些领域（50-100字）",
-  "limitations": "局限性，论文的不足之处和待改进方向（50-100字）",
-  "relevance_note": "相关性注记，该论文与当前研究热点的关系和阅读价值（50-100字）"
+  "one_line_summary": "一句话总结论文的核心发现或贡献（50字以内，完整中文句子）",
+  "core_contributions": "核心贡献，列出论文的主要创新点（100-200字中文）",
+  "method_summary": "方法概述，简要描述论文使用的技术方法和实验设计（100-200字中文）",
+  "use_cases": "应用场景，论文成果可以应用在哪些领域（50-100字中文）",
+  "limitations": "局限性，论文的不足之处和待改进方向（50-100字中文）",
+  "relevance_note": "相关性注记，该论文与当前研究热点的关系和阅读价值（50-100字中文）"
 }
 
-注意：
-- 所有字段使用中文回答
-- 仅返回 JSON，不要包含任何其他文本或 markdown 标记
-- 如果某个章节内容为空，根据已有内容尽可能推断
+关键规则：
+1. **无论输入论文是什么语言（英文 / 中文 / 其他），所有字段必须全部使用简体中文完整句子回答**。严禁返回英文章节标题（如 "Abstract"、"Introduction"）或原文片段作为字段值。
+2. 技术术语可保留英文缩写（如 LLM、RL、VLM、KV Cache），但说明文字必须是中文。
+3. 每个字段必须是意义完整的中文句子，长度不少于 20 字符。如果内容不足以填充某字段，请基于已有内容合理推断并补全。
+4. 仅返回 JSON 对象，不要包含任何解释、markdown 标记或多余文本。
+
+示例（输入英文摘要时的正确输出）：
+输入摘要："This paper presents a novel diffusion transformer for image generation..."
+正确输出片段：
+  "one_line_summary": "提出一种基于 Transformer 的新型扩散模型用于图像生成",
+  "core_contributions": "核心贡献是在扩散模型架构中引入 Transformer 主干..."
+
+错误示例（禁止）：
+  "one_line_summary": "Abstract"   ← 仅章节标签，不合法
+  "one_line_summary": "This paper presents..."   ← 英文，不合法
 """
 
 
@@ -38,7 +76,7 @@ class DeepSeekClient:
         self.api_base = (api_base or settings.deepseek_api_base).rstrip("/")
         self.api_key = api_key or settings.deepseek_api_key
 
-    def summarize_sections(self, sections: dict[str, str], model: str = "gpt-5.4-mini") -> dict[str, str]:
+    def summarize_sections(self, sections: dict[str, str], model: str = "gpt-5.4") -> dict[str, str]:
         """Summarize paper sections using DeepSeek Chat API.
 
         If no API key is configured, falls back to a placeholder result.
@@ -53,7 +91,7 @@ class DeepSeekClient:
             logger.exception("DeepSeek API call failed, falling back to placeholder")
             return self._fallback_result(sections)
 
-    def _summarize_via_api(self, sections: dict[str, str], model: str = "gpt-5.4-mini") -> dict[str, str]:
+    def _summarize_via_api(self, sections: dict[str, str], model: str = "gpt-5.4") -> dict[str, str]:
         user_content = self._build_user_message(sections)
         logger.info(
             "Calling DeepSeek API for summarization (%d chars input)", len(user_content)
@@ -73,7 +111,7 @@ class DeepSeekClient:
         }
 
         content = self._stream_chat(endpoint, request_body)
-        print(f"[DeepSeek DEBUG] got content ({len(content)} chars)", flush=True)
+        logger.debug("DeepSeek streaming response collected (%d chars)", len(content))
 
         # Parse JSON from response — handle possible markdown code fences
         import re
@@ -91,7 +129,7 @@ class DeepSeekClient:
             logger.error("Failed to parse JSON. Raw response: %s", content)
             raise e
 
-        return {
+        result = {
             "one_line_summary": parsed.get("one_line_summary", ""),
             "core_contributions": parsed.get("core_contributions", ""),
             "method_summary": parsed.get("method_summary", ""),
@@ -99,23 +137,50 @@ class DeepSeekClient:
             "limitations": parsed.get("limitations", ""),
             "relevance_note": parsed.get("relevance_note", ""),
             "model_name": model,
-            "prompt_version": "v2",
+            "prompt_version": "v3",
         }
 
-    def chat(self, messages: list[dict[str, str]], model: str = "gpt-5.4-mini") -> str:
+        # 校验核心字段：避免 LLM 返回英文/章节标签/过短占位符
+        if not _is_meaningful_chinese(result["one_line_summary"]):
+            logger.warning(
+                "DeepSeek output rejected (one_line_summary not valid Chinese): %r",
+                result["one_line_summary"][:80],
+            )
+            raise RuntimeError("DeepSeek summary failed validation: one_line_summary not valid Chinese")
+
+        return result
+
+    def translate_to_chinese(self, text: str, model: str = "gpt-5.4") -> str:
+        """Translate English text to Chinese using DeepSeek API.
+
+        Returns original text if API unavailable or translation fails.
+        """
+        if not text or not self.api_key:
+            return text
+        try:
+            messages = [
+                {"role": "system", "content": "你是一个专业的技术文档翻译助手。请将用户提供的英文项目描述翻译成简洁流畅的中文（50字以内）。仅返回翻译结果，不要解释。"},
+                {"role": "user", "content": f"请翻译以下项目描述：\n\n{text}"},
+            ]
+            result = self._stream_chat(self._resolve_chat_endpoint(), {
+                "model": model, "messages": messages, "stream": True,
+            })
+            # Validate: result should be Chinese
+            if _is_meaningful_chinese(result):
+                return result.strip()
+            return text
+        except Exception:
+            logger.warning("Translation failed, using local Chinese fallback: %s", text[:80])
+            return text
+
+    def chat(self, messages: list[dict[str, str]], model: str = "gpt-5.4") -> str:
         """Send a chat message to DeepSeek API."""
         if not self.api_key:
             return "DeepSeek API Key 未配置，无法进行真实对话。请在 backend/.env 中配置 DEEPSEEK_API_KEY。"
-
-        endpoint = self._resolve_chat_endpoint()
-
         try:
-            request_body = {
-                "model": model,
-                "messages": messages,
-                "stream": True,
-            }
-            return self._stream_chat(endpoint, request_body)
+            return self._stream_chat(self._resolve_chat_endpoint(), {
+                "model": model, "messages": messages, "stream": True,
+            })
         except Exception as e:
             logger.exception("DeepSeek chat failed")
             return f"对话失败，请稍后再试（错误信息：{str(e)}）。"
@@ -128,7 +193,10 @@ class DeepSeekClient:
         """
         collected_content: list[str] = []
 
-        with httpx.Client(timeout=180) as client:
+        # LLM calls must use the same URL/API key path as paper summarization.
+        # Do not reuse automation proxy settings, which are intended for source fetching.
+        client = get_http_client(timeout=180, use_db_proxy=False)
+        try:
             with client.stream(
                 "POST",
                 endpoint,
@@ -155,6 +223,8 @@ class DeepSeekClient:
                             collected_content.append(text)
                     except (json.JSONDecodeError, KeyError, IndexError):
                         continue
+        finally:
+            client.close()
 
         result = "".join(collected_content).strip()
         if not result:
@@ -168,7 +238,7 @@ class DeepSeekClient:
             endpoint = f"{self.api_base}/chat/completions"
         else:
             endpoint = f"{self.api_base}/v1/chat/completions"
-        print(f"[DeepSeek DEBUG] resolved endpoint: {endpoint}", flush=True)
+        logger.debug("Resolved DeepSeek chat endpoint: %s", endpoint)
         return endpoint
 
     def _build_user_message(self, sections: dict[str, str]) -> str:
@@ -192,17 +262,18 @@ class DeepSeekClient:
         return "\n".join(parts)
 
     def _fallback_result(self, sections: dict[str, str]) -> dict[str, str]:
-        """Return placeholder result when API key is not configured."""
-        abstract_text = sections.get("abstract_md", "").strip()
+        """Return placeholder result when API is not available or validation failed.
+        
+        Returns Chinese-only placeholder to avoid showing English abstracts in briefing.
+        """
+        placeholder = "摘要生成暂时不可用，请检查 DeepSeek API Key 配置或稍后重试。如需使用原始摘要，请在论文详情页查看。"
         return {
-            "one_line_summary": abstract_text[:120]
-            if abstract_text
-            else "DeepSeek API Key 未配置，请在 .env 中设置 DEEPSEEK_API_KEY",
-            "core_contributions": "API Key 未配置，无法生成真实摘要。请在 backend/.env 中配置 DEEPSEEK_API_KEY。",
+            "one_line_summary": placeholder,
+            "core_contributions": placeholder,
             "method_summary": "",
             "use_cases": "",
             "limitations": "",
-            "relevance_note": "",
+            "relevance_note": placeholder,
             "model_name": "fallback",
-            "prompt_version": "v2",
+            "prompt_version": "v3",
         }

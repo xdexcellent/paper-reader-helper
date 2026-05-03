@@ -1,0 +1,62 @@
+<h2>阅读区里的问答入口怎么放</h2>
+<p class="subtitle">你已经选了三栏工作台 + 摘要优先详情页。下面只看“问答”怎么嵌进去，要求是不打断阅读。</p>
+
+<div class="cards">
+  <div class="card" data-choice="qa-a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">方案 A：右侧可收起问答抽屉</div>
+        <div class="mockup-body" style="display:flex;gap:10px;min-height:340px;">
+          <div class="mock-sidebar" style="width:20%;">章节导航</div>
+          <div class="mock-content" style="width:55%;">正文阅读区<br><br>保持主阅读宽度</div>
+          <div class="mock-content" style="width:25%;">问答抽屉<br>提问框<br>答案<br>引用段落</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>方案 A：右侧抽屉</h3>
+      <p>阅读和问答可以同时存在，适合显示引用来源。我最推荐这个，兼顾阅读与追问。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="qa-b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">方案 B：底部问答面板</div>
+        <div class="mockup-body" style="display:flex;flex-direction:column;gap:10px;min-height:340px;">
+          <div style="display:flex;gap:10px;flex:1;">
+            <div class="mock-sidebar" style="width:22%;">章节导航</div>
+            <div class="mock-content" style="width:78%;">正文阅读区</div>
+          </div>
+          <div class="mock-content" style="height:100px;">底部问答区<br>提问输入框 / 回答 / 引用</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>方案 B：底部面板</h3>
+      <p>更不压缩正文宽度，但来回看答案和正文时滚动距离更大。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="qa-c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">方案 C：悬浮按钮 + 独立问答弹层</div>
+        <div class="mockup-body" style="display:flex;gap:10px;min-height:340px;position:relative;">
+          <div class="mock-sidebar" style="width:22%;">章节导航</div>
+          <div class="mock-content" style="width:78%;">正文阅读区</div>
+          <button class="mock-button" style="position:absolute;right:12px;bottom:12px;">问这篇论文</button>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>方案 C：悬浮弹层</h3>
+      <p>界面最干净，但问答更像额外动作，不够“随手追问”。</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>我的推荐</h3>
+  <p>推荐 <strong>方案 A：右侧可收起问答抽屉</strong>。默认收起，只有在用户需要时展开，这样第一版仍然以阅读为主。</p>
+</div>

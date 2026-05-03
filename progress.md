@@ -1,0 +1,120 @@
+# Project Hardening Progress
+
+## 2026-04-15
+
+- Started implementation pass for the 10 audit issues.
+- Read relevant workflow skills: `brainstorming`, `planning-with-files`, `writing-plans`, `test-driven-development`, `systematic-debugging`, `verification-before-completion`, and `requesting-code-review`.
+- Restored existing planning files and replaced the completed frontend UI plan with the current project hardening repair plan.
+- Added failing-first regression tests for auth secret safety, task failure propagation, duplicated routes, and frontend auth fail-closed behavior.
+- Error: first patch attempt against `frontend/src/App.test.tsx` used mojibake text context and failed; resolved by matching stable English code context.
+- Confirmed RED failures:
+  - Backend targeted tests initially failed for default JWT secret, swallowed task exception, duplicate embed route, and legacy semantic route.
+  - Frontend test failed because auth status failure still opened the workspace.
+- Implemented fixes for all 10 planned issues.
+- Targeted verification:
+  - `PYTHONPATH=. pytest tests/test_auth.py tests/test_task_queue_routes.py -q` passed: 5 tests.
+  - `vitest run src/App.test.tsx --reporter=dot` passed: 13 tests.
+- Broad verification findings and fixes:
+  - `pytest -q` initially collected `backend/test_api.py`, which performs a real network request at import time; fixed by adding `testpaths = ["tests"]` to `backend/pyproject.toml`.
+  - Backend broad tests then exposed local `.env` auth leakage into tests; fixed by explicitly isolating `APP_PASSWORD` and `JWT_SECRET` in `backend/tests/conftest.py`.
+  - Existing parse/summarize tests assumed background tasks completed synchronously; fixed by adding a shared task polling fixture and waiting for task completion.
+- Final verification:
+  - `PYTHONPATH=. pytest -q` passed: 22 tests.
+  - `vitest run src/App.test.tsx --reporter=dot` passed: 13 tests.
+  - `npm run build` passed; Vite still warns that the main JS chunk is larger than 500 kB.
+  - `docker compose config` succeeded; Docker CLI emitted a non-blocking warning about access to `C:\Users\高超\.docker\config.json`.
+- Status: implementation and verification complete.
+
+## 2026-05-02
+
+- Started 工作看板 reading experience refresh.
+- Read workflow/UI skills: `using-superpowers`, `brainstorming`, `writing-plans`, `ui-ux-pro-max`, and `planning-with-files`.
+- ACE semantic search failed on `backend/.pytest_tmp` permission (`EPERM`); switched to `rg` and direct reads for frontend files.
+- Located implementation:
+  - `frontend/src/components/DailyBriefingShell.tsx`
+  - `frontend/src/components/BriefingTopPapers.tsx`
+  - `frontend/src/components/BriefingProjectsSidebar.tsx`
+  - `frontend/src/App.tsx`
+  - `frontend/src/index.css`
+  - `frontend/src/App.test.tsx`
+- Git status shows a very dirty worktree with many unrelated backend/frontend changes and `.trellis` deletions. This pass will not revert or clean them.
+- Implemented the 工作看板 UI refresh:
+  - Added a focused hero purpose line and primary `生成报告` action.
+  - Added a sticky document outline generated from markdown headings.
+  - Added a right-edge marker legend with jump anchors and summary counts.
+  - Grouped the right sidebar into `关键建议`, `风险点`, `参考资料`, `历史记录`, and `下一步建议`.
+  - Limited key suggestions to 3 by default, with priority labels and expand/collapse.
+  - Strengthened left navigation selected state and added `当前模块`.
+  - Tuned dark-mode hierarchy, report typography, blockquotes, card levels, and responsive layout.
+- Debugged a flaky combined daily-briefing link test. Root cause: the test selected before the current `/briefing` container had finished loading its `.briefing-summary`; fixed by waiting for the current container before clicking the markdown paper link.
+- Debugged an order-dependent full `App.test.tsx` failure after the new subscription route test mounted `SubscriptionPage`. Root cause: that test left the component's raw `/subscriptions` `fetch` unmocked, so a local backend 401 could dispatch `paper-reader:unauthorized` during the next test; fixed by mocking the subscription list request in that test.
+- Verification:
+  - `.\\node_modules\\.bin\\vitest.cmd run src\\App.test.tsx -t "工作看板" --reporter=dot` passed: 1 test, 26 skipped.
+  - `.\\node_modules\\.bin\\vitest.cmd run src\\App.test.tsx -t "每日速览" --reporter=dot` passed: 2 tests, 25 skipped.
+  - `.\\node_modules\\.bin\\vitest.cmd run src\\App.test.tsx --reporter=dot` passed: 27 tests in the final run.
+  - Final `npm run build` failed before bundling with existing type error: `src/components/RecommendationShell.tsx(22,78): Property 'updated_at' does not exist on type 'Paper'`.
+- Note: An earlier `-t "工作看板|每日速览|补跑"` attempt is not a valid PowerShell-safe filter because `|` is parsed as a shell pipe; use a quoted Vitest regex-safe command or separate runs.
+- Continued 工作看板 polish pass based on follow-up UI feedback:
+  - Reduced reading weight by moving report body, outline, side cards, and secondary text toward readable sans-serif styling while keeping headings/ranks visually stronger.
+  - Added title status copy: selected paper count, project observations, subscription-source hotspots, last generated time, and reading progress.
+  - Made the highlight panel denser with keyword/risk/read-order summary and anchors to key recommendations/report body.
+  - Clarified the document outline hierarchy with full-title hover text, stronger top-level items, deeper indentation for subheadings, and active left bars.
+  - Reworked right-side paper recommendations into decision cards with `建议动作`, `适合谁看`, `为什么推荐`, and lighter `关联主题` chips.
+  - Narrowed the right rail/main grid balance and tightened report-top spacing.
+  - Added explicit scroll-marker legend colors for papers, projects, risks, and highlights, plus active marker state.
+- Follow-up verification:
+  - `.\\node_modules\\.bin\\vitest.cmd run src\\App.test.tsx -t "可以切换到每日速览" --reporter=dot` passed: 1 test, 26 skipped.
+  - `.\\node_modules\\.bin\\vitest.cmd run src\\App.test.tsx --reporter=dot` passed: 27 tests.
+  - `npm run build` still fails on the existing unrelated `RecommendationShell.tsx(22,78)` `Paper.updated_at` type error.
+  - `git diff --check -- frontend/src/components/DailyBriefingShell.tsx frontend/src/components/BriefingTopPapers.tsx frontend/src/App.test.tsx frontend/src/index.css` reported no whitespace errors; it only warned that Git may convert LF to CRLF.
+- Optimized the 工作看板 `滚动标记` rail after screenshot feedback:
+  - Replaced the wide vertical text/legend stack with a compact marker card containing a short label, three numeric counters, a central colored anchor track, and short legend labels.
+  - Preserved full marker meanings through `aria-label`/`title` for accessibility and hover explanation.
+  - Tightened the marker column from the previous wide rail to a 52px micro-navigation column, with a horizontal compact version on mobile.
+- Scroll-marker verification:
+  - `.\\node_modules\\.bin\\vitest.cmd run src\\App.test.tsx -t "可以切换到每日速览" --reporter=dot` passed: 1 test, 26 skipped.
+  - `.\\node_modules\\.bin\\vitest.cmd run src\\App.test.tsx --reporter=dot` passed: 27 tests.
+  - `npm run build` still fails on the existing unrelated `RecommendationShell.tsx(22,78)` `Paper.updated_at` type error.
+  - `git diff --check -- frontend/src/components/DailyBriefingShell.tsx frontend/src/App.test.tsx frontend/src/index.css` reported no whitespace errors; it only warned that Git may convert LF to CRLF.
+- Implemented MinerU public PDF URL preflight after 16 parse failures:
+  - Root cause evidence: local failed PDFs existed and started with `%PDF-1.7`, but the public `SERVER_BASE_URL/files/...pdf` endpoint returned HTTP 530 with `error code: 1033`, so MinerU received a non-PDF response.
+  - Added preflight in `backend/app/services/mineru_client.py` before submitting MinerU extraction tasks.
+  - Preflight performs a ranged GET against the generated public PDF URL and requires HTTP < 400 plus `%PDF-` file header.
+  - Failures now raise a clear `PDF 公网 URL 预检失败` message with status/preview instead of waiting for MinerU to report a misleading corrupted-file error.
+  - Added regression tests in `backend/tests/test_mineru_client.py` for unreadable public URL and successful preflight-submit flow.
+- MinerU preflight verification:
+  - `$env:PYTHONPATH='.'; uv run pytest tests/test_mineru_client.py -q` passed: 3 tests.
+  - `$env:PYTHONPATH='.'; uv run pytest tests/test_mineru_client.py tests/test_parse_pipeline.py tests/test_task_queue_routes.py -q` passed: 12 tests.
+  - `$env:PYTHONPATH='.'; uv run pytest -q` passed: 110 tests.
+  - `git diff --check -- backend/app/services/mineru_client.py backend/tests/test_mineru_client.py progress.md task_plan.md` reported no whitespace errors; it only warned that Git may convert LF to CRLF.
+# 2026-05-03 PaperQuay Integration Spec Pass
+
+- Started PaperQuay integration specification pass after user selected option 2: gradually transplant PaperQuay-like functionality into the current app.
+- Loaded `spec_workflow_guide`; dashboard is not currently available, so implementation remains blocked pending manual/user review.
+- Continued `superpowers:brainstorming`; created docs only, no application code changes.
+- Used `planning-with-files` and `ui-ux-pro-max` for persistent planning and UI/UX constraints.
+- Researched PaperQuay from official GitHub/README sources and confirmed architecture mismatch: PaperQuay is Tauri 2 + React + Rust + SQLite; current project is FastAPI + React/Vite + SQLModel/SQLite.
+- Created:
+  - `.spec-workflow/specs/paperquay-integration/requirements-questionnaire.md` with 200 fill-in questions.
+  - `.spec-workflow/specs/paperquay-integration/prd.md`.
+  - `.spec-workflow/specs/paperquay-integration/requirements.md`.
+  - `.spec-workflow/specs/paperquay-integration/technical-spec-draft.md`.
+- Self-review:
+  - `rg -n "TBD|TODO|\\[Provide|\\[.*\\]" .spec-workflow\\specs\\paperquay-integration` returned no placeholders.
+  - Document sizes were checked with `Get-ChildItem`.
+- Status: documentation draft complete; coding is blocked until questionnaire answers and requirements/design review.
+- Follow-up request received: user asked to gradually complete according to the documents.
+- Approval status check for `approval_1777794616007_s8idfuhxg` still returned `pending`; spec workflow explicitly rejects verbal approval.
+- Attempted to start `spec-workflow-mcp --dashboard`, but the command is not available in the current shell.
+- Status remains blocked before implementation; no application code changes were made.
+- User installed `spec-workflow-mcp` globally and asked to retry.
+- Retried `spec-workflow-mcp --dashboard`; the command now starts `spec-workflow-mcp` 1.0.8, but this package starts a stdio MCP server and does not expose a dashboard URL or parse the `--dashboard` flag.
+- Checked installed package metadata at `D:\ProgramFiles\nodejs\node_global\node_modules\spec-workflow-mcp\package.json`; the bin only maps `spec-workflow-mcp` to `dist/index.js`, which connects a `StdioServerTransport`.
+- Rechecked approval `approval_1777794616007_s8idfuhxg`; status is still `pending`, so the workflow remains blocked before design/tasks/implementation.
+- Requirements approval `approval_1777794616007_s8idfuhxg` later returned `approved`; deleted it successfully before moving to design.
+- Created `.spec-workflow/specs/paperquay-integration/design.md` from approved requirements, PRD, technical draft, and current code review.
+- ACE semantic search remained blocked by `backend/.pytest_tmp` EPERM, so design analysis used direct reads of `App.tsx`, `PaperManagementPage.tsx`, `PaperList.tsx`, `PaperDetail.tsx`, `ImportForm.tsx`, `types.ts`, `api.ts`, paper models/schemas/routes, category service, and DB migration helper.
+- Self-review for design: placeholder scan returned no matches; design is 371 lines.
+- Requested design approval `approval_1777797111834_7pugbqinq`; status is `pending`, so tasks and implementation are blocked.
+
+---

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import logging
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
 
-import httpx
-
 from app.models.subscription import Subscription
+from app.services.http_client_factory import get_http_client
 from app.services.source_adapters.base import (
     SourceAdapter,
     SourceCandidate,
@@ -14,9 +12,6 @@ from app.services.source_adapters.base import (
     parse_datetime,
     strip_html,
 )
-
-logger = logging.getLogger(__name__)
-
 
 class RssAdapter(SourceAdapter):
     source_kind = "rss"
@@ -34,17 +29,12 @@ class RssAdapter(SourceAdapter):
         if not feed_url:
             return []
 
-        try:
-            xml_text = self._fetch_text(feed_url)
-        except Exception:
-            logger.exception("RSS adapter fetch failed for %s", feed_url)
-            return []
+        xml_text = self._fetch_text(feed_url)
 
         try:
             root = ET.fromstring(xml_text)
         except ET.ParseError:
-            logger.exception("RSS adapter failed to parse feed %s", feed_url)
-            return []
+            raise ValueError(f"RSS feed parse failed for {feed_url}") from None
 
         items = (
             self._parse_atom_feed(root, subscription.fetch_limit)
@@ -127,9 +117,13 @@ class RssAdapter(SourceAdapter):
 
 
 def _default_fetch_text(url: str) -> str:
-    response = httpx.get(url, timeout=30, follow_redirects=True)
-    response.raise_for_status()
-    return response.text
+    client = get_http_client(timeout=30, follow_redirects=True)
+    try:
+        response = client.get(url)
+        response.raise_for_status()
+        return response.text
+    finally:
+        client.close()
 
 
 def _local_name(tag: str) -> str:

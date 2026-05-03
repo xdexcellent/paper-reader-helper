@@ -47,7 +47,7 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)) -> ChatR
     for msg in request.messages:
         messages.append({"role": msg.role, "content": msg.content})
 
-    model = request.model or "gpt-5.4-mini"
+    model = request.model or "gpt-5.4"
     reply = client.chat(messages, model=model)
     return ChatResponse(reply=reply)
 
@@ -57,7 +57,7 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)) -> ChatR
 class CreateSessionRequest(BaseModel):
     title: str = "新对话"
     paper_id: int | None = None
-    model: str = "gpt-5.4-mini"
+    model: str = "gpt-5.4"
 
 
 class SessionResponse(BaseModel):

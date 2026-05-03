@@ -92,6 +92,10 @@ def _migrate_add_columns() -> None:
         ("daily_briefing_project_item", "url", "TEXT DEFAULT ''"),
         ("daily_briefing_project_item", "summary", "TEXT DEFAULT ''"),
         ("daily_briefing_project_item", "source_kind", "TEXT DEFAULT ''"),
+        ("daily_run", "progress", "INTEGER DEFAULT 0"),
+        ("daily_run", "progress_message", "TEXT DEFAULT ''"),
+        ("automation_settings", "http_proxy", "TEXT"),
+        ("automation_settings", "https_proxy", "TEXT"),
     ]
     with engine.connect() as conn:
         for table, column, col_type in migrations:

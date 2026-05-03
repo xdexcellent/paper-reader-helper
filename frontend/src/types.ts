@@ -7,6 +7,7 @@ export type Paper = {
   summary_status: string
   embedding_status: string
   local_pdf_path: string
+  updated_at?: string
   primary_category_id?: number | null
   category_status?: string
   category_confidence?: number
@@ -51,6 +52,8 @@ export interface AutomationSettings {
   top_n: number
   briefing_enabled: boolean
   project_sidebar_enabled: boolean
+  http_proxy?: string | null
+  https_proxy?: string | null
 }
 
 export interface AutomationRunStatus {
@@ -60,6 +63,17 @@ export interface AutomationRunStatus {
   started_at: string | null
   completed_at: string | null
   error_message: string | null
+  progress: number
+  progress_message: string
+  subscription_issues?: AutomationSubscriptionIssue[]
+}
+
+export interface AutomationSubscriptionIssue {
+  subscription_id: number | null
+  subscription_name: string
+  source_kind: string
+  severity: 'warning' | 'error' | string
+  message: string
 }
 
 export interface AutomationTodayStatus {
@@ -80,6 +94,10 @@ export interface BriefingPaperItem {
   score: number
   reason: string
   source_kind: string
+  title?: string
+  summary_text?: string
+  canonical_url?: string
+  pdf_url?: string
 }
 
 export interface BriefingProjectItem {
@@ -88,6 +106,14 @@ export interface BriefingProjectItem {
   url: string
   summary: string
   source_kind: string
+}
+
+export interface BriefingFailedItem {
+  title: string
+  source_kind: string
+  canonical_url?: string
+  pdf_url?: string
+  reason: string
 }
 
 export interface DailyBriefingSnapshot {
@@ -103,6 +129,7 @@ export interface DailyBriefingSnapshot {
   fallback_used: boolean
   top_papers: BriefingPaperItem[]
   projects: BriefingProjectItem[]
+  failed_items?: BriefingFailedItem[]
 }
 
 export interface DailyBriefingHistoryItem {

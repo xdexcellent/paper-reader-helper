@@ -4,19 +4,9 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
+    // Frontend uses VITE_API_BASE / absolute backend URLs, so SPA routes like
+    // /briefing and /stats must not be proxied away from the Vite dev server.
     port: 3000,
-    proxy: {
-      '/papers': 'http://localhost:8000',
-      '/chat': 'http://localhost:8000',
-      '/auth': 'http://localhost:8000',
-      '/stats': 'http://localhost:8000',
-      '/briefing': 'http://localhost:8000',
-      '/recommendations': 'http://localhost:8000',
-      '/tasks': 'http://localhost:8000',
-      '/subscriptions': 'http://localhost:8000',
-      '/health': 'http://localhost:8000',
-      '/files': 'http://localhost:8000',
-    },
   },
   test: {
     globals: true,

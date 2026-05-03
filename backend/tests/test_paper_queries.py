@@ -13,6 +13,15 @@ def test_list_and_detail_endpoints_return_reader_data(client, mocker, wait_for_t
     )
     paper_id = create_response.json()["id"]
 
+    mocker.patch(
+        "app.services.mineru_client.MineruClient.parse_pdf",
+        return_value={
+            "full_markdown": "# Reader Ready\n\n## Abstract\nA readable abstract.\n\n## Introduction\nIntro text.\n\n## Methods\nMethod text.\n\n## Conclusion\nConclusion text.",
+            "content_json_path": "data/storage/mineru/content.json",
+            "full_zip_path": "data/storage/mineru/full.zip",
+        },
+    )
+
     parse_response = client.post(f"/papers/{paper_id}/parse")
     assert parse_response.status_code == 202
     parse_task = wait_for_task(client, parse_response.json()["task_id"])

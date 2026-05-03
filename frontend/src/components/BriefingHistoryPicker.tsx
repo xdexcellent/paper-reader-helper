@@ -1,3 +1,4 @@
+import { BriefingDateField } from './BriefingDateField'
 import { StatusBadge } from './StatusBadge'
 import type { DailyBriefingHistoryItem } from '../types'
 
@@ -12,14 +13,14 @@ export function BriefingHistoryPicker({
 }) {
   return (
     <div className="briefing-history-picker-stack">
-      <label className="briefing-history-picker">
-        <span>日期</span>
-        <input
-          type="date"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      </label>
+      <BriefingDateField
+        label="浏览日期"
+        value={value}
+        helperText="通过日历快速跳转到某一天的日报"
+        ariaLabel="浏览日报日期"
+        onChange={onChange}
+        variant="compact"
+      />
       {history.length > 0 ? (
         <div className="briefing-history-list" aria-label="日报历史">
           {history.map((item) => {

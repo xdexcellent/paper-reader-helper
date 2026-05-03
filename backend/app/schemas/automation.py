@@ -1,6 +1,6 @@
 import re
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.timezone import is_valid_timezone
 
@@ -15,6 +15,8 @@ class AutomationSettingsResponse(BaseModel):
     top_n: int
     briefing_enabled: bool
     project_sidebar_enabled: bool
+    http_proxy: str | None = None
+    https_proxy: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -24,6 +26,14 @@ class AutomationRunResponse(BaseModel):
     status: str
 
 
+class AutomationSubscriptionIssue(BaseModel):
+    subscription_id: int | None = None
+    subscription_name: str = ""
+    source_kind: str = ""
+    severity: str = "warning"
+    message: str = ""
+
+
 class AutomationRunStatus(BaseModel):
     id: int | None
     status: str
@@ -31,6 +41,9 @@ class AutomationRunStatus(BaseModel):
     started_at: str | None
     completed_at: str | None
     error_message: str | None
+    progress: int = 0
+    progress_message: str = ""
+    subscription_issues: list[AutomationSubscriptionIssue] = Field(default_factory=list)
 
 
 class AutomationTodayStatusResponse(BaseModel):
@@ -52,6 +65,8 @@ class AutomationSettingsUpdate(BaseModel):
     top_n: int | None = None
     briefing_enabled: bool | None = None
     project_sidebar_enabled: bool | None = None
+    http_proxy: str | None = None
+    https_proxy: str | None = None
 
     @field_validator("schedule_time")
     @classmethod

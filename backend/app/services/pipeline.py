@@ -84,7 +84,7 @@ class PaperPipelineService:
         session.refresh(paper)
         return paper
 
-    def summarize_paper(self, session: Session, paper: Paper, model: str = "gpt-5.4-mini") -> Paper:
+    def summarize_paper(self, session: Session, paper: Paper, model: str = "gpt-5.4") -> Paper:
         content = session.exec(
             select(PaperContent).where(PaperContent.paper_id == paper.id)
         ).one()

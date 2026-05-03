@@ -8,12 +8,15 @@ from urllib.parse import quote
 import httpx
 
 from app.core.config import settings
+from app.services.http_client_factory import get_http_client
 
 logger = logging.getLogger(__name__)
 
 _POLL_INTERVAL = 5  # seconds
 _POLL_TIMEOUT = 600  # seconds
 _LOCAL_HOST_TOKENS = ["localhost", "127.0.0.1", "0.0.0.0"]
+_PDF_MAGIC = b"%PDF-"
+_PDF_PREFLIGHT_RANGE = "bytes=0-15"
 
 
 class MineruClient:
@@ -75,27 +78,21 @@ class MineruClient:
                 "MinerU 无法从公网访问你的 PDF，请改为可公网访问的后端地址后重试。"
             )
             raise RuntimeError(message)
-            return self._fallback_result(
-                pdf_path,
-                reason=(
-                    "`SERVER_BASE_URL` 当前是本地地址（localhost/127.0.0.1），"
-                    "MinerU 无法从公网访问你的 PDF。请改为可公网访问的后端地址后重试。"
-                ),
-            )
 
         try:
             return self._parse_via_api(pdf_path)
         except Exception as e:
             logger.exception("MinerU API call failed")
             raise RuntimeError(f"MinerU 解析失败: {str(e)}") from e
-            return self._fallback_result(pdf_path, reason=f"解析过程中发生错误：{str(e)}")
 
     def _parse_via_api(self, pdf_path: str) -> dict[str, str]:
         pdf_url = self._make_pdf_url(pdf_path)
+        self._preflight_pdf_url(pdf_url)
         logger.info("Submitting PDF to MinerU: %s", pdf_url)
 
         # Step 1: Submit extraction task
-        with httpx.Client(timeout=30) as client:
+        client = get_http_client(timeout=30)
+        try:
             resp = client.post(
                 f"{self.api_base}/api/v4/extract/task",
                 headers=self._headers(),
@@ -103,6 +100,8 @@ class MineruClient:
             )
             resp.raise_for_status()
             submit_data = resp.json()
+        finally:
+            client.close()
 
         if submit_data.get("code") != 0:
             raise RuntimeError(
@@ -128,11 +127,54 @@ class MineruClient:
             "full_zip_path": result_url,
         }
 
+    def _preflight_pdf_url(self, pdf_url: str) -> None:
+        """Verify MinerU can fetch an actual PDF before submitting an extraction task."""
+        client = get_http_client(timeout=30)
+        try:
+            try:
+                resp = client.get(
+                    pdf_url,
+                    headers={
+                        "Accept": "application/pdf,*/*",
+                        "Range": _PDF_PREFLIGHT_RANGE,
+                    },
+                )
+            except httpx.HTTPError as exc:
+                raise RuntimeError(
+                    f"PDF 公网 URL 预检失败：无法访问 {pdf_url}，MinerU 无法读取 PDF。"
+                    f" 原始错误：{exc}"
+                ) from exc
+
+            if resp.status_code >= 400:
+                raise RuntimeError(
+                    f"PDF 公网 URL 预检失败：{pdf_url} 返回 HTTP {resp.status_code}，"
+                    "MinerU 无法读取 PDF。"
+                    f" 响应预览：{self._response_preview(resp.content)}"
+                )
+
+            prefix = resp.content[:len(_PDF_MAGIC)]
+            if prefix != _PDF_MAGIC:
+                content_type = resp.headers.get("content-type", "unknown")
+                raise RuntimeError(
+                    f"PDF 公网 URL 预检失败：{pdf_url} 返回的内容不是 PDF"
+                    f"（content-type={content_type}）。"
+                    f" 响应预览：{self._response_preview(resp.content)}"
+                )
+        finally:
+            client.close()
+
+    @staticmethod
+    def _response_preview(content: bytes, limit: int = 120) -> str:
+        if not content:
+            return "<empty>"
+        return content[:limit].decode("utf-8", errors="replace").replace("\n", "\\n")
+
     def _poll_task(self, task_id: str) -> dict:
         """Poll MinerU API until the task is completed or times out."""
         start = time.monotonic()
 
-        with httpx.Client(timeout=30) as client:
+        client = get_http_client(timeout=30)
+        try:
             while True:
                 elapsed = time.monotonic() - start
                 if elapsed > _POLL_TIMEOUT:
@@ -146,7 +188,6 @@ class MineruClient:
                 )
                 resp.raise_for_status()
                 poll_data = resp.json()
-                print(f"[MinerU DEBUG] poll raw response: {poll_data}", flush=True)
 
                 if poll_data.get("code") != 0:
                     raise RuntimeError(f"MinerU poll error: {poll_data.get('message')}")
@@ -154,9 +195,11 @@ class MineruClient:
                 task_info = poll_data.get("data", {})
                 # MinerU API uses 'state' field (not 'status')
                 state = task_info.get("state", "") or task_info.get("status", "")
-                print(
-                    f"[MinerU DEBUG] task {task_id} state: {state} ({elapsed:.0f}s elapsed)",
-                    flush=True,
+                logger.debug(
+                    "MinerU task %s state=%s elapsed=%ss",
+                    task_id,
+                    state,
+                    int(elapsed),
                 )
 
                 if state in ("done", "completed"):
@@ -166,14 +209,20 @@ class MineruClient:
                     raise RuntimeError(f"MinerU task {task_id} failed: {err_msg}")
 
                 time.sleep(_POLL_INTERVAL)
+        finally:
+            client.close()
 
     def _download_and_extract_markdown(self, result_url: str) -> str:
         """Download a result ZIP and extract the markdown content."""
-        with httpx.Client(timeout=120) as client:
+        client = get_http_client(timeout=120)
+        try:
             resp = client.get(result_url)
             resp.raise_for_status()
+            content = resp.content
+        finally:
+            client.close()
 
-        with zipfile.ZipFile(BytesIO(resp.content)) as zf:
+        with zipfile.ZipFile(BytesIO(content)) as zf:
             # Look for markdown files in the ZIP
             md_files = [n for n in zf.namelist() if n.endswith(".md")]
             if not md_files:

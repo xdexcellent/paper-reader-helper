@@ -7,6 +7,10 @@ class BriefingPaperItem(BaseModel):
     score: float
     reason: str
     source_kind: str
+    title: str = ""
+    summary_text: str = ""
+    canonical_url: str = ""
+    pdf_url: str = ""
 
 
 class BriefingProjectItem(BaseModel):
@@ -15,6 +19,14 @@ class BriefingProjectItem(BaseModel):
     url: str
     summary: str
     source_kind: str
+
+
+class BriefingFailedItem(BaseModel):
+    title: str
+    source_kind: str
+    canonical_url: str = ""
+    pdf_url: str = ""
+    reason: str  # human-friendly failure reason
 
 
 class DailyBriefingResponse(BaseModel):
@@ -30,6 +42,7 @@ class DailyBriefingResponse(BaseModel):
     fallback_used: bool
     top_papers: list[BriefingPaperItem]
     projects: list[BriefingProjectItem]
+    failed_items: list[BriefingFailedItem] = Field(default_factory=list)
 
 
 class DailyBriefingHistoryItem(BaseModel):

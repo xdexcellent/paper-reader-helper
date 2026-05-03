@@ -6,6 +6,8 @@ import xml.etree.ElementTree as ET
 
 import httpx
 
+from app.services.http_client_factory import get_http_client
+
 logger = logging.getLogger(__name__)
 
 ARXIV_API_BASE = "https://export.arxiv.org/api/query"
@@ -13,7 +15,7 @@ _ARXIV_FIELD_RE = re.compile(r"\b(?:ti|au|abs|co|jr|cat|rn|all):")
 _ARXIV_LOGIC_RE = re.compile(r"\b(?:AND|OR|NOT)\b|[()]")
 
 
-def search_arxiv(query: str, max_results: int = 10) -> list[dict]:
+def search_arxiv(query: str, max_results: int = 10, *, raise_on_error: bool = False) -> list[dict]:
     """Search arXiv API and return paper metadata.
 
     Returns list of dicts with: title, authors, abstract, pdf_url, arxiv_id, published
@@ -31,14 +33,18 @@ def search_arxiv(query: str, max_results: int = 10) -> list[dict]:
     }
 
     try:
-        with httpx.Client(timeout=30) as client:
+        client = get_http_client(timeout=30, follow_redirects=True)
+        try:
             resp = client.get(ARXIV_API_BASE, params=params)
             resp.raise_for_status()
+            return _parse_atom_feed(resp.text)
+        finally:
+            client.close()
     except Exception:
         logger.exception("arXiv API request failed")
+        if raise_on_error:
+            raise
         return []
-
-    return _parse_atom_feed(resp.text)
 
 
 def _build_search_query(query: str) -> str:

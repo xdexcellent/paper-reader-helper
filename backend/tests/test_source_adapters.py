@@ -267,6 +267,89 @@ def test_openreview_adapter_builds_venue_filter_from_config() -> None:
     assert candidates[0].metadata["venue"] == "ICLR.cc/2026/Conference"
 
 
+def test_openreview_adapter_filters_candidates_by_query_keyword() -> None:
+    payload = _read_json_fixture("openreview_notes_mixed.json")
+    captured: dict[str, object] = {}
+
+    def fetch_json(url: str, params: dict) -> dict:
+        captured["params"] = dict(params)
+        return payload
+
+    adapter = OpenReviewAdapter(fetch_json=fetch_json)
+
+    candidates = adapter.fetch_candidates(
+        _subscription(
+            "openreview",
+            query="diffusion",
+            config={"venue": "ICLR.cc/2026/Conference"},
+            fetch_limit=5,
+        )
+    )
+
+    # 过滤模式下 limit 会被放大以抓更大的池子
+    assert captured["params"]["limit"] >= 5 * 5
+    titles = [c.title for c in candidates]
+    assert "Diffusion Transformers for Image Generation" in titles
+    assert "Consistency Models Revisited" in titles
+    assert "Offline Reinforcement Learning with Actor Critic" not in titles
+    assert "Vision Language Pretraining" not in titles
+
+
+def test_openreview_adapter_filter_supports_multi_token_and_match() -> None:
+    payload = _read_json_fixture("openreview_notes_mixed.json")
+
+    adapter = OpenReviewAdapter(fetch_json=lambda url, params: payload)
+    candidates = adapter.fetch_candidates(
+        _subscription(
+            "openreview",
+            query="diffusion transformer",
+            config={"venue": "ICLR.cc/2026/Conference"},
+            fetch_limit=5,
+        )
+    )
+
+    # 两个 token 都要命中
+    titles = [c.title for c in candidates]
+    assert titles == ["Diffusion Transformers for Image Generation"]
+
+
+def test_openreview_adapter_filter_respects_custom_search_pool_size() -> None:
+    payload = _read_json_fixture("openreview_notes_mixed.json")
+    captured: dict[str, object] = {}
+
+    def fetch_json(url: str, params: dict) -> dict:
+        captured["params"] = dict(params)
+        return payload
+
+    adapter = OpenReviewAdapter(fetch_json=fetch_json)
+    adapter.fetch_candidates(
+        _subscription(
+            "openreview",
+            query="diffusion",
+            config={"venue": "ICLR.cc/2026/Conference", "search_pool_size": 42},
+            fetch_limit=3,
+        )
+    )
+
+    assert captured["params"]["limit"] == 42
+
+
+def test_openreview_adapter_stops_at_fetch_limit_after_filter() -> None:
+    payload = _read_json_fixture("openreview_notes_mixed.json")
+
+    adapter = OpenReviewAdapter(fetch_json=lambda url, params: payload)
+    candidates = adapter.fetch_candidates(
+        _subscription(
+            "openreview",
+            query="diffusion",
+            config={"venue": "ICLR.cc/2026/Conference"},
+            fetch_limit=1,
+        )
+    )
+
+    assert len(candidates) == 1
+
+
 def test_openreview_adapter_builds_invitation_filter_from_config() -> None:
     payload = _read_json_fixture("openreview_notes_search.json")
     captured: dict[str, object] = {}

@@ -1,0 +1,65 @@
+{
+  "count": 4,
+  "notes": [
+    {
+      "id": "or-diff-1",
+      "forum": "or-diff-1",
+      "invitation": "ICLR.cc/2026/Conference/-/Submission",
+      "cdate": 1713088800000,
+      "pdate": 1713092400000,
+      "content": {
+        "title": { "value": "Diffusion Transformers for Image Generation" },
+        "authors": { "value": ["Alice"] },
+        "abstract": { "value": "A diffusion-based generative model leveraging transformer backbones." },
+        "keywords": { "value": ["diffusion", "generative model"] },
+        "pdf": { "value": "/pdf?id=or-diff-1" },
+        "venueid": { "value": "ICLR.cc/2026/Conference" }
+      }
+    },
+    {
+      "id": "or-rl-1",
+      "forum": "or-rl-1",
+      "invitation": "ICLR.cc/2026/Conference/-/Submission",
+      "cdate": 1713088800000,
+      "pdate": 1713092400000,
+      "content": {
+        "title": { "value": "Offline Reinforcement Learning with Actor Critic" },
+        "authors": { "value": ["Bob"] },
+        "abstract": { "value": "A new actor critic RL method for offline datasets." },
+        "keywords": { "value": ["reinforcement learning", "offline rl"] },
+        "pdf": { "value": "/pdf?id=or-rl-1" },
+        "venueid": { "value": "ICLR.cc/2026/Conference" }
+      }
+    },
+    {
+      "id": "or-diff-2",
+      "forum": "or-diff-2",
+      "invitation": "ICLR.cc/2026/Conference/-/Submission",
+      "cdate": 1713088800000,
+      "pdate": 1713092400000,
+      "content": {
+        "title": { "value": "Consistency Models Revisited" },
+        "authors": { "value": ["Carol"] },
+        "abstract": { "value": "Improved training for consistency and diffusion score models." },
+        "keywords": { "value": ["diffusion", "consistency model"] },
+        "pdf": { "value": "/pdf?id=or-diff-2" },
+        "venueid": { "value": "ICLR.cc/2026/Conference" }
+      }
+    },
+    {
+      "id": "or-vlm-1",
+      "forum": "or-vlm-1",
+      "invitation": "ICLR.cc/2026/Conference/-/Submission",
+      "cdate": 1713088800000,
+      "pdate": 1713092400000,
+      "content": {
+        "title": { "value": "Vision Language Pretraining" },
+        "authors": { "value": ["Dave"] },
+        "abstract": { "value": "A VLM architecture trained with contrastive objectives." },
+        "keywords": { "value": ["multimodal", "vlm"] },
+        "pdf": { "value": "/pdf?id=or-vlm-1" },
+        "venueid": { "value": "ICLR.cc/2026/Conference" }
+      }
+    }
+  ]
+}

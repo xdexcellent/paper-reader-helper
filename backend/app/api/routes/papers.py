@@ -10,11 +10,17 @@ from sqlmodel import Session, select
 
 from app.core.db import get_session
 from app.models.category import Category
+from app.models.chat_message import ChatMessageRecord
+from app.models.chat_session import ChatSession
+from app.models.daily_briefing import DailyBriefingPaperItem
+from app.models.ingestion_item import IngestionItem
 from app.models.paper import Paper
 from app.models.paper_content import PaperContent
+from app.models.paper_embedding import PaperEmbedding
 from app.models.paper_summary import PaperSummary
 from app.schemas.paper import PaperDetailResponse, PaperImportRequest, PaperImportUrlRequest, PaperResponse
 from app.services.category_service import initialize_pending_category, update_paper_category
+from app.services.http_client_factory import get_http_client
 from app.services.pdf_metadata import extract_title_from_pdf
 from app.services.pipeline import PaperPipelineService
 from app.services.storage import StorageService
@@ -102,11 +108,13 @@ def import_paper_from_url(
 
     # Download the PDF
     try:
-        # Use a timeout of 30s for downloading PDF
-        with httpx.Client(follow_redirects=True, timeout=30.0) as client:
+        client = get_http_client(follow_redirects=True, timeout=30.0)
+        try:
             resp = client.get(payload.url)
             resp.raise_for_status()
             pdf_bytes = resp.content
+        finally:
+            client.close()
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"下载 PDF 失败: {exc}") from exc
 
@@ -370,7 +378,7 @@ def parse_paper(paper_id: int, session: Session = Depends(get_session)) -> dict:
 @router.post("/{paper_id}/summarize", status_code=202)
 def summarize_paper(
     paper_id: int,
-    model: str = Query(default="gpt-5.4-mini"),
+    model: str = Query(default="gpt-5.4"),
     session: Session = Depends(get_session),
 ) -> dict:
     paper = session.get(Paper, paper_id)
@@ -416,7 +424,38 @@ def delete_paper(paper_id: int, session: Session = Depends(get_session)) -> dict
     if paper is None:
         raise HTTPException(status_code=404, detail="论文不存在")
 
-    # 删除关联的内容和摘要
+    # 1. ChatMessageRecord → ChatSession (间接依赖)
+    chat_sessions = list(
+        session.exec(select(ChatSession).where(ChatSession.paper_id == paper_id)).all()
+    )
+    for cs in chat_sessions:
+        for msg in session.exec(
+            select(ChatMessageRecord).where(ChatMessageRecord.session_id == cs.id)
+        ).all():
+            session.delete(msg)
+        session.delete(cs)
+
+    # 2. PaperEmbedding
+    embedding = session.exec(
+        select(PaperEmbedding).where(PaperEmbedding.paper_id == paper_id)
+    ).first()
+    if embedding:
+        session.delete(embedding)
+
+    # 3. DailyBriefingPaperItem
+    for bp_item in session.exec(
+        select(DailyBriefingPaperItem).where(DailyBriefingPaperItem.paper_id == paper_id)
+    ).all():
+        session.delete(bp_item)
+
+    # 4. IngestionItem — 保留 run 历史, 只置空 paper_id
+    for ing_item in session.exec(
+        select(IngestionItem).where(IngestionItem.paper_id == paper_id)
+    ).all():
+        ing_item.paper_id = None
+        session.add(ing_item)
+
+    # 5. PaperContent & PaperSummary
     content = session.exec(
         select(PaperContent).where(PaperContent.paper_id == paper_id)
     ).first()

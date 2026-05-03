@@ -1,0 +1,64 @@
+<h2>论文阅读器 MVP 信息架构</h2>
+<p class="subtitle">先保证阅读体验，再叠加单篇问答能力。看下这个主界面组织方式是否符合你的预期。</p>
+
+<div class="cards">
+  <div class="card" data-choice="layout-a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">方案 A：三栏工作台</div>
+        <div class="mockup-body" style="display:flex;gap:12px;min-height:360px;">
+          <div class="mock-sidebar" style="width:22%;">左侧导航<br>工作看板<br>论文管理<br>搜索<br>推荐</div>
+          <div class="mock-content" style="width:28%;">论文列表<br><br>筛选器<br>标签<br>状态<br>时间排序</div>
+          <div class="mock-content" style="width:50%;">论文详情 / 阅读区<br><br>摘要卡片<br>章节导航<br>Markdown 阅读<br>问答面板入口</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>方案 A：三栏工作台</h3>
+      <p>最接近你发的参考图。左侧模块导航，中间论文列表，右侧详情与阅读，阅读优先且切换高效。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="layout-b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">方案 B：上下分区阅读器</div>
+        <div class="mockup-body" style="display:flex;flex-direction:column;gap:12px;min-height:360px;">
+          <div class="mock-nav">顶部：搜索 / 筛选 / 状态统计 / 导入论文</div>
+          <div style="display:flex;gap:12px;flex:1;">
+            <div class="mock-sidebar" style="width:34%;">论文列表<br>摘要预览<br>状态标签</div>
+            <div class="mock-content" style="width:66%;">阅读页<br><br>摘要 + 章节内容 + 问答抽屉</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>方案 B：上下分区阅读器</h3>
+      <p>更偏传统 Web 应用，结构清楚，实现简单，但“研究工作台”的感觉会弱一些。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="layout-c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">方案 C：仪表盘 + 独立阅读页</div>
+        <div class="mockup-body" style="display:flex;flex-direction:column;gap:12px;min-height:360px;">
+          <div class="mock-content" style="height:110px;">首页工作看板：统计、待处理任务、推荐论文</div>
+          <div class="split">
+            <div class="mock-content">论文管理页<br>列表 / 搜索 / 状态筛选</div>
+            <div class="mock-content">独立阅读页<br>沉浸式正文 + 问答</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>方案 C：仪表盘 + 独立阅读页</h3>
+      <p>更利于后续扩展，但第一版页面跳转会更多，不如 A 直接。</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>我的推荐</h3>
+  <p>推荐 <strong>方案 A：三栏工作台</strong>。它最贴近你参考图的使用习惯，也最符合“先阅读，再问答”的目标。</p>
+</div>

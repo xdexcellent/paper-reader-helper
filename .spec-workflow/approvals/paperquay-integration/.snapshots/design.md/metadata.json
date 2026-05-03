@@ -1,0 +1,14 @@
+{
+  "filePath": ".spec-workflow/specs/paperquay-integration/design.md",
+  "currentVersion": 1,
+  "snapshots": [
+    {
+      "version": 1,
+      "filename": "snapshot-001.json",
+      "timestamp": "2026-05-03T08:31:51.850Z",
+      "trigger": "initial",
+      "approvalId": "approval_1777797111834_7pugbqinq",
+      "approvalTitle": "PaperQuay integration design review"
+    }
+  ]
+}
