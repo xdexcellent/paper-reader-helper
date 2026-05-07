@@ -143,3 +143,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: 阅读器与论文管理页UI优化
+
+**Date**: 2026-05-07
+**Task**: 阅读器与论文管理页UI优化
+**Branch**: `master`
+
+### Summary
+
+重写阅读器布局：PDF沉浸式阅读（全宽+可展开抽屉替换固定侧栏）、顶部工具栏轻量化（分段控件切换模式+自动保存）、论文管理页筛选区三层重排（搜索→核心筛选→标签）、新增Drawer通用组件、PaperOverviewPanel单列变体。tsc零错误，144测试全过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `815b58b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

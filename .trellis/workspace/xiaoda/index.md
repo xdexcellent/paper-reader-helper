@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
+- **Total Sessions**: 5
 - **Last Active**: 2026-05-07
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~145 | Active |
+| `journal-1.md` | ~178 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 5 | 2026-05-07 | 阅读器与论文管理页UI优化 | `815b58b` | `master` |
 | 4 | 2026-05-07 | 论文管理页面UI重构 | `048c5d3` | `master` |
 | 3 | 2026-05-07 | 工作看板UI全面重构 | `3956bb9` | `master` |
 | 2 | 2026-05-07 | 工作看板UI优化 — 今日概览四指标横向布局 + 文档目录标题截断 | `d19458a` | `master` |
