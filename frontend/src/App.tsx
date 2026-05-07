@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react'
 import { Link, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 
 import { useAuth } from './components/AuthContext'
+import { AgentWorkspace } from './components/agent/AgentWorkspace'
 import { AiAssistantShell } from './components/AiAssistantShell'
 import { DailyBriefingShell } from './components/DailyBriefingShell'
+import { LibraryPage } from './components/library/LibraryPage'
 import { LoginPage } from './components/LoginPage'
-import { PaperManagementPage } from './components/PaperManagementPage'
 import { RecommendationShell } from './components/RecommendationShell'
+import { ReaderPage } from './components/reader/ReaderPage'
 import { StatsShell } from './components/StatsShell'
 import { SubscriptionPage } from './components/SubscriptionPage'
+import { ZoteroImportPage } from './components/zotero/ZoteroImportPage'
 import { Icon } from './components/UiIcon'
 import { fetchCategories, fetchPapers } from './lib/api'
 import type { Category, Paper } from './types'
@@ -71,6 +74,22 @@ function Sidebar({ theme, setTheme }: { theme: 'dark' | 'light'; setTheme: (t: '
           <span className="side-nav-text">
             <strong>AI 智能推荐</strong>
             <small>个性化论文推荐</small>
+          </span>
+        </Link>
+
+        <Link to="/agent" className={`side-nav-item${isActive('/agent') ? ' active' : ''}`} style={{ textDecoration: 'none' }}>
+          <span className="side-nav-icon" aria-hidden="true"><Icon name="assistant" /></span>
+          <span className="side-nav-text">
+            <strong>文库 Agent</strong>
+            <small>AI 辅助整理论文库</small>
+          </span>
+        </Link>
+
+        <Link to="/zotero/import" className={`side-nav-item${isActive('/zotero/import') ? ' active' : ''}`} style={{ textDecoration: 'none' }}>
+          <span className="side-nav-icon" aria-hidden="true"><Icon name="library" /></span>
+          <span className="side-nav-text">
+            <strong>Zotero 导入</strong>
+            <small>从 Zotero 导入论文</small>
           </span>
         </Link>
       </nav>
@@ -149,7 +168,7 @@ export default function App() {
           <Route
             path="/"
             element={
-              <PaperManagementPage
+              <LibraryPage
                 papers={papers}
                 categories={categories}
                 isLoadingLibrary={isLoadingLibrary}
@@ -158,9 +177,13 @@ export default function App() {
             }
           />
           <Route
+            path="/paper/:paperId/reader"
+            element={<ReaderPage refreshLibrary={refreshLibrary} />}
+          />
+          <Route
             path="/paper/:paperId"
             element={
-              <PaperManagementPage
+              <LibraryPage
                 papers={papers}
                 categories={categories}
                 isLoadingLibrary={isLoadingLibrary}
@@ -237,6 +260,32 @@ export default function App() {
               </header>
               <div className="workspace-panel">
                 <SubscriptionPage />
+              </div>
+            </>
+          } />
+          <Route path="/agent" element={
+            <>
+              <header className="workspace-header">
+                <div className="workspace-title-block">
+                  <h1>文库 Agent</h1>
+                  <p>AI 辅助整理你的论文库。选择范围，描述需求，Agent 会建议操作。</p>
+                </div>
+              </header>
+              <div className="workspace-panel">
+                <AgentWorkspace />
+              </div>
+            </>
+          } />
+          <Route path="/zotero/import" element={
+            <>
+              <header className="workspace-header">
+                <div className="workspace-title-block">
+                  <h1>Zotero 导入</h1>
+                  <p>从 Zotero 论文库安全导入到本地，支持预览和去重。</p>
+                </div>
+              </header>
+              <div className="workspace-panel">
+                <ZoteroImportPage />
               </div>
             </>
           } />

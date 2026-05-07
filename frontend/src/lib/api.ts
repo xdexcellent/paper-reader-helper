@@ -1,11 +1,26 @@
 import type {
   AutomationSettings,
   AutomationTodayStatus,
+  BlockTranslatePayload,
   Category,
   DailyBriefingHistoryItem,
   DailyBriefingSnapshot,
+  PaperBlockFilters,
+  PaperBlockRebuildResponse,
+  PaperBlocksResponse,
+  PaperBlockTranslation,
   Paper,
   PaperDetail,
+  PaperUpdatePayload,
+  ReadingStatus,
+  AgentRunCreatePayload,
+  AgentRunResponse,
+  AgentAction,
+  BatchApproveResponse,
+  ZoteroRunResponse,
+  ZoteroCandidateResponse,
+  ZoteroCandidateFilter,
+  ZoteroImportConfirm,
 } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000'
@@ -100,9 +115,13 @@ export async function fetchPaperDetail(id: number): Promise<PaperDetail> {
   return readJson<PaperDetail>(response)
 }
 
-export async function uploadPaper(payload: { source: string; file: File }): Promise<Paper> {
+export async function uploadPaper(payload: { source: string; title?: string; file: File }): Promise<Paper> {
   const formData = new FormData()
   formData.append('source', payload.source)
+  const title = payload.title?.trim()
+  if (title) {
+    formData.append('title', title)
+  }
   formData.append('pdf_file', payload.file)
 
   const response = await fetch(`${API_BASE}/papers/upload`, {
@@ -192,16 +211,28 @@ export async function searchPapers(params: { q?: string; status?: string; source
   return readJson<Paper[]>(response)
 }
 
-export async function updatePaper(id: number, data: { title?: string; source?: string }): Promise<Paper> {
-  const searchParams = new URLSearchParams()
-  if (data.title !== undefined) searchParams.append('title', data.title)
-  if (data.source !== undefined) searchParams.append('source', data.source)
-
-  const response = await fetch(`${API_BASE}/papers/${id}?${searchParams.toString()}`, {
+export async function updatePaper(id: number, data: PaperUpdatePayload): Promise<Paper> {
+  const response = await fetch(`${API_BASE}/papers/${id}`, {
     method: 'PATCH',
-    headers: getAuthHeaders(),
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(data),
   })
   return readJson<Paper>(response)
+}
+
+export async function updatePaperFavorite(id: number, favorite: boolean): Promise<Paper> {
+  return updatePaper(id, { favorite })
+}
+
+export async function updatePaperReadingState(
+  id: number,
+  payload: { reading_status?: ReadingStatus; reading_progress?: number },
+): Promise<Paper> {
+  return updatePaper(id, payload)
+}
+
+export async function updatePaperNotes(id: number, user_notes: string): Promise<Paper> {
+  return updatePaper(id, { user_notes })
 }
 
 export async function updatePaperCategory(paperId: number, primaryCategoryId: number): Promise<Paper> {
@@ -211,6 +242,48 @@ export async function updatePaperCategory(paperId: number, primaryCategoryId: nu
     body: JSON.stringify({ primary_category_id: primaryCategoryId }),
   })
   return readJson<Paper>(response)
+}
+
+export async function fetchPaperBlocks(
+  paperId: number,
+  filters: PaperBlockFilters = {},
+): Promise<PaperBlocksResponse> {
+  const params = new URLSearchParams()
+  if (filters.page !== undefined && filters.page !== null) {
+    params.set('page', String(filters.page))
+  }
+  if (filters.type) {
+    params.set('type', filters.type)
+  }
+  if (filters.search) {
+    params.set('search', filters.search)
+  }
+  const query = params.toString()
+  const response = await fetch(`${API_BASE}/papers/${paperId}/blocks${query ? `?${query}` : ''}`, {
+    headers: getAuthHeaders(),
+  })
+  return readJson<PaperBlocksResponse>(response)
+}
+
+export async function rebuildPaperBlocks(paperId: number): Promise<PaperBlockRebuildResponse> {
+  const response = await fetch(`${API_BASE}/papers/${paperId}/blocks/rebuild`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  })
+  return readJson<PaperBlockRebuildResponse>(response)
+}
+
+export async function translatePaperBlock(
+  paperId: number,
+  blockId: number,
+  payload: BlockTranslatePayload = {},
+): Promise<PaperBlockTranslation> {
+  const response = await fetch(`${API_BASE}/papers/${paperId}/blocks/${blockId}/translate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(payload),
+  })
+  return readJson<PaperBlockTranslation>(response)
 }
 
 // ─── Chat (legacy quick chat) ──────────────────────────────
@@ -459,4 +532,105 @@ export async function embedPaper(paperId: number): Promise<{ task_id: string; me
     headers: getAuthHeaders(),
   })
   return readJson(response)
+}
+
+// ─── Agent ──────────────────────────────────────────────────
+export async function createAgentRun(payload: AgentRunCreatePayload): Promise<AgentRunResponse> {
+  const response = await fetch(`${API_BASE}/agent/runs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(payload),
+  })
+  return readJson<AgentRunResponse>(response)
+}
+
+export async function fetchAgentRuns(): Promise<AgentRunResponse[]> {
+  const response = await fetch(`${API_BASE}/agent/runs`, { headers: getAuthHeaders() })
+  return readJson<AgentRunResponse[]>(response)
+}
+
+export async function fetchAgentRunDetail(runId: number): Promise<AgentRunResponse> {
+  const response = await fetch(`${API_BASE}/agent/runs/${runId}`, { headers: getAuthHeaders() })
+  return readJson<AgentRunResponse>(response)
+}
+
+export async function approveAgentAction(actionId: number): Promise<AgentAction> {
+  const response = await fetch(`${API_BASE}/agent/actions/${actionId}/approve`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  })
+  return readJson<AgentAction>(response)
+}
+
+export async function batchApproveAgentActions(runId: number, actionIds: number[]): Promise<BatchApproveResponse> {
+  const response = await fetch(`${API_BASE}/agent/runs/${runId}/approve-batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ action_ids: actionIds }),
+  })
+  return readJson<BatchApproveResponse>(response)
+}
+
+export async function rejectAgentAction(actionId: number, reason?: string): Promise<AgentAction> {
+  const response = await fetch(`${API_BASE}/agent/actions/${actionId}/reject`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ reason: reason || '' }),
+  })
+  return readJson<AgentAction>(response)
+}
+
+export async function revertAgentAction(actionId: number): Promise<AgentAction> {
+  const response = await fetch(`${API_BASE}/agent/actions/${actionId}/revert`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  })
+  return readJson<AgentAction>(response)
+}
+
+// ─── Zotero ─────────────────────────────────────────────────
+export async function scanZotero(sourcePath: string): Promise<ZoteroRunResponse> {
+  const response = await fetch(`${API_BASE}/zotero/import-runs/scan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ source_path: sourcePath }),
+  })
+  return readJson<ZoteroRunResponse>(response)
+}
+
+export async function fetchZoteroRun(runId: number): Promise<ZoteroRunResponse> {
+  const response = await fetch(`${API_BASE}/zotero/import-runs/${runId}`, { headers: getAuthHeaders() })
+  return readJson<ZoteroRunResponse>(response)
+}
+
+export async function fetchZoteroCandidates(runId: number, filters: ZoteroCandidateFilter = {}): Promise<ZoteroCandidateResponse[]> {
+  const params = new URLSearchParams()
+  if (filters.collection) params.set('collection', filters.collection)
+  if (filters.tag) params.set('tag', filters.tag)
+  if (filters.attachment_status) params.set('attachment_status', filters.attachment_status)
+  if (filters.duplicate_status) params.set('duplicate_status', filters.duplicate_status)
+  if (filters.warning_status) params.set('warning_status', filters.warning_status)
+  const qs = params.toString()
+  const response = await fetch(`${API_BASE}/zotero/import-runs/${runId}/candidates${qs ? '?' + qs : ''}`, {
+    headers: getAuthHeaders(),
+  })
+  return readJson<ZoteroCandidateResponse[]>(response)
+}
+
+export async function updateCandidateSelection(runId: number, candidateId: number, isSelected: boolean): Promise<ZoteroCandidateResponse> {
+  const response = await fetch(`${API_BASE}/zotero/import-runs/${runId}/candidates/${candidateId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ is_selected: isSelected }),
+  })
+  return readJson<ZoteroCandidateResponse>(response)
+}
+
+export async function importZoteroCandidates(runId: number, confirm: ZoteroImportConfirm): Promise<ZoteroRunResponse> {
+  const response = await fetch(`${API_BASE}/zotero/import-runs/${runId}/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(confirm),
+  })
+  return readJson<ZoteroRunResponse>(response)
 }
