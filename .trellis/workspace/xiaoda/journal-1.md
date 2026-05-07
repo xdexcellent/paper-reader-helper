@@ -110,3 +110,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: 论文管理页面UI重构
+
+**Date**: 2026-05-07
+**Task**: 论文管理页面UI重构
+**Branch**: `master`
+
+### Summary
+
+全面重构论文管理页面UI：统一中文界面文案(20+组件)、PaperMetadataPanel从裸表单改为5个分组折叠面板(摘要/处理流程/基础信息/分类匹配/阅读管理)、LibraryToolbar紧凑工具栏+更多操作下拉、左侧分类栏去卡片化为导航列表、论文列表卡片变为处理队列样式+标签截断+N、StatusBadge补充8个中文状态映射、按钮层级重定义(主/次/保存/低频/危险)、暗色层级统一。修复3个关键bug：摘要区改用abstract_md显示摘要内容、基础信息移除重复摘要字段、ReaderPage StrictMode remount导致永远loading。标签筛选分两层+前8个默认可见。28个文件 +1000/-529行。TypeCheck + 144 tests pass。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `048c5d3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
