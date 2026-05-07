@@ -1,8 +1,9 @@
 import logging
 import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.exc import NoResultFound
@@ -18,7 +19,13 @@ from app.models.paper import Paper
 from app.models.paper_content import PaperContent
 from app.models.paper_embedding import PaperEmbedding
 from app.models.paper_summary import PaperSummary
-from app.schemas.paper import PaperDetailResponse, PaperImportRequest, PaperImportUrlRequest, PaperResponse
+from app.schemas.paper import (
+    PaperDetailResponse,
+    PaperImportRequest,
+    PaperImportUrlRequest,
+    PaperResponse,
+    PaperUpdateRequest,
+)
 from app.services.category_service import initialize_pending_category, update_paper_category
 from app.services.http_client_factory import get_http_client
 from app.services.pdf_metadata import extract_title_from_pdf
@@ -318,6 +325,16 @@ def get_paper(
         id=paper.id,
         title=paper.title,
         source=paper.source,
+        authors=paper.authors,
+        abstract_raw=paper.abstract_raw,
+        year=paper.year,
+        venue=paper.venue,
+        doi=paper.doi,
+        url=paper.url,
+        favorite=paper.favorite,
+        reading_status=paper.reading_status,
+        reading_progress=paper.reading_progress,
+        user_notes=paper.user_notes,
         status=paper.status,
         parse_status=paper.parse_status,
         summary_status=paper.summary_status,
@@ -504,8 +521,9 @@ def search_papers(
 @router.patch("/{paper_id}", response_model=PaperResponse)
 def update_paper(
     paper_id: int,
-    title: str | None = None,
-    source: str | None = None,
+    payload: PaperUpdateRequest | None = Body(default=None),
+    title: str | None = Query(default=None),
+    source: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> Paper:
     """更新论文信息"""
@@ -513,10 +531,18 @@ def update_paper(
     if paper is None:
         raise HTTPException(status_code=404, detail="论文不存在")
 
-    if title is not None:
-        paper.title = title
-    if source is not None:
-        paper.source = source
+    updates = payload.model_dump(exclude_unset=True) if payload is not None else {}
+    if title is not None and "title" not in updates:
+        updates["title"] = title
+    if source is not None and "source" not in updates:
+        updates["source"] = source
+
+    updates = PaperUpdateRequest(**updates).model_dump(exclude_unset=True)
+    for field_name, value in updates.items():
+        setattr(paper, field_name, value)
+
+    if updates:
+        paper.updated_at = datetime.now(timezone.utc)
 
     session.add(paper)
     session.commit()

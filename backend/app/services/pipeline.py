@@ -7,6 +7,7 @@ from app.models.paper import Paper
 from app.models.paper_content import PaperContent
 from app.models.paper_embedding import PaperEmbedding
 from app.models.paper_summary import PaperSummary
+from app.services.block_extraction_service import BlockExtractionService
 from app.services.category_classifier import CategoryClassifier
 from app.services.category_service import get_pending_category, update_paper_category
 from app.services.deepseek_client import DeepSeekClient
@@ -23,11 +24,13 @@ class PaperPipelineService:
         deepseek_client: DeepSeekClient | None = None,
         section_extractor: SectionExtractor | None = None,
         category_classifier: CategoryClassifier | None = None,
+        block_extraction_service: BlockExtractionService | None = None,
     ) -> None:
         self.mineru_client = mineru_client or MineruClient()
         self.deepseek_client = deepseek_client or DeepSeekClient()
         self.section_extractor = section_extractor or SectionExtractor()
         self.category_classifier = category_classifier or CategoryClassifier(self.deepseek_client)
+        self.block_extraction_service = block_extraction_service or BlockExtractionService()
 
     def parse_paper(self, session: Session, paper: Paper) -> Paper:
         paper.status = "parsing"
@@ -81,6 +84,18 @@ class PaperPipelineService:
         paper.embedding_status = "pending"
         session.add(paper)
         session.commit()
+        session.refresh(paper)
+
+        try:
+            self.block_extraction_service.rebuild_blocks(session, paper, content)
+            session.commit()
+        except Exception:
+            session.rollback()
+            logger.warning(
+                "Block extraction failed for paper %s; parse remains completed",
+                paper.id,
+                exc_info=True,
+            )
         session.refresh(paper)
         return paper
 

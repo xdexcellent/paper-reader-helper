@@ -37,6 +37,14 @@ class Paper(SQLModel, table=True):
     pdf_url: str = ""
     local_pdf_path: str
     published_at: Optional[datetime] = None
+    year: Optional[int] = None
+    venue: str = ""
+    doi: str = ""
+    url: str = ""
+    favorite: bool = False
+    reading_status: str = "unread"
+    reading_progress: int = 0
+    user_notes: str = ""
     status: str = PaperStatus.QUEUED
     parse_status: str = PipelineStatus.PENDING
     summary_status: str = PipelineStatus.PENDING

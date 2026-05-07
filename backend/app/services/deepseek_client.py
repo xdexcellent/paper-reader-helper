@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.services.http_client_factory import get_http_client
 
 logger = logging.getLogger(__name__)
+BLOCK_TRANSLATION_PROMPT_VERSION = "block-translate-v1"
 
 
 def _is_meaningful_chinese(text: str | None) -> bool:
@@ -172,6 +173,37 @@ class DeepSeekClient:
         except Exception:
             logger.warning("Translation failed, using local Chinese fallback: %s", text[:80])
             return text
+
+    def translate_block_text(
+        self,
+        *,
+        text: str,
+        target_language: str = "zh-CN",
+        model: str = "gpt-5.4",
+        page_index: int | None = None,
+        block_type: str = "text",
+    ) -> dict[str, str]:
+        if not text.strip():
+            raise ValueError("block has no translatable text")
+        if not self.api_key:
+            raise RuntimeError("DEEPSEEK_API_KEY is not configured")
+        system = (
+            "You are an academic translation assistant. Translate the user's paper "
+            "block into the target language. Preserve formulas, citations, tables, "
+            "code, and technical terms. Return only the translation."
+        )
+        user = (
+            f"Target language: {target_language}\nBlock type: {block_type}\n"
+            f"Page index: {page_index if page_index is not None else 'unknown'}\n\n{text}"
+        )
+        translated = self._stream_chat(
+            self._resolve_chat_endpoint(),
+            {"model": model, "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ], "stream": True},
+        )
+        return {"translated_text": translated.strip(), "model_name": model, "prompt_version": BLOCK_TRANSLATION_PROMPT_VERSION}
 
     def chat(self, messages: list[dict[str, str]], model: str = "gpt-5.4") -> str:
         """Send a chat message to DeepSeek API."""

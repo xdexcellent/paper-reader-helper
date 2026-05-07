@@ -23,6 +23,23 @@ def test_upload_pdf_auto_extracts_title_and_returns_queued_status(client) -> Non
     assert body["local_pdf_path"].endswith("sample.pdf")
 
 
+def test_upload_pdf_uses_confirmed_title_when_provided(client) -> None:
+    sample_pdf = Path(__file__).parent / "fixtures" / "sample.pdf"
+
+    with sample_pdf.open("rb") as file_obj:
+        response = client.post(
+            "/papers/upload",
+            data={"source": "manual", "title": "  Confirmed Import Title  "},
+            files={"pdf_file": ("sample.pdf", file_obj, "application/pdf")},
+        )
+
+    body = response.json()
+    assert response.status_code == 201
+    assert body["title"] == "Confirmed Import Title"
+    assert body["source"] == "manual"
+    assert body["status"] == "queued"
+
+
 def test_upload_rejects_non_pdf_files(client) -> None:
     response = client.post(
         "/papers/upload",

@@ -1,0 +1,294 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+
+import { createCategory, deletePaper, embedPaper, fetchPaperDetail, parsePaper, summarizePaper, updatePaperCategory, updatePaperTags, uploadPaper, waitForTaskCompletion } from '../../lib/api'
+import type { Category, Paper, PaperDetail } from '../../types'
+import { runBulkPaperAction } from './libraryBulkActions'
+import { createLibraryMetadataActions } from './libraryMetadataActions'
+import { LibraryImportModal } from './LibraryImportModal'
+import { LibraryPageHeader } from './LibraryPageHeader'
+import { LibraryWorkspaceLayout } from './LibraryWorkspaceLayout'
+import type { CategoryScope, FavoriteFilter, ImportConfirmPayload, LibraryStatusFilter, ReadingStatusFilter } from './libraryTypes'
+
+type LibraryPageProps = {
+  papers: Paper[]
+  categories: Category[]
+  isLoadingLibrary: boolean
+  refreshLibrary: () => Promise<void>
+}
+
+export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibrary }: LibraryPageProps) {
+  const { paperId } = useParams()
+  const navigate = useNavigate()
+  const [selectedPaperId, setSelectedPaperId] = useState<number | null>(paperId ? Number(paperId) : null)
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
+  const [detail, setDetail] = useState<PaperDetail | null>(null)
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false)
+  const [isSubmittingImport, setIsSubmittingImport] = useState(false)
+  const [isImportOpen, setIsImportOpen] = useState(false)
+  const [isCreateCategoryOpen, setIsCreateCategoryOpen] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [newCategoryDescription, setNewCategoryDescription] = useState('')
+  const [categoryScope, setCategoryScope] = useState<CategoryScope>('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<LibraryStatusFilter>('all')
+  const [favoriteFilter, setFavoriteFilter] = useState<FavoriteFilter>('all')
+  const [readingStatusFilter, setReadingStatusFilter] = useState<ReadingStatusFilter>('all')
+  const [activeTag, setActiveTag] = useState<string | null>(null)
+  const [selectedModel, setSelectedModel] = useState('gpt-5.4')
+  const [feedbackMessage, setFeedbackMessage] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
+  const [isRunningParse, setIsRunningParse] = useState(false)
+  const [isRunningSummarize, setIsRunningSummarize] = useState(false)
+  const [isRunningEmbed, setIsRunningEmbed] = useState(false)
+  const [isUpdatingCategory, setIsUpdatingCategory] = useState(false)
+  const [isRetryingParseFailed, setIsRetryingParseFailed] = useState(false)
+  const [isDeletingParseFailed, setIsDeletingParseFailed] = useState(false)
+  const requestRef = useRef(0)
+  const requestedPaperIdRef = useRef<number | null>(null)
+
+  const parseFailedPapers = useMemo(
+    () => papers.filter((paper) => paper.status === 'parse_failed' || paper.parse_status === 'failed'),
+    [papers],
+  )
+  const categoryPapers = useMemo(
+    () => papers.filter((paper) => selectedCategoryId === null || paper.primary_category_id === selectedCategoryId),
+    [papers, selectedCategoryId],
+  )
+  const shouldPollDetail = detail != null
+    && [detail.status, detail.parse_status, detail.summary_status, detail.embedding_status]
+      .some((status) => ['parsing', 'summarizing', 'processing', 'running'].includes(status))
+
+  function clearSelection() {
+    setSelectedPaperId(null)
+    setDetail(null)
+    navigate('/', { replace: true })
+  }
+
+  async function loadPaperDetail(id: number, options: { reset?: boolean; loading?: boolean } = {}) {
+    const { reset = true, loading = true } = options
+    const requestId = requestRef.current + 1
+    requestRef.current = requestId
+    requestedPaperIdRef.current = id
+    setSelectedPaperId(id)
+    if (reset) setDetail(null)
+    if (loading) setIsLoadingDetail(true)
+    try {
+      const nextDetail = await fetchPaperDetail(id)
+      if (requestRef.current === requestId) {
+        setDetail(nextDetail)
+      }
+    } finally {
+      if (loading && requestRef.current === requestId) {
+        setIsLoadingDetail(false)
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (!paperId) return
+    const nextPaperId = Number(paperId)
+    if (Number.isNaN(nextPaperId)) return
+    if (requestedPaperIdRef.current === nextPaperId) return
+    if (detail?.id === nextPaperId || isLoadingDetail) return
+    loadPaperDetail(nextPaperId).catch((error) => {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to load paper detail')
+      setIsLoadingDetail(false)
+    })
+  }, [paperId, detail?.id, isLoadingDetail])
+
+  useEffect(() => {
+    if (!shouldPollDetail || !detail) return
+    const timerId = window.setInterval(() => {
+      void loadPaperDetail(detail.id, { reset: false, loading: false })
+      void refreshLibrary()
+    }, 2000)
+    return () => window.clearInterval(timerId)
+  }, [detail?.id, refreshLibrary, shouldPollDetail])
+
+  function handleSelect(paper: Paper) {
+    setErrorMessage('')
+    setFeedbackMessage('')
+    requestedPaperIdRef.current = null
+    setSelectedPaperId(paper.id)
+    setDetail(null)
+    navigate(`/paper/${paper.id}`)
+  }
+
+  async function handleImport(payload: ImportConfirmPayload): Promise<boolean> {
+    setIsSubmittingImport(true)
+    setErrorMessage('')
+    try {
+      const createdPaper = await uploadPaper(payload)
+      await refreshLibrary()
+      navigate(`/paper/${createdPaper.id}`)
+      await loadPaperDetail(createdPaper.id)
+      setFeedbackMessage('Import completed')
+      setIsImportOpen(false)
+      return true
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Import failed')
+      return false
+    } finally {
+      setIsSubmittingImport(false)
+    }
+  }
+
+  async function handleCreateCategory(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!newCategoryName.trim()) return
+    await createCategory({ name: newCategoryName.trim(), description: newCategoryDescription.trim() })
+    setNewCategoryName('')
+    setNewCategoryDescription('')
+    setIsCreateCategoryOpen(false)
+    await refreshLibrary()
+  }
+
+  async function handlePrimaryCategoryChange(categoryId: number) {
+    if (!detail || detail.primary_category_id === categoryId) return
+    setIsUpdatingCategory(true)
+    try {
+      const updatedPaper = await updatePaperCategory(detail.id, categoryId)
+      const staysVisible = selectedCategoryId === null || updatedPaper.primary_category_id === selectedCategoryId
+      if (!staysVisible) {
+        clearSelection(); await refreshLibrary(); setFeedbackMessage('Primary category updated; paper moved out of the current category.'); return
+      }
+      await refreshLibrary()
+      await loadPaperDetail(detail.id)
+      setFeedbackMessage('Primary category updated')
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to update primary category')
+    } finally {
+      setIsUpdatingCategory(false)
+    }
+  }
+
+  async function handleTagsChange(tags: string[]) {
+    if (!detail) return
+    await updatePaperTags(detail.id, tags)
+    setDetail({ ...detail, tags })
+    await refreshLibrary()
+  }
+
+  async function runPipelineAction(
+    setRunning: (value: boolean) => void,
+    action: (paperId: number) => Promise<Record<string, unknown>>,
+    successMessage: string,
+  ) {
+    if (!detail) return
+    setRunning(true)
+    setErrorMessage('')
+    try {
+      const result = await action(detail.id)
+      if (typeof result.task_id === 'string' && result.task_id) {
+        await waitForTaskCompletion(result.task_id)
+      }
+      await refreshLibrary()
+      await loadPaperDetail(detail.id)
+      setFeedbackMessage(successMessage)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Task failed')
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  async function handleRetryAllParseFailed() {
+    setIsRetryingParseFailed(true)
+    const { succeeded, failed } = await runBulkPaperAction(parseFailedPapers, (paper) => parsePaper(paper.id))
+    await refreshLibrary()
+    setFeedbackMessage(`Submitted ${succeeded.length} parse retry tasks`)
+    setErrorMessage(failed.length > 0 ? `${failed.length} parse retry tasks failed` : '')
+    setIsRetryingParseFailed(false)
+  }
+
+  async function handleDeleteAllParseFailed() {
+    if (!window.confirm(`Delete ${parseFailedPapers.length} parse failed papers?`)) return
+    setIsDeletingParseFailed(true)
+    const { succeeded, failed } = await runBulkPaperAction(parseFailedPapers, (paper) => deletePaper(paper.id))
+    if (selectedPaperId !== null && succeeded.some((paper) => paper.id === selectedPaperId)) clearSelection()
+    await refreshLibrary()
+    setFeedbackMessage(`Deleted ${succeeded.length} parse failed papers`)
+    setErrorMessage(failed.length > 0 ? `${failed.length} delete operations failed` : '')
+    setIsDeletingParseFailed(false)
+  }
+
+  const metadataActions = createLibraryMetadataActions({ detail, refreshLibrary, loadPaperDetail, setFeedbackMessage, setErrorMessage })
+
+  return (
+    <>
+      <LibraryPageHeader />
+
+      <LibraryWorkspaceLayout
+        papers={papers}
+        categoryPapers={categoryPapers}
+        categories={categories}
+        selectedPaperId={selectedPaperId}
+        selectedCategoryId={selectedCategoryId}
+        categoryScope={categoryScope}
+        isLoadingLibrary={isLoadingLibrary}
+        isCreateCategoryOpen={isCreateCategoryOpen}
+        newCategoryName={newCategoryName}
+        newCategoryDescription={newCategoryDescription}
+        searchQuery={searchQuery}
+        statusFilter={statusFilter}
+        favoriteFilter={favoriteFilter}
+        readingStatusFilter={readingStatusFilter}
+        activeTag={activeTag}
+        detail={detail}
+        isLoadingDetail={isLoadingDetail}
+        isUpdatingCategory={isUpdatingCategory}
+        feedbackMessage={feedbackMessage}
+        errorMessage={errorMessage}
+        isRunningParse={isRunningParse}
+        isRunningSummarize={isRunningSummarize}
+        isRunningEmbed={isRunningEmbed}
+        selectedModel={selectedModel}
+        isRetryingParseFailed={isRetryingParseFailed}
+        isDeletingParseFailed={isDeletingParseFailed}
+        onCategoryScopeChange={setCategoryScope}
+        onSelectCategory={setSelectedCategoryId}
+        onOpenImport={() => setIsImportOpen(true)}
+        onToggleCreateCategory={() => setIsCreateCategoryOpen((value) => !value)}
+        onRefreshLibrary={refreshLibrary}
+        onRetryParseFailed={handleRetryAllParseFailed}
+        onDeleteParseFailed={handleDeleteAllParseFailed}
+        onNewCategoryNameChange={setNewCategoryName}
+        onNewCategoryDescriptionChange={setNewCategoryDescription}
+        onCreateCategory={handleCreateCategory}
+        onSearchChange={setSearchQuery}
+        onStatusFilterChange={setStatusFilter}
+        onFavoriteFilterChange={setFavoriteFilter}
+        onReadingStatusFilterChange={setReadingStatusFilter}
+        onTagChange={setActiveTag}
+        onSelectPaper={handleSelect}
+        onDeletePaper={async (paper) => {
+          await deletePaper(paper.id)
+          if (selectedPaperId === paper.id) clearSelection()
+          await refreshLibrary()
+        }}
+        onModelChange={setSelectedModel}
+        onParse={() => runPipelineAction(setIsRunningParse, parsePaper, 'Parse completed')}
+        onSummarize={() => runPipelineAction(setIsRunningSummarize, (id) => summarizePaper(id, selectedModel), 'Summary completed')}
+        onEmbed={() => runPipelineAction(setIsRunningEmbed, embedPaper, 'Embedding completed')}
+        onRefreshDetail={() => detail ? loadPaperDetail(detail.id) : Promise.resolve()}
+        onCategoryChange={handlePrimaryCategoryChange}
+        onTagsChange={handleTagsChange}
+        onOpenReader={(paper) => navigate(`/paper/${paper.id}/reader`)}
+        onMetadataSave={metadataActions.handleMetadataSave}
+        onFavoriteChange={metadataActions.handleFavoriteChange}
+        onReadingStateChange={metadataActions.handleReadingStateChange}
+        onNotesSave={metadataActions.handleNotesSave}
+      />
+
+      {isImportOpen && (
+        <LibraryImportModal
+          papers={papers}
+          isSubmitting={isSubmittingImport}
+          onClose={() => setIsImportOpen(false)}
+          onSubmit={handleImport}
+        />
+      )}
+    </>
+  )
+}
