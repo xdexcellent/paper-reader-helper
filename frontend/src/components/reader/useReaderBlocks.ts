@@ -15,7 +15,6 @@ function useBlockLoading(paper: PaperDetail | null) {
   const [blockError, setBlockError] = useState('')
   const [isBlocksLoading, setIsBlocksLoading] = useState(false)
   const blocksRequestRef = useRef(0)
-  const isMountedRef = useRef(true)
 
   const loadBlocks = useCallback(async (paperId: number, loading = true) => {
     const requestId = blocksRequestRef.current + 1
@@ -24,19 +23,18 @@ function useBlockLoading(paper: PaperDetail | null) {
     setBlockError('')
     try {
       const payload = await fetchPaperBlocks(paperId)
-      if (blocksRequestRef.current === requestId && isMountedRef.current) setBlocks(payload.blocks)
+      if (blocksRequestRef.current === requestId) setBlocks(payload.blocks)
     } catch (error) {
-      if (blocksRequestRef.current === requestId && isMountedRef.current) {
+      if (blocksRequestRef.current === requestId) {
         setBlocks([])
         setBlockError(readError(error, 'Failed to load blocks'))
       }
     } finally {
-      if (loading && blocksRequestRef.current === requestId && isMountedRef.current) setIsBlocksLoading(false)
+      if (loading && blocksRequestRef.current === requestId) setIsBlocksLoading(false)
     }
   }, [])
 
   useEffect(() => () => {
-    isMountedRef.current = false
     blocksRequestRef.current += 1
   }, [])
 
