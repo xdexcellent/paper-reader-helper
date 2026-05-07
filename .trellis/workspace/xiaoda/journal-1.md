@@ -176,3 +176,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: fix: 结构块提取静默失败 + CORS 500根因修复
+
+**Date**: 2026-05-07
+**Task**: fix: 结构块提取静默失败 + CORS 500根因修复
+**Branch**: `master`
+
+### Summary
+
+PaperContent新增block_extraction_error字段记录提取错误；pipeline存储/清除错误；paper_blocks路由返回error字段；前端useReaderBlocks读取payload.error；修复db.py迁移表名paper_content→papercontent（与实际表名一致），解决CORS 500崩溃根因
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2fe1c3f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

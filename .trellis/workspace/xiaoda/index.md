@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 5
+- **Total Sessions**: 6
 - **Last Active**: 2026-05-07
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~178 | Active |
+| `journal-1.md` | ~211 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 6 | 2026-05-07 | fix: 结构块提取静默失败 + CORS 500根因修复 | `2fe1c3f` | `master` |
 | 5 | 2026-05-07 | 阅读器与论文管理页UI优化 | `815b58b` | `master` |
 | 4 | 2026-05-07 | 论文管理页面UI重构 | `048c5d3` | `master` |
 | 3 | 2026-05-07 | 工作看板UI全面重构 | `3956bb9` | `master` |
