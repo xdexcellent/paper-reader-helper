@@ -44,7 +44,11 @@ function useBlockLoading(paper: PaperDetail | null) {
     blocksRequestRef.current += 1
     setBlocks([])
     setBlockError('')
-    if (paper?.id) void loadBlocks(paper.id)
+    if (paper?.id) {
+      void loadBlocks(paper.id)
+    } else {
+      setIsBlocksLoading(false)
+    }
   }, [loadBlocks, paper?.id])
 
   const reloadBlocks = useCallback(async (loading = false) => {

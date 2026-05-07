@@ -112,7 +112,7 @@ export function ReaderShell({
             type="button"
           >
             <Icon name="assistant" />
-            AI 辅助
+            {drawerOpen ? '收起 ▾' : 'AI 辅助 ▸'}
           </button>
         </div>
         {mode === 'pdf' ? (

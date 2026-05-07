@@ -55,7 +55,7 @@ export function ReaderToolbar({
         <span className="reader-status-sep">·</span>
         <span className="reader-status-progress">进度 {readingProgress}%</span>
         <span className="reader-status-sep">·</span>
-        <span className="reader-status-saved">{autoSaved ? '已自动保存' : '保存中…'}</span>
+        <span className="reader-status-saved">{autoSaved ? '已自动保存' : '正在保存…'}</span>
       </div>
     </header>
   )

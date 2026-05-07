@@ -51,7 +51,7 @@ export function ReaderPage({ refreshLibrary }: ReaderPageProps) {
   const [isSavingNotes, setIsSavingNotes] = useState(false)
   const [isUpdatingReadingState, setIsUpdatingReadingState] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [autoSaved, setAutoSaved] = useState(false)
+  const [autoSaved, setAutoSaved] = useState(true)
   const detailRequestRef = useRef(0)
   const pdfRequestRef = useRef(0)
   const pdfUrlRef = useRef<string | null>(null)
@@ -274,7 +274,12 @@ export function ReaderPage({ refreshLibrary }: ReaderPageProps) {
     setDrawerOpen((v) => !v)
   }
 
-  const visiblePdfUrl = pdfUrl && pdfPage ? `${pdfUrl}#page=${pdfPage}` : pdfUrl
+  // 构建 PDF URL: 附加页面定位 + 浏览器 PDF 查看器参数（隐藏侧栏）
+  const visiblePdfUrl = pdfUrl
+    ? pdfPage
+      ? `${pdfUrl}#page=${pdfPage}&pagemode=none&scrollbar=1&toolbar=1`
+      : `${pdfUrl}#pagemode=none&scrollbar=1&toolbar=1`
+    : null
 
   const readingStatus = paper?.reading_status ?? 'unread'
   const readingStatusLabel = readingStatusLabels[readingStatus]

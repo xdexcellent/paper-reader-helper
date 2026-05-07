@@ -1,3 +1,11 @@
+:root[data-theme="dark"] {
+  scrollbar-color: rgba(255,255,255,0.12) transparent;
+}
+:root[data-theme="dark"] ::-webkit-scrollbar { width: 6px; height: 6px; }
+:root[data-theme="dark"] ::-webkit-scrollbar-track { background: transparent; }
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+
 :root, :root[data-theme="dark"] {
   --theme-type: "dark";
   --bg-page: #0a0e14;
@@ -2729,7 +2737,10 @@ textarea {
 
 .reader-markdown-body {
   min-width: 0;
-  max-width: 920px;
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
+  justify-self: center;
   color: var(--text-secondary);
   font-size: 16px;
   line-height: 1.8;
@@ -2775,13 +2786,18 @@ textarea {
 
 .reader-pdf-pane {
   display: flex;
-  min-height: 520px;
+  min-height: 0;
+  flex: 1;
   overflow: hidden;
+  padding: 0;
+  border: none;
+  background: transparent;
 }
 
 .reader-pdf-pane iframe {
   width: 100%;
-  min-height: 520px;
+  min-height: 0;
+  flex: 1;
   border: 0;
   background: var(--bg-layer-1);
 }
@@ -3236,13 +3252,13 @@ textarea {
 .reader-toolbar-v2 {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   flex-shrink: 0;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: color-mix(in srgb, var(--bg-panel) 94%, transparent);
   box-shadow: var(--shadow-soft);
-  padding: 10px 14px;
+  padding: 8px 14px;
 }
 
 .reader-toolbar-row-main {
@@ -3280,11 +3296,11 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 5px 12px;
+  padding: 4px 14px;
   border: none;
   background: transparent;
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 650;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
@@ -3300,7 +3316,7 @@ textarea {
   border-right: 1px solid var(--border-strong);
 }
 
-.segmented-btn:hover {
+.segmented-btn:hover:not(.active) {
   color: var(--text-secondary);
   background: var(--bg-layer-2);
 }
@@ -3308,6 +3324,7 @@ textarea {
 .segmented-btn.active {
   color: #ffffff;
   background: var(--accent-blue);
+  box-shadow: 0 0 8px rgba(0,113,227,0.3);
 }
 
 /* 轻量状态条 */
@@ -3352,12 +3369,12 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 12px;
+  padding: 5px 10px;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: color-mix(in srgb, var(--bg-panel) 88%, transparent);
   color: var(--text-secondary);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 650;
   cursor: pointer;
   pointer-events: auto;
@@ -3371,6 +3388,7 @@ textarea {
   border-color: var(--accent-blue-soft);
   background: var(--bg-selected);
   color: var(--text-primary);
+  box-shadow: 0 0 10px rgba(0,113,227,0.12);
 }
 
 .reader-drawer-toggle svg {

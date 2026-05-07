@@ -1780,7 +1780,7 @@ test('reader route switches PDF and Markdown modes while revoking blob URLs', as
 
     fireEvent.click(await screen.findByRole('button', { name: 'PDF' }))
     await waitFor(() => expect(apiMocks.getPdfBlobUrl).toHaveBeenCalledWith(1))
-    expect(await screen.findByTitle('PDF preview')).toHaveAttribute('src', 'blob:reader-pdf')
+    expect(await screen.findByTitle('PDF preview')).toHaveAttribute('src', 'blob:reader-pdf#pagemode=none&scrollbar=1&toolbar=1')
 
     fireEvent.click(screen.getByRole('button', { name: 'Markdown' }))
     await waitFor(() => expect(revokeSpy).toHaveBeenCalledWith('blob:reader-pdf'))
@@ -1802,7 +1802,7 @@ test('reader route shows PDF failure and retries loading', async () => {
   expect(await screen.findByText('pdf offline')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Retry PDF' }))
 
-  expect(await screen.findByTitle('PDF preview')).toHaveAttribute('src', 'blob:reader-retry')
+  expect(await screen.findByTitle('PDF preview')).toHaveAttribute('src', 'blob:reader-retry#pagemode=none&scrollbar=1&toolbar=1')
   expect(apiMocks.getPdfBlobUrl).toHaveBeenCalledTimes(2)
 })
 
@@ -1849,7 +1849,7 @@ test('reader route loads blocks and rebuilds them without replacing markdown', a
   renderApp(['/paper/1/reader'])
 
   // 打开抽屉并切换到结构块 tab
-  fireEvent.click(await screen.findByRole('button', { name: 'AI 辅助' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'AI 辅助 ▸' }))
   fireEvent.click(await screen.findByRole('tab', { name: '结构块' }))
 
   expect(await screen.findByText('Initial structured block')).toBeInTheDocument()
@@ -1890,7 +1890,7 @@ test('reader route translates blocks, shows failures, and retries', async () => 
   renderApp(['/paper/1/reader'])
 
   // 打开抽屉并切换到结构块
-  fireEvent.click(await screen.findByRole('button', { name: 'AI 辅助' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'AI 辅助 ▸' }))
   fireEvent.click(await screen.findByRole('tab', { name: '结构块' }))
 
   fireEvent.click(await screen.findByRole('button', { name: '翻译段落' }))
@@ -1933,7 +1933,7 @@ test('reader route displays cached block translations from loaded blocks', async
 
   // Cached block translations are still behind the drawer under 结构块
   // 打开抽屉并切换到结构块 tab
-  fireEvent.click(await screen.findByRole('button', { name: 'AI 辅助' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'AI 辅助 ▸' }))
   fireEvent.click(await screen.findByRole('tab', { name: '结构块' }))
 
   expect(await screen.findByText('缓存翻译内容')).toBeInTheDocument()
@@ -1956,13 +1956,13 @@ test('reader route opens a block page in PDF mode', async () => {
   renderApp(['/paper/1/reader'])
 
   // 打开抽屉并切换到结构块
-  fireEvent.click(await screen.findByRole('button', { name: 'AI 辅助' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'AI 辅助 ▸' }))
   fireEvent.click(await screen.findByRole('tab', { name: '结构块' }))
 
   fireEvent.click(await screen.findByRole('button', { name: 'Open Page 2' }))
 
   await waitFor(() => expect(apiMocks.getPdfBlobUrl).toHaveBeenCalledWith(1))
-  expect(await screen.findByTitle('PDF preview')).toHaveAttribute('src', 'blob:block-pdf#page=2')
+  expect(await screen.findByTitle('PDF preview')).toHaveAttribute('src', 'blob:block-pdf#page=2&pagemode=none&scrollbar=1&toolbar=1')
 })
 
 test('reader route shows no-block state from block API empty response', async () => {
@@ -1980,7 +1980,7 @@ test('reader route shows no-block state from block API empty response', async ()
   renderApp(['/paper/1/reader'])
 
   // 打开抽屉并切换到结构块 tab
-  fireEvent.click(await screen.findByRole('button', { name: 'AI 辅助' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'AI 辅助 ▸' }))
   fireEvent.click(await screen.findByRole('tab', { name: '结构块' }))
 
   expect(await screen.findByText('No structured blocks yet')).toBeInTheDocument()
