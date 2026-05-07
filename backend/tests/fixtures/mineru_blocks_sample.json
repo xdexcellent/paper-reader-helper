@@ -1,0 +1,181 @@
+{
+  "content_list": [
+    {
+      "type": "text",
+      "text": "1 Introduction",
+      "text_level": 1,
+      "bbox": [62, 80, 946, 120],
+      "page_idx": 0
+    },
+    {
+      "type": "text",
+      "text": "Body paragraph text.",
+      "bbox": [62, 130, 946, 190],
+      "page_idx": 0
+    },
+    {
+      "type": "table",
+      "table_caption": ["Table 1. Results."],
+      "table_body": "<table><tr><td>A</td><td>B</td></tr></table>",
+      "table_footnote": ["Values are normalized."],
+      "bbox": [50, 200, 950, 500],
+      "page_idx": 1
+    },
+    {
+      "type": "image",
+      "image_caption": ["Figure 1. Overview."],
+      "image_footnote": [],
+      "img_path": "images/figure-1.jpg",
+      "bbox": [75, 120, 900, 450],
+      "page_idx": 1
+    },
+    {
+      "type": "chart",
+      "chart_caption": ["Chart A. Trend."],
+      "bbox": [75, 460, 900, 760],
+      "page_idx": 1
+    },
+    {
+      "type": "equation",
+      "text": "$$E = mc^2$$",
+      "text_format": "latex",
+      "bbox": [100, 300, 800, 340],
+      "page_idx": 2
+    },
+    {
+      "type": "list",
+      "list_items": ["First item", "Second item"],
+      "bbox": [100, 360, 800, 460],
+      "page_idx": 2
+    },
+    {
+      "type": "code",
+      "code_body": "print('ok')",
+      "code_caption": ["Listing 1."],
+      "bbox": [100, 480, 800, 620],
+      "page_idx": 2
+    },
+    {
+      "type": "seal",
+      "bbox": [10, 20, 30, 40],
+      "page_idx": 3
+    }
+  ],
+  "content_list_v2": [
+    [
+      {
+        "type": "title",
+        "content": {
+          "title_content": [{"type": "text", "content": "2 Method"}],
+          "level": 1
+        },
+        "bbox": [83, 121, 917, 156]
+      },
+      {
+        "type": "paragraph",
+        "content": {
+          "paragraph_content": [{"type": "text", "content": "V2 paragraph."}]
+        },
+        "bbox": [83, 170, 917, 210]
+      },
+      {
+        "type": "equation_interline",
+        "content": {
+          "math_content": "a^2 + b^2 = c^2",
+          "math_type": "latex"
+        },
+        "bbox": [83, 220, 917, 250]
+      },
+      {
+        "type": "algorithm",
+        "content": {
+          "algorithm_content": "for item in items: pass"
+        },
+        "bbox": [83, 260, 917, 300]
+      }
+    ],
+    [
+      {
+        "type": "list",
+        "content": {
+          "list_items": [{"content": "alpha"}, {"content": "beta"}]
+        },
+        "bbox": [10, 20, 30, 40]
+      }
+    ]
+  ],
+  "vlm_model": [
+    [
+      {
+        "type": "title",
+        "bbox": [0.1, 0.2, 0.8, 0.25],
+        "content": "VLM Title"
+      },
+      {
+        "type": "text",
+        "bbox": [0.1, 0.3, 0.9, 0.4],
+        "content": "VLM body"
+      }
+    ],
+    [
+      {
+        "type": "table",
+        "bbox": [0.2, 0.2, 0.7, 0.6],
+        "content": "VLM table"
+      }
+    ]
+  ],
+  "middle": {
+    "pdf_info": [
+      {
+        "page_idx": 4,
+        "para_blocks": [
+          {
+            "type": "text",
+            "bbox": [52, 61, 294, 83],
+            "lines": [
+              {
+                "spans": [
+                  {"type": "text", "content": "Middle paragraph"}
+                ]
+              }
+            ]
+          }
+        ],
+        "tables": [
+          {
+            "type": "table",
+            "bbox": [52, 100, 294, 200],
+            "blocks": [
+              {
+                "lines": [
+                  {
+                    "spans": [
+                      {"type": "text", "content": "Middle table"}
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "malformed": [
+    null,
+    "bad",
+    {},
+    {
+      "type": "text",
+      "text": "Bad bbox survives",
+      "bbox": ["x"],
+      "page_idx": "oops"
+    }
+  ],
+  "empty": [
+    null,
+    {},
+    {"type": "text", "text": ""}
+  ]
+}

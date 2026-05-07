@@ -7,6 +7,7 @@ from sqlmodel import Session, select
 from app.core.db import engine
 from app.models.paper_embedding import PaperEmbedding
 from app.models.paper import Paper
+from app.models.paper_block import PaperBlock
 from app.models.paper_content import PaperContent
 from app.models.paper_summary import PaperSummary
 from app.services.task_queue import BackgroundTaskQueue
@@ -264,3 +265,98 @@ def test_reparse_invalidates_stale_derived_artifacts(
     assert content.full_zip_path == "data/storage/mineru/new-full.zip"
     assert summary is None
     assert embedding is None
+
+
+def test_parse_paper_persists_blocks_from_structured_artifact(
+    client, mocker, wait_for_task, tmp_path
+) -> None:
+    sample_pdf = Path(__file__).parent / "fixtures" / "sample.pdf"
+    content_json = tmp_path / "paper_content_list.json"
+    content_json.write_text(
+        '[{"type":"text","text":"Parsed block","bbox":[1,2,3,4],"page_idx":0}]',
+        encoding="utf-8",
+    )
+    create_response = client.post(
+        "/papers/import",
+        json={
+            "title": "Parse Blocks",
+            "source": "manual",
+            "local_pdf_path": str(sample_pdf),
+        },
+    )
+    paper_id = create_response.json()["id"]
+
+    mocker.patch(
+        "app.services.mineru_client.MineruClient.parse_pdf",
+        return_value={
+            "full_markdown": "# Blocks\n\nParsed markdown",
+            "content_json_path": str(content_json),
+            "full_zip_path": "",
+        },
+    )
+
+    response = client.post(f"/papers/{paper_id}/parse")
+
+    assert response.status_code == 202
+    task_body = wait_for_task(client, response.json()["task_id"])
+    assert task_body["status"] == "completed"
+
+    with Session(engine) as session:
+        blocks = session.exec(
+            select(PaperBlock).where(PaperBlock.paper_id == paper_id)
+        ).all()
+
+    assert len(blocks) == 1
+    assert blocks[0].text == "Parsed block"
+    assert blocks[0].block_index == 0
+
+
+def test_parse_paper_keeps_success_when_block_extraction_fails(
+    client, mocker, wait_for_task, tmp_path
+) -> None:
+    sample_pdf = Path(__file__).parent / "fixtures" / "sample.pdf"
+    content_json = tmp_path / "paper_content_list.json"
+    content_json.write_text("[]", encoding="utf-8")
+    create_response = client.post(
+        "/papers/import",
+        json={
+            "title": "Recoverable Block Failure",
+            "source": "manual",
+            "local_pdf_path": str(sample_pdf),
+        },
+    )
+    paper_id = create_response.json()["id"]
+
+    mocker.patch(
+        "app.services.mineru_client.MineruClient.parse_pdf",
+        return_value={
+            "full_markdown": "# Blocks\n\nMarkdown survives",
+            "content_json_path": str(content_json),
+            "full_zip_path": "",
+        },
+    )
+    mocker.patch(
+        "app.services.block_extraction_service.BlockExtractionService.rebuild_blocks",
+        side_effect=RuntimeError("broken structured artifact"),
+    )
+
+    response = client.post(f"/papers/{paper_id}/parse")
+
+    assert response.status_code == 202
+    task_body = wait_for_task(client, response.json()["task_id"])
+    assert task_body["status"] == "completed"
+
+    with Session(engine) as session:
+        paper = session.get(Paper, paper_id)
+        content = session.exec(
+            select(PaperContent).where(PaperContent.paper_id == paper_id)
+        ).one()
+        blocks = session.exec(
+            select(PaperBlock).where(PaperBlock.paper_id == paper_id)
+        ).all()
+
+    assert paper is not None
+    assert paper.status == "parsed"
+    assert paper.parse_status == "completed"
+    assert content.full_markdown == "# Blocks\n\nMarkdown survives"
+    assert blocks == []
