@@ -59,7 +59,7 @@ export function ImportConfirmDialog({
   function handleFileSelect(files: ArrayLike<File> | null) {
     const pdf = resolvePdf(files)
     if (!pdf) {
-      setValidationMessage('Only PDF files are supported.')
+      setValidationMessage('仅支持 PDF 文件。')
       return
     }
 
@@ -72,13 +72,13 @@ export function ImportConfirmDialog({
     event.preventDefault()
 
     if (!selectedFile) {
-      setValidationMessage('Choose a PDF file before importing.')
+      setValidationMessage('请先选择 PDF 文件。')
       return
     }
 
     const confirmedTitle = title.trim()
     if (!confirmedTitle) {
-      setValidationMessage('Enter a title before importing.')
+      setValidationMessage('请先输入论文标题。')
       titleInputRef.current?.focus()
       return
     }
@@ -106,11 +106,11 @@ export function ImportConfirmDialog({
     >
       <div className="import-confirm-header">
         <div>
-          <p className="panel-chip">PDF import</p>
-          <h2 id="import-confirm-title">Confirm paper import</h2>
+          <p className="panel-chip">PDF 导入</p>
+          <h2 id="import-confirm-title">确认导入论文</h2>
         </div>
         <button
-          aria-label="Cancel import"
+          aria-label="取消导入"
           className="icon-button"
           disabled={isSubmitting}
           onClick={onClose}
@@ -134,13 +134,13 @@ export function ImportConfirmDialog({
         }}
       >
         <Icon name="upload" className="import-confirm-upload-icon" />
-        <div className="upload-dropzone-title">Drop a PDF here</div>
-        <div className="upload-dropzone-subtitle">Choose a local PDF, then confirm its metadata.</div>
+        <div className="upload-dropzone-title">拖拽 PDF 到此处</div>
+        <div className="upload-dropzone-subtitle">选择本地 PDF 文件并确认元数据。</div>
 
         <input
           ref={fileInputRef}
           accept=".pdf,application/pdf"
-          aria-label="PDF file"
+          aria-label="PDF 文件"
           className="visually-hidden"
           id="import-confirm-pdf-file"
           onChange={(event) => handleFileSelect(event.target.files)}
@@ -153,19 +153,19 @@ export function ImportConfirmDialog({
           onClick={() => fileInputRef.current?.click()}
           type="button"
         >
-          Choose PDF
+          选择 PDF
         </button>
 
         {selectedFile && (
           <div className="upload-selected-file" title={selectedFile.name}>
-            Selected file: {selectedFile.name}
+            已选文件：{selectedFile.name}
           </div>
         )}
       </div>
 
       <div className="import-confirm-fields">
         <label className="form-group" htmlFor="import-confirm-title-input">
-          <span>Title</span>
+          <span>标题</span>
           <input
             ref={titleInputRef}
             disabled={isSubmitting}
@@ -176,7 +176,7 @@ export function ImportConfirmDialog({
         </label>
 
         <label className="form-group" htmlFor="import-confirm-source-input">
-          <span>Source</span>
+          <span>来源</span>
           <input
             disabled={isSubmitting}
             id="import-confirm-source-input"
@@ -189,7 +189,7 @@ export function ImportConfirmDialog({
       {duplicatePaper && (
         <div className="feedback-banner feedback-error import-confirm-warning" role="status">
           <Icon name="warning" className="banner-icon" />
-          <span>A paper with this title already exists.</span>
+          <span>已存在相同标题的论文。</span>
         </div>
       )}
 
@@ -202,16 +202,16 @@ export function ImportConfirmDialog({
 
       <div className="import-confirm-actions">
         <button className="btn btn-action" disabled={isSubmitting} onClick={onClose} type="button">
-          Cancel
+          取消
         </button>
         <button className="btn btn-primary" disabled={isSubmitting} type="submit">
           {isSubmitting ? (
             <>
               <span className="spinner" />
-              Importing...
+              导入中...
             </>
           ) : (
-            'Confirm import'
+            '确认导入'
           )}
         </button>
       </div>

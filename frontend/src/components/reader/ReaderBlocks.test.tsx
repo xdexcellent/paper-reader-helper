@@ -146,11 +146,11 @@ describe('reader block components', () => {
     expect(screen.getByText('神经检索改进引用审阅。')).toBeInTheDocument()
 
     rerender(<ReaderBlockTranslation block={block()} onForceRefresh={onRetry} onTranslate={onRetry} state={{ isLoading: true }} />)
-    expect(screen.getByText('Translating block...')).toBeInTheDocument()
+    expect(screen.getByText('正在翻译段落...')).toBeInTheDocument()
 
     rerender(<ReaderBlockTranslation block={block()} onForceRefresh={onRetry} onTranslate={onRetry} state={{ errorMessage: 'model failed' }} />)
-    expect(screen.getByText('Translation failed')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Retry translation' }))
+    expect(screen.getByText('翻译失败')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '重试翻译' }))
     expect(onRetry).toHaveBeenCalledTimes(1)
 
     rerender(
@@ -161,8 +161,8 @@ describe('reader block components', () => {
         state={{ translation: translation({ source_hash: 'old-hash' }) }}
       />,
     )
-    expect(screen.getByText('Stale translation')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh translation' }))
+    expect(screen.getByText('翻译已过时')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '刷新翻译' }))
     expect(onRetry).toHaveBeenCalledTimes(2)
   })
 
@@ -187,7 +187,7 @@ describe('reader block components', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Translate block' }))
+    fireEvent.click(screen.getByRole('button', { name: '翻译段落' }))
     expect(onTranslate).toHaveBeenCalledWith(sampleBlock)
   })
 })

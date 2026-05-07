@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Paper, ReadingStatus } from '../../types'
 import { StatusBadge } from '../StatusBadge'
 import { Icon } from '../UiIcon'
@@ -23,33 +24,33 @@ type PaperLibraryListProps = {
 }
 
 const statusOptions: { value: LibraryStatusFilter; label: string }[] = [
-  { value: 'all', label: 'All statuses' },
-  { value: 'ready', label: 'Ready' },
-  { value: 'imported', label: 'Imported' },
-  { value: 'parsing', label: 'Parsing' },
-  { value: 'summarizing', label: 'Summarizing' },
-  { value: 'parse_failed', label: 'Parse failed' },
-  { value: 'pending', label: 'Pending' },
+  { value: 'all', label: '全部状态' },
+  { value: 'queued', label: '排队中' },
+  { value: 'parsing', label: '解析中' },
+  { value: 'parsed', label: '已解析' },
+  { value: 'ready', label: '就绪' },
+  { value: 'parse_failed', label: '解析失败' },
+  { value: 'pending', label: '待确认' },
 ]
 
 const favoriteOptions: { value: FavoriteFilter; label: string }[] = [
-  { value: 'all', label: 'All papers' },
-  { value: 'favorites', label: 'Favorites' },
+  { value: 'all', label: '全部论文' },
+  { value: 'favorites', label: '收藏' },
 ]
 
 const readingStatusOptions: { value: ReadingStatusFilter; label: string }[] = [
-  { value: 'all', label: 'All reading' },
-  { value: 'unread', label: 'Unread' },
-  { value: 'reading', label: 'Reading' },
-  { value: 'read', label: 'Read' },
-  { value: 'skipped', label: 'Skipped' },
+  { value: 'all', label: '全部阅读状态' },
+  { value: 'unread', label: '未读' },
+  { value: 'reading', label: '阅读中' },
+  { value: 'read', label: '已读' },
+  { value: 'skipped', label: '已跳过' },
 ]
 
 const readingStatusLabels: Record<ReadingStatus, string> = {
-  unread: 'Unread',
-  reading: 'Reading',
-  read: 'Read',
-  skipped: 'Skipped',
+  unread: '未读',
+  reading: '阅读中',
+  read: '已读',
+  skipped: '已跳过',
 }
 
 function paperButtonLabel(paper: Paper): string {
@@ -89,6 +90,10 @@ export function PaperLibraryList({
   onDelete,
 }: PaperLibraryListProps) {
   const tags = collectTags(papers)
+  const [showAllTags, setShowAllTags] = useState(false)
+  const MAX_VISIBLE_TAGS = 8
+  const visibleTagsList = showAllTags ? tags : tags.slice(0, MAX_VISIBLE_TAGS)
+  const hasMoreTags = tags.length > MAX_VISIBLE_TAGS
   const visiblePapers = filterPapers({
     papers,
     selectedCategoryId: null,
@@ -100,21 +105,21 @@ export function PaperLibraryList({
   })
 
   return (
-    <section className="paper-library-list" aria-label="Papers">
+    <section className="paper-library-list" aria-label="论文列表">
       <div className="paper-library-controls">
         <label className="library-control" htmlFor="paper-library-search">
-          <span>Search papers</span>
+          <span>搜索论文</span>
           <input
             id="paper-library-search"
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Search title or source"
+            placeholder="搜索标题或来源"
             type="search"
             value={searchQuery}
           />
         </label>
 
         <label className="library-control" htmlFor="paper-library-status">
-          <span>Status filter</span>
+          <span>状态筛选</span>
           <select
             id="paper-library-status"
             onChange={(event) => onStatusFilterChange(event.target.value as LibraryStatusFilter)}
@@ -129,7 +134,7 @@ export function PaperLibraryList({
         </label>
 
         <label className="library-control" htmlFor="paper-library-favorite">
-          <span>Favorite filter</span>
+          <span>收藏筛选</span>
           <select
             id="paper-library-favorite"
             onChange={(event) => onFavoriteFilterChange(event.target.value as FavoriteFilter)}
@@ -144,7 +149,7 @@ export function PaperLibraryList({
         </label>
 
         <label className="library-control" htmlFor="paper-library-reading">
-          <span>Reading filter</span>
+          <span>阅读筛选</span>
           <select
             id="paper-library-reading"
             onChange={(event) => onReadingStatusFilterChange(event.target.value as ReadingStatusFilter)}
@@ -160,10 +165,10 @@ export function PaperLibraryList({
       </div>
 
       {tags.length > 0 && (
-        <div className="tag-filter-bar" aria-label="Tag filters">
+        <div className={`tag-filter-bar${showAllTags ? ' expanded' : ''}`} aria-label="标签筛选">
           {activeTag && (
             <button
-              aria-label={`Clear tag filter ${activeTag}`}
+              aria-label={`清除标签筛选 ${activeTag}`}
               className="tag-filter-pill active"
               onClick={() => onTagChange(null)}
               type="button"
@@ -172,7 +177,7 @@ export function PaperLibraryList({
               <Icon name="close" />
             </button>
           )}
-          {tags.map((tag) => (
+          {visibleTagsList.map((tag) => (
             <button
               aria-pressed={activeTag === tag}
               className={`tag-filter-pill${activeTag === tag ? ' active' : ''}`}
@@ -183,12 +188,21 @@ export function PaperLibraryList({
               {tag}
             </button>
           ))}
+          {hasMoreTags && (
+            <button
+              className="tag-filter-toggle"
+              onClick={() => setShowAllTags((v) => !v)}
+              type="button"
+            >
+              {showAllTags ? '收起标签' : `展开更多标签 (+${tags.length - MAX_VISIBLE_TAGS})`}
+            </button>
+          )}
         </div>
       )}
 
       {isLoading ? (
         <div className="paper-list" aria-busy="true">
-          <span className="loading-text">Loading papers...</span>
+          <span className="loading-text">加载论文...</span>
           {[1, 2, 3].map((index) => (
             <div className="skeleton-item" key={index}>
               <div className="skeleton skeleton-line" />
@@ -199,58 +213,66 @@ export function PaperLibraryList({
       ) : visiblePapers.length === 0 ? (
         <div className="list-empty-state">
           <Icon name="fileText" />
-          <span>No papers match the current filters.</span>
+          <span>没有匹配当前筛选条件的论文。</span>
         </div>
       ) : (
         <div className="paper-list">
-          {visiblePapers.map((paper) => (
-            <div
-              className={`paper-library-row${selectedPaperId === paper.id ? ' selected' : ''}`}
-              key={paper.id}
-            >
-              <button
-                aria-label={paperButtonLabel(paper)}
-                aria-pressed={selectedPaperId === paper.id}
-                className="paper-library-item"
-                onClick={() => onSelect(paper)}
-                type="button"
+          {visiblePapers.map((paper) => {
+            const paperTags = paper.tags ?? []
+            const visibleTags = paperTags.slice(0, 3)
+            const extraCount = paperTags.length - 3
+            return (
+              <div
+                className={`paper-library-row${selectedPaperId === paper.id ? ' selected' : ''}`}
+                key={paper.id}
               >
-                <span className="paper-item-title">{paper.title}</span>
-                <span className="paper-item-meta">
-                  <span className="paper-source">{paper.source}</span>
-                  <StatusBadge value={paper.status} />
-                </span>
-                <span className="paper-item-states" aria-label="Paper organization state">
-                  {paper.favorite && (
-                    <span className="paper-state-pill favorite">
-                      <Icon name="spark" />
-                      Favorite
+                <button
+                  aria-label={paperButtonLabel(paper)}
+                  aria-pressed={selectedPaperId === paper.id}
+                  className="paper-library-item"
+                  onClick={() => onSelect(paper)}
+                  type="button"
+                >
+                  <span className="paper-item-title">{paper.title}</span>
+                  <span className="paper-item-meta">
+                    <span className="paper-source">{paper.source}</span>
+                    <StatusBadge value={paper.status} />
+                  </span>
+                  <span className="paper-item-states" aria-label="论文管理状态">
+                    {paper.favorite && (
+                      <span className="paper-state-pill favorite">
+                        <Icon name="spark" />
+                        收藏
+                      </span>
+                    )}
+                    <span className={`paper-state-pill reading-state state-${getPaperReadingStatus(paper)}`}>
+                      {readingStateLabel(paper)}
+                    </span>
+                  </span>
+                  {paperTags.length > 0 && (
+                    <span className="paper-item-tags">
+                      {visibleTags.map((tag) => (
+                        <span className="paper-tag-pill" key={tag}>
+                          {tag}
+                        </span>
+                      ))}
+                      {extraCount > 0 && (
+                        <span className="paper-tag-pill paper-tag-extra">+{extraCount}</span>
+                      )}
                     </span>
                   )}
-                  <span className={`paper-state-pill reading-state state-${getPaperReadingStatus(paper)}`}>
-                    {readingStateLabel(paper)}
-                  </span>
-                </span>
-                {(paper.tags ?? []).length > 0 && (
-                  <span className="paper-item-tags">
-                    {paper.tags!.map((tag) => (
-                      <span className="paper-tag-pill" key={tag}>
-                        {tag}
-                      </span>
-                    ))}
-                  </span>
-                )}
-              </button>
-              <button
-                aria-label={`Delete ${paper.title}`}
-                className="paper-delete-btn"
-                onClick={() => void onDelete(paper)}
-                type="button"
-              >
-                <Icon name="close" />
-              </button>
-            </div>
-          ))}
+                </button>
+                <button
+                  aria-label={`删除 ${paper.title}`}
+                  className="paper-delete-btn"
+                  onClick={() => void onDelete(paper)}
+                  type="button"
+                >
+                  <Icon name="close" />
+                </button>
+              </div>
+            )
+          })}
         </div>
       )}
     </section>

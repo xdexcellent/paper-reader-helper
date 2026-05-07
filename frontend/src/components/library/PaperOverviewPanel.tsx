@@ -11,12 +11,12 @@ type OverviewSection = {
 
 function buildOverviewSections(paper: PaperDetail): OverviewSection[] {
   return [
-    { label: 'Quick conclusion', value: paper.one_line_summary },
-    { label: 'Core contributions', value: paper.core_contributions },
-    { label: 'Method overview', value: paper.method_summary },
-    { label: 'Use cases', value: paper.use_cases },
-    { label: 'Limitations', value: paper.limitations },
-    { label: 'Relevance note', value: paper.relevance_note },
+    { label: '简要结论', value: paper.one_line_summary },
+    { label: '核心贡献', value: paper.core_contributions },
+    { label: '方法概述', value: paper.method_summary },
+    { label: '应用场景', value: paper.use_cases },
+    { label: '局限性', value: paper.limitations },
+    { label: '相关说明', value: paper.relevance_note },
   ].filter((section) => section.value.trim())
 }
 
@@ -24,7 +24,7 @@ export function PaperOverviewPanel({ paper }: PaperOverviewPanelProps) {
   if (!paper) {
     return (
       <section className="paper-overview-panel paper-panel-empty">
-        <span>Select a paper to review its overview.</span>
+        <span>选择一篇论文查看审阅概览。</span>
       </section>
     )
   }
@@ -32,15 +32,15 @@ export function PaperOverviewPanel({ paper }: PaperOverviewPanelProps) {
   const sections = buildOverviewSections(paper)
 
   return (
-    <section className="paper-overview-panel" aria-label="Paper overview">
+    <section className="paper-overview-panel" aria-label="论文概览">
       <div className="paper-overview-header">
-        <p className="panel-chip">Screening</p>
-        <h2>Paper overview</h2>
+        <p className="panel-chip">审阅概览</p>
+        <h2>论文概览</h2>
       </div>
 
       {sections.length === 0 ? (
         <div className="paper-panel-empty">
-          No overview yet. Generate a summary to populate these sections.
+          暂无审阅概览。生成摘要后将填充这些信息。
         </div>
       ) : (
         <div className="paper-overview-grid">

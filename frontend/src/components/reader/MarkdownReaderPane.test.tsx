@@ -57,9 +57,9 @@ describe('MarkdownReaderPane', () => {
     const onParse = vi.fn()
 
     render(<MarkdownReaderPane isParsing={false} onParse={onParse} paper={{ ...paper, full_markdown: '' }} />)
+    expect(screen.getByText('Markdown 尚未生成')).toBeInTheDocument()
 
-    expect(screen.getByText('Markdown not ready')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Parse paper' }))
+    fireEvent.click(screen.getByRole('button', { name: '解析论文' }))
 
     expect(onParse).toHaveBeenCalledTimes(1)
     expect(screen.queryByText('/private/reader-paper.pdf')).not.toBeInTheDocument()

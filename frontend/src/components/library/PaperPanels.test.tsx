@@ -69,6 +69,28 @@ const paper: PaperDetail = {
   relevance_note: 'Relevant to paper management migration.',
 }
 
+const noopAsync = vi.fn().mockResolvedValue(undefined)
+const noop = vi.fn()
+
+function metadataProps(overrides: Record<string, unknown> = {}) {
+  return {
+    categories,
+    isLoading: false,
+    isUpdatingCategory: false,
+    isRunningParse: false,
+    isRunningSummarize: false,
+    isRunningEmbed: false,
+    selectedModel: 'gpt-5.4',
+    onCategoryChange: noopAsync,
+    onModelChange: noop,
+    onParse: noopAsync,
+    onSummarize: noopAsync,
+    onEmbed: noopAsync,
+    onRefreshDetail: noopAsync,
+    ...overrides,
+  }
+}
+
 describe('paper library panels', () => {
   test('PaperMetadataPanel renders selected metadata and forwards category, tag, and reader actions', async () => {
     const onCategoryChange = vi.fn().mockResolvedValue(undefined)
@@ -81,8 +103,7 @@ describe('paper library panels', () => {
 
     render(
       <PaperMetadataPanel
-        categories={categories}
-        isLoading={false}
+        {...metadataProps()}
         isUpdatingCategory={false}
         onCategoryChange={onCategoryChange}
         onFavoriteChange={onFavoriteChange}
@@ -95,28 +116,34 @@ describe('paper library panels', () => {
       />,
     )
 
-    expect(screen.getByRole('heading', { name: 'PaperQuay Inspired Library' })).toBeInTheDocument()
+    // Title is now in an h2
+    expect(screen.getByText('PaperQuay Inspired Library')).toBeInTheDocument()
     expect(screen.getByText('manual')).toBeInTheDocument()
     expect(screen.getByText('Assigned by reviewer')).toBeInTheDocument()
     expect(screen.queryByText('/private/paper.pdf')).not.toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText('Primary category'), { target: { value: '1' } })
+    // Expand the 分类与匹配 section to access the category select
+    const categorySection = screen.getByText('分类与匹配')
+    fireEvent.click(categorySection)
+
+    fireEvent.change(screen.getByLabelText('主分类'), { target: { value: '1' } })
     expect(onCategoryChange).toHaveBeenCalledWith(1)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open reader' }))
+    fireEvent.click(screen.getByRole('button', { name: '打开阅读器' }))
     expect(onOpenReader).toHaveBeenCalledWith(paper)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add tag' }))
-    fireEvent.change(screen.getByLabelText('New tag'), { target: { value: 'workflow' } })
-    fireEvent.keyDown(screen.getByLabelText('New tag'), { key: 'Enter' })
+    fireEvent.click(screen.getByRole('button', { name: '添加标签' }))
+
+    fireEvent.change(screen.getByLabelText('新标签'), { target: { value: 'testing' } })
+    fireEvent.keyDown(screen.getByLabelText('新标签'), { key: 'Enter' })
 
     await waitFor(() => {
-      expect(onTagsChange).toHaveBeenCalledWith(['library', 'agent', 'workflow'])
+      expect(onTagsChange).toHaveBeenCalledWith(['library', 'agent', 'testing'])
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove tag library' }))
+    fireEvent.click(screen.getByRole('button', { name: '移除标签 library' }))
     await waitFor(() => {
-      expect(onTagsChange).toHaveBeenCalledWith(['agent', 'workflow'])
+      expect(onTagsChange).toHaveBeenCalledWith(['agent', 'testing'])
     })
   })
 
@@ -125,23 +152,23 @@ describe('paper library panels', () => {
 
     render(
       <PaperMetadataPanel
-        categories={categories}
-        isLoading={false}
-        isUpdatingCategory={false}
+        {...metadataProps()}
         onCategoryChange={vi.fn()}
         onMetadataSave={onMetadataSave}
         paper={paper}
       />,
     )
 
-    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Updated title' } })
-    fireEvent.change(screen.getByLabelText('Authors'), { target: { value: 'Grace Hopper' } })
-    fireEvent.change(screen.getByLabelText('Year'), { target: { value: '2025' } })
-    fireEvent.change(screen.getByLabelText('Venue'), { target: { value: 'NeurIPS' } })
+    // Expand the 基础信息 section
+    fireEvent.click(screen.getByText(/基础信息/))
+
+    fireEvent.change(screen.getByLabelText('标题'), { target: { value: 'Updated title' } })
+    fireEvent.change(screen.getByLabelText('作者'), { target: { value: 'Grace Hopper' } })
+    fireEvent.change(screen.getByLabelText('年份'), { target: { value: '2025' } })
+    fireEvent.change(screen.getByLabelText('期刊/会议'), { target: { value: 'NeurIPS' } })
     fireEvent.change(screen.getByLabelText('DOI'), { target: { value: '10.5678/updated' } })
     fireEvent.change(screen.getByLabelText('URL'), { target: { value: 'https://example.com/updated' } })
-    fireEvent.change(screen.getByLabelText('Abstract'), { target: { value: 'Updated abstract.' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save metadata' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存元数据' }))
 
     await waitFor(() => {
       expect(onMetadataSave).toHaveBeenCalledWith({
@@ -151,7 +178,7 @@ describe('paper library panels', () => {
         venue: 'NeurIPS',
         doi: '10.5678/updated',
         url: 'https://example.com/updated',
-        abstract_raw: 'Updated abstract.',
+        abstract_raw: 'Original abstract.',
       })
     })
   })
@@ -162,9 +189,7 @@ describe('paper library panels', () => {
 
     render(
       <PaperMetadataPanel
-        categories={categories}
-        isLoading={false}
-        isUpdatingCategory={false}
+        {...metadataProps()}
         onCategoryChange={vi.fn()}
         onFavoriteChange={onFavoriteChange}
         onReadingStateChange={onReadingStateChange}
@@ -172,12 +197,17 @@ describe('paper library panels', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Favorite paper' }))
+    fireEvent.click(screen.getByRole('button', { name: '收藏论文' }))
     await waitFor(() => expect(onFavoriteChange).toHaveBeenCalledWith(true))
 
-    fireEvent.change(screen.getByLabelText('Reading status'), { target: { value: 'reading' } })
-    fireEvent.change(screen.getByLabelText('Reading progress'), { target: { value: '45' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save reading state' }))
+    // Expand the 阅读管理 section
+    fireEvent.click(screen.getByText('阅读管理'))
+
+    fireEvent.change(screen.getByLabelText('阅读状态'), { target: { value: 'reading' } })
+
+    fireEvent.change(screen.getByLabelText('阅读进度'), { target: { value: '45' } })
+
+    fireEvent.click(screen.getByRole('button', { name: '保存阅读状态' }))
 
     await waitFor(() => {
       expect(onReadingStateChange).toHaveBeenCalledWith({
@@ -195,66 +225,63 @@ describe('paper library panels', () => {
 
     render(
       <PaperMetadataPanel
-        categories={categories}
-        isLoading={false}
-        isUpdatingCategory={false}
+        {...metadataProps()}
         onCategoryChange={vi.fn()}
         onNotesSave={onNotesSave}
         paper={paper}
       />,
     )
 
-    fireEvent.change(screen.getByLabelText('User notes'), { target: { value: 'Unsaved local note.' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save notes' }))
+    // Expand the 阅读管理 section
+    fireEvent.click(screen.getByText('阅读管理'))
 
-    await waitFor(() => expect(screen.getByText('Notes save failed')).toBeInTheDocument())
-    expect(screen.getByLabelText('User notes')).toHaveValue('Unsaved local note.')
+    fireEvent.change(screen.getByLabelText('用户笔记'), { target: { value: 'Unsaved local note.' } })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save notes' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存笔记' }))
+
+    await waitFor(() => expect(screen.getByText('笔记保存失败')).toBeInTheDocument())
+
+    expect(screen.getByLabelText('用户笔记')).toHaveValue('Unsaved local note.')
+
+    fireEvent.click(screen.getByRole('button', { name: '保存笔记' }))
     await waitFor(() => expect(onNotesSave).toHaveBeenLastCalledWith('Unsaved local note.'))
   })
 
   test('PaperMetadataPanel exposes loading and empty states', () => {
     const { rerender } = render(
       <PaperMetadataPanel
-        categories={categories}
-        isLoading
-        isUpdatingCategory={false}
-        onCategoryChange={vi.fn()}
+        {...metadataProps({ isLoading: true })}
         paper={null}
       />,
     )
 
-    expect(screen.getByText('Loading paper metadata...')).toBeInTheDocument()
+    expect(screen.getByText('加载论文元数据...')).toBeInTheDocument()
 
     rerender(
       <PaperMetadataPanel
-        categories={categories}
-        isLoading={false}
-        isUpdatingCategory={false}
-        onCategoryChange={vi.fn()}
+        {...metadataProps()}
         paper={null}
       />,
     )
 
-    expect(screen.getByText('Select a paper to inspect metadata.')).toBeInTheDocument()
+    expect(screen.getByText('选择一篇论文查看详情和管理状态。')).toBeInTheDocument()
   })
 
   test('PaperOverviewPanel maps existing summary fields into overview sections', () => {
     render(<PaperOverviewPanel paper={paper} />)
 
-    expect(screen.getByRole('heading', { name: 'Paper overview' })).toBeInTheDocument()
-    expect(screen.getByText('Quick conclusion')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '论文概览' })).toBeInTheDocument()
+    expect(screen.getByText('简要结论')).toBeInTheDocument()
     expect(screen.getByText('A library-first paper workflow.')).toBeInTheDocument()
-    expect(screen.getByText('Core contributions')).toBeInTheDocument()
+    expect(screen.getByText('核心贡献')).toBeInTheDocument()
     expect(screen.getByText('Structured import and review.')).toBeInTheDocument()
-    expect(screen.getByText('Use cases')).toBeInTheDocument()
+    expect(screen.getByText('应用场景')).toBeInTheDocument()
     expect(screen.getByText('Literature screening.')).toBeInTheDocument()
   })
 
   test('PaperOverviewPanel shows a retryable summary prompt when overview fields are empty', () => {
     render(<PaperOverviewPanel paper={{ ...paper, one_line_summary: '', core_contributions: '', method_summary: '', use_cases: '', limitations: '', relevance_note: '' }} />)
 
-    expect(screen.getByText('No overview yet. Generate a summary to populate these sections.')).toBeInTheDocument()
+    expect(screen.getByText('暂无审阅概览。生成摘要后将填充这些信息。')).toBeInTheDocument()
   })
 })

@@ -30,12 +30,12 @@ export function MarkdownReaderPane({ paper, isParsing, onParse }: MarkdownReader
     return (
       <section className="reader-markdown-pane reader-empty-state" aria-label="Markdown reader">
         <Icon name="fileText" />
-        <h2>Markdown not ready</h2>
-        <p>Parse this paper to read the Markdown version.</p>
+        <h2>Markdown 尚未生成</h2>
+        <p>请先解析此论文以阅读 Markdown 版本。</p>
         {paper && (
           <button className="btn btn-secondary" disabled={isParsing} onClick={() => void onParse()} type="button">
             <Icon name="refresh" />
-            {isParsing ? 'Parsing...' : 'Parse paper'}
+            {isParsing ? '解析中...' : '解析论文'}
           </button>
         )}
       </section>

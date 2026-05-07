@@ -92,7 +92,7 @@ export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibra
     if (requestedPaperIdRef.current === nextPaperId) return
     if (detail?.id === nextPaperId || isLoadingDetail) return
     loadPaperDetail(nextPaperId).catch((error) => {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to load paper detail')
+      setErrorMessage(error instanceof Error ? error.message : '加载论文详情失败')
       setIsLoadingDetail(false)
     })
   }, [paperId, detail?.id, isLoadingDetail])
@@ -123,11 +123,11 @@ export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibra
       await refreshLibrary()
       navigate(`/paper/${createdPaper.id}`)
       await loadPaperDetail(createdPaper.id)
-      setFeedbackMessage('Import completed')
+      setFeedbackMessage('导入完成')
       setIsImportOpen(false)
       return true
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Import failed')
+      setErrorMessage(error instanceof Error ? error.message : '导入失败')
       return false
     } finally {
       setIsSubmittingImport(false)
@@ -151,13 +151,13 @@ export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibra
       const updatedPaper = await updatePaperCategory(detail.id, categoryId)
       const staysVisible = selectedCategoryId === null || updatedPaper.primary_category_id === selectedCategoryId
       if (!staysVisible) {
-        clearSelection(); await refreshLibrary(); setFeedbackMessage('Primary category updated; paper moved out of the current category.'); return
+        clearSelection(); await refreshLibrary(); setFeedbackMessage('主分类已更新；论文已从当前分类移出。'); return
       }
       await refreshLibrary()
       await loadPaperDetail(detail.id)
-      setFeedbackMessage('Primary category updated')
+      setFeedbackMessage('主分类已更新')
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to update primary category')
+      setErrorMessage(error instanceof Error ? error.message : '主分类更新失败')
     } finally {
       setIsUpdatingCategory(false)
     }
@@ -187,7 +187,7 @@ export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibra
       await loadPaperDetail(detail.id)
       setFeedbackMessage(successMessage)
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Task failed')
+      setErrorMessage(error instanceof Error ? error.message : '任务失败')
     } finally {
       setRunning(false)
     }
@@ -197,19 +197,19 @@ export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibra
     setIsRetryingParseFailed(true)
     const { succeeded, failed } = await runBulkPaperAction(parseFailedPapers, (paper) => parsePaper(paper.id))
     await refreshLibrary()
-    setFeedbackMessage(`Submitted ${succeeded.length} parse retry tasks`)
-    setErrorMessage(failed.length > 0 ? `${failed.length} parse retry tasks failed` : '')
+    setFeedbackMessage(`已提交 ${succeeded.length} 个重试解析任务`)
+    setErrorMessage(failed.length > 0 ? `${failed.length} 个重试解析任务失败` : '')
     setIsRetryingParseFailed(false)
   }
 
   async function handleDeleteAllParseFailed() {
-    if (!window.confirm(`Delete ${parseFailedPapers.length} parse failed papers?`)) return
+    if (!window.confirm(`确定要删除 ${parseFailedPapers.length} 篇解析失败的论文吗？`)) return
     setIsDeletingParseFailed(true)
     const { succeeded, failed } = await runBulkPaperAction(parseFailedPapers, (paper) => deletePaper(paper.id))
     if (selectedPaperId !== null && succeeded.some((paper) => paper.id === selectedPaperId)) clearSelection()
     await refreshLibrary()
-    setFeedbackMessage(`Deleted ${succeeded.length} parse failed papers`)
-    setErrorMessage(failed.length > 0 ? `${failed.length} delete operations failed` : '')
+    setFeedbackMessage(`已删除 ${succeeded.length} 篇解析失败的论文`)
+    setErrorMessage(failed.length > 0 ? `${failed.length} 个删除操作失败` : '')
     setIsDeletingParseFailed(false)
   }
 
@@ -268,9 +268,9 @@ export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibra
           await refreshLibrary()
         }}
         onModelChange={setSelectedModel}
-        onParse={() => runPipelineAction(setIsRunningParse, parsePaper, 'Parse completed')}
-        onSummarize={() => runPipelineAction(setIsRunningSummarize, (id) => summarizePaper(id, selectedModel), 'Summary completed')}
-        onEmbed={() => runPipelineAction(setIsRunningEmbed, embedPaper, 'Embedding completed')}
+        onParse={() => runPipelineAction(setIsRunningParse, parsePaper, '解析完成')}
+        onSummarize={() => runPipelineAction(setIsRunningSummarize, (id) => summarizePaper(id, selectedModel), '摘要完成')}
+        onEmbed={() => runPipelineAction(setIsRunningEmbed, embedPaper, '向量化完成')}
         onRefreshDetail={() => detail ? loadPaperDetail(detail.id) : Promise.resolve()}
         onCategoryChange={handlePrimaryCategoryChange}
         onTagsChange={handleTagsChange}

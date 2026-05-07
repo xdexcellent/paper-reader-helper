@@ -68,9 +68,9 @@ describe('reader block utilities', () => {
   })
 
   test('derives translation states including stale cached translations', () => {
-    expect(getTranslationViewState(block(), { isLoading: true }).label).toBe('Translating')
-    expect(getTranslationViewState(block(), { errorMessage: 'model failed' }).label).toBe('Translation failed')
-    expect(getTranslationViewState(block(), { translation: translation() }).label).toBe('Translated')
-    expect(getTranslationViewState(block(), { translation: translation({ source_hash: 'old-hash' }) }).label).toBe('Stale translation')
+    expect(getTranslationViewState(block(), { isLoading: true }).label).toBe('翻译中')
+    expect(getTranslationViewState(block(), { errorMessage: 'model failed' }).label).toBe('翻译失败')
+    expect(getTranslationViewState(block(), { translation: translation() }).label).toBe('已翻译')
+    expect(getTranslationViewState(block(), { translation: translation({ source_hash: 'old-hash' }) }).label).toBe('翻译已过时')
   })
 })

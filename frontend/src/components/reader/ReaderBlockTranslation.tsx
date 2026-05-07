@@ -23,7 +23,7 @@ export function ReaderBlockTranslation({
     return (
       <section className="reader-block-translation" aria-live="polite">
         <span className="spinner" />
-        <span>Translating block...</span>
+        <span>正在翻译段落...</span>
       </section>
     )
   }
@@ -33,12 +33,12 @@ export function ReaderBlockTranslation({
       <section className="reader-block-translation translation-error">
         <div className="reader-block-translation-header">
           <StatusBadge value="failed" />
-          <strong>Translation failed</strong>
+          <strong>翻译失败</strong>
         </div>
         {state.errorMessage && <p>{state.errorMessage}</p>}
         <button className="btn btn-secondary" onClick={() => onTranslate(block)} type="button">
           <Icon name="refresh" />
-          Retry translation
+          重试翻译
         </button>
       </section>
     )
@@ -49,7 +49,7 @@ export function ReaderBlockTranslation({
       <section className="reader-block-translation">
         <button className="btn btn-secondary" onClick={() => onTranslate(block)} type="button">
           <Icon name="spark" />
-          Translate block
+          翻译段落
         </button>
       </section>
     )
@@ -69,7 +69,7 @@ export function ReaderBlockTranslation({
           type="button"
         >
           <Icon name="refresh" />
-          Refresh translation
+          刷新翻译
         </button>
       )}
     </section>

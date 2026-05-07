@@ -94,14 +94,15 @@ describe('library navigation components', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: 'All papers 2' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: 'Personal 1 papers 0 pending' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Deep Learning 2 papers 0 pending' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '全部论文 2' })).toHaveAttribute('aria-pressed', 'true')
+    // Personal has 0 pending, so no pending label
+    expect(screen.getByRole('button', { name: 'Personal 1 篇论文' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Deep Learning/ })).not.toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText('Category scope'), { target: { value: 'system' } })
+    fireEvent.change(screen.getByLabelText('分类范围'), { target: { value: 'system' } })
     expect(onCategoryScopeChange).toHaveBeenCalledWith('system')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Personal 1 papers 0 pending' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Personal 1 篇论文' }))
     expect(onSelectCategory).toHaveBeenCalledWith(3)
   })
 
@@ -128,15 +129,20 @@ describe('library navigation components', () => {
       />,
     )
 
-    expect(screen.getByText('2 papers')).toBeInTheDocument()
-    expect(screen.getByText('1 pending')).toBeInTheDocument()
-    expect(screen.getByText('1 parse failed')).toBeInTheDocument()
+    expect(screen.getByText('2 篇论文')).toBeInTheDocument()
+    expect(screen.getByText('1 篇待确认')).toBeInTheDocument()
+    expect(screen.getByText('1 篇解析失败')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Import PDF' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Create category' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh library' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Retry parse failures' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Delete parse failures' }))
+    fireEvent.click(screen.getByRole('button', { name: '导入 PDF' }))
+    fireEvent.click(screen.getByRole('button', { name: '新建分类' }))
+    fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+
+    // Open "更多操作" dropdown and click retry
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }))
+    fireEvent.click(screen.getByText('重试解析失败'))
+    // Re-open dropdown (closed by the first click) and click delete
+    fireEvent.click(screen.getByRole('button', { name: '更多操作' }))
+    fireEvent.click(screen.getByText('删除失败记录'))
 
     expect(onOpenImport).toHaveBeenCalledTimes(1)
     expect(onToggleCreateCategory).toHaveBeenCalledTimes(1)
@@ -177,13 +183,13 @@ describe('library navigation components', () => {
     expect(screen.getByRole('button', { name: 'Agentic Retrieval arxiv ready Agent RAG' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.queryByText('Library Failure Modes')).not.toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText('Search papers'), { target: { value: 'failure' } })
-    fireEvent.change(screen.getByLabelText('Status filter'), { target: { value: 'parse_failed' } })
-    fireEvent.change(screen.getByLabelText('Favorite filter'), { target: { value: 'favorites' } })
-    fireEvent.change(screen.getByLabelText('Reading filter'), { target: { value: 'read' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Clear tag filter RAG' }))
+    fireEvent.change(screen.getByLabelText('搜索论文'), { target: { value: 'failure' } })
+    fireEvent.change(screen.getByLabelText('状态筛选'), { target: { value: 'parse_failed' } })
+    fireEvent.change(screen.getByLabelText('收藏筛选'), { target: { value: 'favorites' } })
+    fireEvent.change(screen.getByLabelText('阅读筛选'), { target: { value: 'read' } })
+    fireEvent.click(screen.getByRole('button', { name: '清除标签筛选 RAG' }))
     fireEvent.click(screen.getByRole('button', { name: 'Agentic Retrieval arxiv ready Agent RAG' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Delete Agentic Retrieval' }))
+    fireEvent.click(screen.getByRole('button', { name: '删除 Agentic Retrieval' }))
 
     expect(onSearchChange).toHaveBeenCalledWith('failure')
     expect(onStatusFilterChange).toHaveBeenCalledWith('parse_failed')
@@ -215,9 +221,8 @@ describe('library navigation components', () => {
       />,
     )
 
-    expect(screen.getByText('Favorite')).toBeInTheDocument()
-    expect(screen.getByText('Reading 35%')).toBeInTheDocument()
-    expect(screen.getByText('Read 100%')).toBeInTheDocument()
+    expect(screen.getByText('阅读中 35%')).toBeInTheDocument()
+    expect(screen.getByText('已读 100%')).toBeInTheDocument()
   })
 
   test('PaperLibraryList applies favorite and reading-state filters', () => {

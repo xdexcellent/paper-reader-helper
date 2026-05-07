@@ -1,6 +1,5 @@
 import type { Category, PaperDetail, PaperUpdatePayload, ReadingStatus } from '../../types'
 import { FeedbackBanner } from '../FeedbackBanner'
-import { PaperActions } from '../PaperActions'
 import { PaperMetadataPanel } from './PaperMetadataPanel'
 import { PaperOverviewPanel } from './PaperOverviewPanel'
 
@@ -55,24 +54,16 @@ export function LibraryDetailStack({
 }: LibraryDetailStackProps) {
   return (
     <section className="library-detail-stack">
-      <PaperActions
-        disabled={detail === null || isLoadingDetail}
-        isRunningParse={isRunningParse || detail?.parse_status === 'processing'}
-        isRunningSummarize={isRunningSummarize || detail?.summary_status === 'processing'}
-        isRunningEmbed={isRunningEmbed || detail?.embedding_status === 'processing'}
-        selectedModel={selectedModel}
-        onModelChange={onModelChange}
-        onParse={onParse}
-        onSummarize={onSummarize}
-        onEmbed={onEmbed}
-        onRefresh={onRefresh}
-      />
       <FeedbackBanner feedbackMessage={feedbackMessage} errorMessage={errorMessage} />
       <PaperMetadataPanel
         paper={detail}
         categories={categories}
         isLoading={isLoadingDetail}
         isUpdatingCategory={isUpdatingCategory}
+        isRunningParse={isRunningParse || detail?.parse_status === 'processing'}
+        isRunningSummarize={isRunningSummarize || detail?.summary_status === 'processing'}
+        isRunningEmbed={isRunningEmbed || detail?.embedding_status === 'processing'}
+        selectedModel={selectedModel}
         onCategoryChange={onCategoryChange}
         onTagsChange={onTagsChange}
         onOpenReader={onOpenReader}
@@ -80,6 +71,11 @@ export function LibraryDetailStack({
         onFavoriteChange={onFavoriteChange}
         onReadingStateChange={onReadingStateChange}
         onNotesSave={onNotesSave}
+        onModelChange={onModelChange}
+        onParse={onParse}
+        onSummarize={onSummarize}
+        onEmbed={onEmbed}
+        onRefreshDetail={onRefresh}
       />
       <PaperOverviewPanel paper={detail} />
     </section>

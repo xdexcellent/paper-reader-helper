@@ -18,14 +18,14 @@ export function CategoryCreateForm({
   return (
     <form className="category-create-form" onSubmit={onSubmit}>
       <label className="form-group" htmlFor="library-new-category-name">
-        <span>Category name</span>
+        <span>分类名称</span>
         <input id="library-new-category-name" value={name} onChange={(event) => onNameChange(event.target.value)} />
       </label>
       <label className="form-group" htmlFor="library-new-category-description">
-        <span>Description</span>
+        <span>描述</span>
         <input id="library-new-category-description" value={description} onChange={(event) => onDescriptionChange(event.target.value)} />
       </label>
-      <button className="btn btn-primary" type="submit">Save category</button>
+      <button className="btn btn-primary" type="submit">保存分类</button>
     </form>
   )
 }

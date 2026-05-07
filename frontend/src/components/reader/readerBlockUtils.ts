@@ -71,18 +71,18 @@ export function getTranslationViewState(
   state: ReaderBlockTranslationState = {},
 ): ReaderBlockTranslationView {
   if (state.isLoading) {
-    return { label: 'Translating', tone: 'loading', isStale: false }
+    return { label: '翻译中', tone: 'loading', isStale: false }
   }
   if (state.errorMessage || state.translation?.status === 'failed') {
-    return { label: 'Translation failed', tone: 'error', isStale: false }
+    return { label: '翻译失败', tone: 'error', isStale: false }
   }
   if (!state.translation) {
-    return { label: 'Not translated', tone: 'idle', isStale: false }
+    return { label: '未翻译', tone: 'idle', isStale: false }
   }
 
   const isStale = state.translation.source_hash !== block.source_hash
   return {
-    label: isStale ? 'Stale translation' : 'Translated',
+    label: isStale ? '翻译已过时' : '已翻译',
     tone: isStale ? 'warning' : 'success',
     isStale,
   }

@@ -126,6 +126,7 @@ export function ReaderPage({ refreshLibrary }: ReaderPageProps) {
   }, [loadPaper, revokeCurrentPdfUrl])
 
   useEffect(() => {
+    isMountedRef.current = true
     return () => {
       isMountedRef.current = false
       pdfRequestRef.current += 1

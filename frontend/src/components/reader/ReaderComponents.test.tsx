@@ -91,12 +91,13 @@ describe('reader components', () => {
 
     render(<ReaderNotesPanel isSaving={false} onSave={onSave} paper={paper} />)
 
-    fireEvent.change(screen.getByLabelText('Reader notes'), { target: { value: 'Unsaved reader note.' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save notes' }))
+    fireEvent.change(screen.getByLabelText('阅读笔记'), { target: { value: 'Unsaved reader note.' } })
 
-    await waitFor(() => expect(screen.getByText('Notes save failed')).toBeInTheDocument())
-    expect(onSave).toHaveBeenCalledWith('Unsaved reader note.')
-    expect(screen.getByLabelText('Reader notes')).toHaveValue('Unsaved reader note.')
+    fireEvent.click(screen.getByRole('button', { name: '保存笔记' }))
+
+    await waitFor(() => expect(screen.getByText('笔记保存失败')).toBeInTheDocument())
+
+    expect(screen.getByLabelText('阅读笔记')).toHaveValue('Unsaved reader note.')
   })
 
   test('ReaderToolbar switches modes and saves reading state', async () => {
@@ -117,9 +118,11 @@ describe('reader components', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Markdown mode' }))
     expect(onModeChange).toHaveBeenCalledWith('markdown')
 
-    fireEvent.change(screen.getByLabelText('Reading status'), { target: { value: 'reading' } })
-    fireEvent.change(screen.getByLabelText('Reading progress'), { target: { value: '40' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save reading state' }))
+    fireEvent.change(screen.getByLabelText('阅读状态'), { target: { value: 'reading' } })
+
+    fireEvent.change(screen.getByLabelText('阅读进度'), { target: { value: '40' } })
+
+    fireEvent.click(screen.getByRole('button', { name: '保存阅读状态' }))
 
     await waitFor(() => expect(onReadingStateChange).toHaveBeenCalledWith({
       reading_status: 'reading',
@@ -200,7 +203,7 @@ describe('reader components', () => {
 
     expect(screen.getByText('Shell block text')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Open Page 2' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Translate block' }))
+    fireEvent.click(screen.getByRole('button', { name: '翻译段落' }))
 
     expect(onBlockOpenPage).toHaveBeenCalledWith(block)
     expect(onBlockTranslate).toHaveBeenCalledWith(block)

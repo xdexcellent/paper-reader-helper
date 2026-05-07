@@ -55,23 +55,23 @@ export function createLibraryMetadataActions({
   return {
     handleMetadataSave: (payload: PaperUpdatePayload) => runUpdate(
       (paperId) => updatePaper(paperId, payload),
-      'Metadata updated',
-      'Failed to update metadata',
+      '元数据已更新',
+      '元数据更新失败',
     ),
     handleFavoriteChange: (favorite: boolean) => runUpdate(
       (paperId) => updatePaperFavorite(paperId, favorite),
-      favorite ? 'Added to favorites' : 'Removed from favorites',
-      'Failed to update favorite',
+      favorite ? '已收藏' : '已取消收藏',
+      '收藏更新失败',
     ),
     handleReadingStateChange: (payload: ReadingStatePayload) => runUpdate(
       (paperId) => updatePaperReadingState(paperId, payload),
-      'Reading state updated',
-      'Failed to update reading state',
+      '阅读状态已更新',
+      '阅读状态更新失败',
     ),
     handleNotesSave: (userNotes: string) => runUpdate(
       (paperId) => updatePaperNotes(paperId, userNotes),
-      'Notes saved',
-      'Failed to save notes',
+      '笔记已保存',
+      '笔记保存失败',
       { rethrow: true },
     ),
   }

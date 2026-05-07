@@ -23,14 +23,14 @@ export function ReaderNotesPanel({ paper, isSaving, onSave }: ReaderNotesPanelPr
     try {
       await onSave(notes)
     } catch {
-      setErrorMessage('Notes save failed')
+      setErrorMessage('笔记保存失败')
     }
   }
 
   if (!paper) {
     return (
       <section className="reader-notes-panel reader-empty-state">
-        <span>Select a paper to edit notes.</span>
+        <span>选择论文以编辑笔记</span>
       </section>
     )
   }
@@ -38,12 +38,12 @@ export function ReaderNotesPanel({ paper, isSaving, onSave }: ReaderNotesPanelPr
   return (
     <form className="reader-notes-panel" onSubmit={saveNotes}>
       <label className="library-control" htmlFor="reader-notes">
-        <span>Reader notes</span>
+        <span>阅读笔记</span>
         <textarea id="reader-notes" onChange={(event) => setNotes(event.target.value)} value={notes} />
       </label>
       {errorMessage && <p className="form-error">{errorMessage}</p>}
       <button className="btn btn-secondary" disabled={isSaving} type="submit">
-        Save notes
+        保存笔记
       </button>
     </form>
   )

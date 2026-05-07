@@ -48,12 +48,12 @@ export function PaperTagEditor({ tags: initialTags, onTagsChange }: PaperTagEdit
   }
 
   return (
-    <div className="paper-tag-editor" aria-label="Paper tags">
+    <div className="paper-tag-editor" aria-label="论文标签">
       {tags.map((tag) => (
         <span className="tag-editor-pill" key={tag}>
           {tag}
           <button
-            aria-label={`Remove tag ${tag}`}
+            aria-label={`移除标签 ${tag}`}
             className="tag-editor-remove"
             onClick={() => void commitTags(tags.filter((currentTag) => currentTag !== tag))}
             type="button"
@@ -64,7 +64,7 @@ export function PaperTagEditor({ tags: initialTags, onTagsChange }: PaperTagEdit
       ))}
       {isAddingTag ? (
         <label className="tag-editor-field" htmlFor="paper-new-tag">
-          <span>New tag</span>
+          <span>新标签</span>
           <input
             autoFocus
             id="paper-new-tag"
@@ -75,7 +75,7 @@ export function PaperTagEditor({ tags: initialTags, onTagsChange }: PaperTagEdit
         </label>
       ) : (
         <button className="tag-editor-add" onClick={() => setIsAddingTag(true)} type="button">
-          Add tag
+          添加标签
         </button>
       )}
     </div>

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Icon } from '../UiIcon'
 
 type LibraryToolbarProps = {
@@ -28,63 +29,73 @@ export function LibraryToolbar({
   onDeleteParseFailed,
 }: LibraryToolbarProps) {
   const isBulkBusy = isRetryingParseFailed || isDeletingParseFailed
+  const [moreOpen, setMoreOpen] = useState(false)
 
   return (
-    <section className="library-toolbar" aria-label="Library actions">
+    <section className="library-toolbar" aria-label="论文操作">
       <div className="library-toolbar-summary" aria-live="polite" role="status">
-        <span>{totalPapers} papers</span>
-        <span>{pendingCount} pending</span>
-        <span>{parseFailedCount} parse failed</span>
+        <span>{totalPapers} 篇论文</span>
+        <span>{pendingCount} 篇待确认</span>
+        <span>{parseFailedCount} 篇解析失败</span>
         {isLoadingLibrary && (
           <span className="sync-indicator">
             <span className="spinner" />
-            Syncing
+            同步中
           </span>
         )}
       </div>
 
       <div className="library-toolbar-actions">
-        <button aria-label="Import PDF" className="btn btn-primary" onClick={onOpenImport} type="button">
+        <button aria-label="导入 PDF" className="btn btn-primary" onClick={onOpenImport} type="button">
           <Icon name="upload" />
-          Import PDF
+          导入 PDF
         </button>
         <button
-          aria-label="Create category"
+          aria-label="新建分类"
           className="btn btn-action"
           onClick={onToggleCreateCategory}
           type="button"
         >
           <Icon name="library" />
-          Create category
+          新建分类
         </button>
-        <button aria-label="Refresh library" className="btn btn-action" onClick={onRefresh} type="button">
+        <button aria-label="刷新" className="btn btn-action" onClick={onRefresh} type="button">
           <Icon name="refresh" />
-          Refresh
+          刷新
         </button>
-      </div>
 
-      {parseFailedCount > 0 && (
-        <div className="library-toolbar-bulk">
-          <button
-            aria-label="Retry parse failures"
-            className="btn btn-action"
-            disabled={isBulkBusy}
-            onClick={onRetryParseFailed}
-            type="button"
-          >
-            {isRetryingParseFailed ? 'Retrying...' : 'Retry failed parses'}
-          </button>
-          <button
-            aria-label="Delete parse failures"
-            className="btn btn-action parse-failed-delete-btn"
-            disabled={isBulkBusy}
-            onClick={onDeleteParseFailed}
-            type="button"
-          >
-            {isDeletingParseFailed ? 'Deleting...' : 'Delete failed parses'}
-          </button>
-        </div>
-      )}
+        {parseFailedCount > 0 && (
+          <div className="more-menu-wrapper">
+            <button
+              aria-label="更多操作"
+              className="btn btn-action"
+              onClick={() => setMoreOpen((v) => !v)}
+              type="button"
+            >
+              更多操作 ▾
+            </button>
+            {moreOpen && (
+              <div className="more-menu-dropdown">
+                <button
+                  disabled={isBulkBusy}
+                  onClick={() => { onRetryParseFailed(); setMoreOpen(false) }}
+                  type="button"
+                >
+                  {isRetryingParseFailed ? '重试中...' : '重试解析失败'}
+                </button>
+                <button
+                  className="danger"
+                  disabled={isBulkBusy}
+                  onClick={() => { onDeleteParseFailed(); setMoreOpen(false) }}
+                  type="button"
+                >
+                  {isDeletingParseFailed ? '删除中...' : '删除失败记录'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </section>
   )
 }

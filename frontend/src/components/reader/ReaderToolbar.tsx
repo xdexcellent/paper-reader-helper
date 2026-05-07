@@ -18,10 +18,10 @@ type ReaderToolbarProps = {
 }
 
 const readingOptions: { value: ReadingStatus; label: string }[] = [
-  { value: 'unread', label: 'Unread' },
-  { value: 'reading', label: 'Reading' },
-  { value: 'read', label: 'Read' },
-  { value: 'skipped', label: 'Skipped' },
+  { value: 'unread', label: '未读' },
+  { value: 'reading', label: '阅读中' },
+  { value: 'read', label: '已读' },
+  { value: 'skipped', label: '已跳过' },
 ]
 
 export function ReaderToolbar({
@@ -52,7 +52,7 @@ export function ReaderToolbar({
     <header className="reader-toolbar">
       <button className="btn btn-secondary" onClick={onBack} type="button">
         <Icon name="library" />
-        Back to library
+        返回论文库
       </button>
       <div className="reader-toolbar-title">
         <h1>{paper.title}</h1>
@@ -70,17 +70,17 @@ export function ReaderToolbar({
       </div>
       <form className="reader-state-form" onSubmit={saveReadingState}>
         <label className="library-control" htmlFor="reader-reading-status">
-          <span>Reading status</span>
+          <span>阅读状态</span>
           <select id="reader-reading-status" onChange={(event) => setReadingStatus(event.target.value as ReadingStatus)} value={readingStatus}>
             {readingOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </label>
         <label className="library-control" htmlFor="reader-reading-progress">
-          <span>Reading progress</span>
+          <span>阅读进度</span>
           <input id="reader-reading-progress" max="100" min="0" onChange={(event) => setReadingProgress(event.target.value)} type="number" value={readingProgress} />
         </label>
         <button className="btn btn-secondary" disabled={isUpdatingReadingState} type="submit">
-          Save reading state
+          保存阅读状态
         </button>
       </form>
     </header>

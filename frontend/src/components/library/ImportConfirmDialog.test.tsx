@@ -45,13 +45,13 @@ describe('ImportConfirmDialog', () => {
     const { onSubmit } = renderDialog()
     const file = new File(['%PDF-1.7'], 'paper-quay-sample.pdf', { type: 'application/pdf' })
 
-    fireEvent.change(screen.getByLabelText('PDF file'), { target: { files: [file] } })
+    fireEvent.change(screen.getByLabelText('PDF 文件'), { target: { files: [file] } })
 
-    expect(screen.getByLabelText('Title')).toHaveValue('paper quay sample')
+    expect(screen.getByLabelText('标题')).toHaveValue('paper quay sample')
 
-    fireEvent.change(screen.getByLabelText('Title'), { target: { value: '  Confirmed Title  ' } })
-    fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'local-library' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm import' }))
+    fireEvent.change(screen.getByLabelText('标题'), { target: { value: '  Confirmed Title  ' } })
+    fireEvent.change(screen.getByLabelText('来源'), { target: { value: 'local-library' } })
+    fireEvent.click(screen.getByRole('button', { name: '确认导入' }))
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith({
@@ -66,11 +66,11 @@ describe('ImportConfirmDialog', () => {
     const { onSubmit } = renderDialog()
     const file = new File(['%PDF-1.7'], 'known-paper.pdf', { type: 'application/pdf' })
 
-    fireEvent.change(screen.getByLabelText('PDF file'), { target: { files: [file] } })
+    fireEvent.change(screen.getByLabelText('PDF 文件'), { target: { files: [file] } })
 
-    expect(screen.getByText('A paper with this title already exists.')).toBeInTheDocument()
+    expect(screen.getByText('已存在相同标题的论文。')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm import' }))
+    fireEvent.click(screen.getByRole('button', { name: '确认导入' }))
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalled()
@@ -80,13 +80,13 @@ describe('ImportConfirmDialog', () => {
   test('rejects missing or non-PDF files before submission', async () => {
     const { onSubmit } = renderDialog()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm import' }))
-    expect(screen.getByRole('alert')).toHaveTextContent('Choose a PDF file before importing.')
+    fireEvent.click(screen.getByRole('button', { name: '确认导入' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('请先选择 PDF 文件。')
 
     const file = new File(['plain text'], 'notes.txt', { type: 'text/plain' })
-    fireEvent.change(screen.getByLabelText('PDF file'), { target: { files: [file] } })
+    fireEvent.change(screen.getByLabelText('PDF 文件'), { target: { files: [file] } })
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Only PDF files are supported.')
+    expect(screen.getByRole('alert')).toHaveTextContent('仅支持 PDF 文件。')
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
@@ -95,17 +95,17 @@ describe('ImportConfirmDialog', () => {
     const { onClose } = renderDialog({ onSubmit })
     const file = new File(['%PDF-1.7'], 'failed-upload.pdf', { type: 'application/pdf' })
 
-    fireEvent.change(screen.getByLabelText('PDF file'), { target: { files: [file] } })
-    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Retry Title' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm import' }))
+    fireEvent.change(screen.getByLabelText('PDF 文件'), { target: { files: [file] } })
+    fireEvent.change(screen.getByLabelText('标题'), { target: { value: 'Retry Title' } })
+    fireEvent.click(screen.getByRole('button', { name: '确认导入' }))
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalled()
     })
 
-    expect(screen.getByLabelText('Title')).toHaveValue('Retry Title')
+    expect(screen.getByLabelText('标题')).toHaveValue('Retry Title')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel import' }))
+    fireEvent.click(screen.getByRole('button', { name: '取消导入' }))
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 })

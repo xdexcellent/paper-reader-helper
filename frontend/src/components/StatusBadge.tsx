@@ -34,6 +34,14 @@ export function StatusBadge({ value }: { value: string }) {
     fallback: '回退中',
     manual: '手动',
     scheduled: '自动',
+    parsed: '已解析',
+    ready: '就绪',
+    imported: '已导入',
+    unclassified: '未分类',
+    manual_locked: '手动锁定',
+    pending_review: '待审核',
+    queued: '排队中',
+    summarizing: '摘要中',
   }
 
   const displayLabel = labelMap[normalized] ?? value
