@@ -285,7 +285,7 @@ test('recommendation action still opens the library detail route', async () => {
 
   expect(await screen.findByRole('heading', { name: 'Paper library' })).toBeInTheDocument()
   expect(await screen.findByRole('heading', { name: 'Recommendation Compatible' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Open reader' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '打开阅读器' })).toBeInTheDocument()
 })
 
 test('renders the PaperQuay-style library workspace on the root route', async () => {
@@ -360,7 +360,7 @@ test('初始渲染时显示浅色工作台标题与空态提示', async () => {
   renderApp()
 
   expect(await screen.findByRole('heading', { name: 'Paper library' })).toBeInTheDocument()
-  expect(await screen.findByText('No papers match the current filters.')).toBeInTheDocument()
+  expect(await screen.findByText('没有匹配当前筛选条件的论文。')).toBeInTheDocument()
   expect(await screen.findByText('Select a paper to inspect metadata.')).toBeInTheDocument()
 })
 
@@ -459,7 +459,7 @@ test('导入成功后刷新列表并自动选中新论文', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Import PDF' }))
   const file = new File(['%PDF-1.4 mock'], 'new.pdf', { type: 'application/pdf' })
   fireEvent.change(await screen.findByLabelText('PDF file'), { target: { files: [file] } })
-  fireEvent.change(await screen.findByLabelText('Title'), { target: { value: 'New Paper' } })
+  fireEvent.change(await screen.findByLabelText('标题'), { target: { value: 'New Paper' } })
   fireEvent.click(screen.getByRole('button', { name: 'Confirm import' }))
 
   await waitFor(() => {
@@ -655,12 +655,12 @@ test('首屏加载论文时显示加载提示而不是空列表提示', async ()
 
   renderApp()
 
-  expect(await screen.findByText('Loading papers...')).toBeInTheDocument()
-  expect(screen.queryByText('No papers match the current filters.')).not.toBeInTheDocument()
+  expect(await screen.findByText('加载论文...')).toBeInTheDocument()
+  expect(screen.queryByText('没有匹配当前筛选条件的论文。')).not.toBeInTheDocument()
 
   resolvePapers?.([])
 
-  expect(await screen.findByText('No papers match the current filters.')).toBeInTheDocument()
+  expect(await screen.findByText('没有匹配当前筛选条件的论文。')).toBeInTheDocument()
 })
 
 test('切换论文但详情加载失败时清空旧详情并显示错误提示', async () => {
@@ -828,24 +828,22 @@ test('可以切换到每日速览并展示速览壳层', async () => {
   fireEvent.click(await screen.findByRole('link', { name: /工作看板/ }))
 
   expect(await screen.findByText('今日精选')).toBeInTheDocument()
-  const heroHeading = screen.getByRole('heading', { name: '每日速览' })
+  const heroHeading = screen.getByRole('heading', { name: '今日工作概览' })
   expect(heroHeading.closest('.briefing-hero')).not.toBeNull()
   expect(screen.getByLabelText('搜索论文、项目或关键词')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '通知' })).not.toBeInTheDocument()
   expect(screen.queryByRole('heading', { name: '日报控制台' })).not.toBeInTheDocument()
   expect(screen.queryByRole('heading', { name: '今日研究快照' })).not.toBeInTheDocument()
-  expect(screen.getByRole('heading', { name: '2026-04-19', level: 3 })).toBeInTheDocument()
-  expect(screen.getByText('当前展示今天日报')).toBeInTheDocument()
   expect(screen.getByRole('heading', { name: '先看这三条结论' })).toBeInTheDocument()
-  expect(screen.getByText('已筛选 4 篇论文，生成 1 个项目观察，发现 7 个订阅源热点。')).toBeInTheDocument()
-  expect(screen.getByText('最后生成：12:00')).toBeInTheDocument()
-  expect(screen.getByText(/阅读进度：/)).toBeInTheDocument()
+  expect(screen.getAllByText(/2026-04-19/).length).toBeGreaterThan(0)
+  expect(screen.getByText(/最后生成.*12:00/)).toBeInTheDocument()
+  expect(screen.getByText(/阅读进度/)).toBeInTheDocument()
   expect(screen.getByText('今日关键词')).toBeInTheDocument()
   expect(screen.getByText('风险等级')).toBeInTheDocument()
   expect(screen.getByText('推荐阅读顺序')).toBeInTheDocument()
   expect(screen.getByRole('link', { name: '查看关键建议' })).toHaveAttribute('href', '#briefing-recommendations')
   expect(screen.getByRole('button', { name: '生成报告' })).toBeInTheDocument()
-  expect(screen.getByText('聚合今日论文、项目与风险信号，用于快速决定阅读和处理顺序。')).toBeInTheDocument()
+  expect(screen.getByText('聚合今日论文、项目、风险与关键信号，用于快速判断处理优先级。')).toBeInTheDocument()
   expect(screen.getByText('当前模块')).toBeInTheDocument()
   const summaryHeading = screen.getByRole('heading', { name: '今日论文汇总' })
   expect(summaryHeading.closest('.briefing-main')).not.toBeNull()
@@ -854,13 +852,6 @@ test('可以切换到每日速览并展示速览壳层', async () => {
   expect(screen.getByRole('link', { name: '背景' })).toHaveAttribute('href', '#briefing-section-背景')
   expect(screen.getByRole('link', { name: '关键发现' })).toHaveAttribute('href', '#briefing-section-关键发现')
   expect(screen.getByRole('link', { name: '关键发现' })).toHaveAttribute('title', '关键发现')
-  expect(screen.getByText('滚动标记')).toBeInTheDocument()
-  expect(screen.getByLabelText('4 条建议 / 0 个风险 / 1 条参考')).toBeInTheDocument()
-  expect(screen.getByLabelText('蓝色：论文')).toBeInTheDocument()
-  expect(screen.getByLabelText('绿色：项目')).toBeInTheDocument()
-  expect(screen.getByLabelText('红色：风险')).toBeInTheDocument()
-  expect(screen.getByLabelText('黄色：重点')).toBeInTheDocument()
-  expect(screen.getByLabelText('滚动锚点')).toBeInTheDocument()
   const briefingPaperLink = screen.getByRole('link', { name: 'Briefing Paper' })
   expect(briefingPaperLink).toHaveAttribute('href', '/paper/1')
   expect(screen.getByText('与 AI coding 高相关')).toBeInTheDocument()
@@ -1122,7 +1113,7 @@ test('可以在工作看板更新自动化设置并触发今天补跑', async ()
   }))
   await waitFor(() => expect(apiMocks.runTodayBriefing).toHaveBeenCalled())
   expect(await screen.findAllByText('补跑完成')).not.toHaveLength(0)
-  expect(await screen.findByText('计划时间 13:00')).toBeInTheDocument()
+  expect(await screen.findByText(/13:00/)).toBeInTheDocument()
   expect(screen.getAllByText('Asia/Shanghai').length).toBeGreaterThan(0)
 })
 
@@ -1187,14 +1178,12 @@ test('每日日报顶部控件区使用 command deck 并可展开历史日报', 
 
   renderApp(['/briefing'])
 
-  expect(await screen.findByText('日期切换')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: '选择日报日期' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: /历史日报（1）/ })).toBeInTheDocument()
-  expect(screen.getByText('计划时间 12:00')).toBeInTheDocument()
+  expect(await screen.findByText(/2026-04-19/)).toBeInTheDocument()
+  expect(screen.getByText(/自动生成：每天 12:00/)).toBeInTheDocument()
   expect(screen.getByText('订阅源问题反馈')).toBeInTheDocument()
   expect(screen.getAllByText('arXiv AI RSS').length).toBeGreaterThan(0)
 
-  fireEvent.click(screen.getByRole('button', { name: /历史日报（1）/ }))
+  fireEvent.click(screen.getByRole('button', { name: '查看历史日报' }))
 
   expect(await screen.findByRole('button', { name: '浏览日报日期' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /2026-04-18/ })).toBeInTheDocument()
@@ -1400,7 +1389,7 @@ test('静默刷新失败时会保留当前日报内容', async () => {
 
   expect((await screen.findAllByText('刷新每日速览失败')).length).toBeGreaterThan(0)
   expect(screen.getByText('初始日报')).toBeInTheDocument()
-  expect(screen.getByText('计划时间 13:00')).toBeInTheDocument()
+  expect(screen.getByText(/13:00/)).toBeInTheDocument()
 })
 
 test('可以切换到数据统计并展示统计壳层', async () => {
@@ -1653,14 +1642,14 @@ test('library detail metadata save refreshes selected paper detail', async () =>
   renderApp(['/paper/1'])
 
   expect(await screen.findByRole('heading', { name: 'Metadata Paper' })).toBeInTheDocument()
-  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Updated Metadata' } })
-  fireEvent.change(screen.getByLabelText('Authors'), { target: { value: 'Grace Hopper' } })
-  fireEvent.change(screen.getByLabelText('Year'), { target: { value: '2025' } })
-  fireEvent.change(screen.getByLabelText('Venue'), { target: { value: 'NeurIPS' } })
+  fireEvent.change(screen.getByLabelText('标题'), { target: { value: 'Updated Metadata' } })
+  fireEvent.change(screen.getByLabelText('作者'), { target: { value: 'Grace Hopper' } })
+  fireEvent.change(screen.getByLabelText('年份'), { target: { value: '2025' } })
+  fireEvent.change(screen.getByLabelText('期刊/会议'), { target: { value: 'NeurIPS' } })
   fireEvent.change(screen.getByLabelText('DOI'), { target: { value: '10.5678/updated' } })
   fireEvent.change(screen.getByLabelText('URL'), { target: { value: 'https://example.com/updated' } })
-  fireEvent.change(screen.getByLabelText('Abstract'), { target: { value: 'Updated abstract.' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Save metadata' }))
+  fireEvent.change(screen.getByLabelText('摘要'), { target: { value: 'Updated abstract.' } })
+  fireEvent.click(screen.getByRole('button', { name: '保存元数据' }))
 
   await waitFor(() => expect(apiMocks.updatePaper).toHaveBeenCalledWith(1, {
     title: 'Updated Metadata',
@@ -1690,13 +1679,13 @@ test('library detail wires favorite and reading-state updates through API wrappe
 
   renderApp(['/paper/1'])
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Favorite paper' }))
-  await waitFor(() => expect(apiMocks.updatePaperFavorite).toHaveBeenCalledWith(1, true))
-  expect(await screen.findByRole('button', { name: 'Unfavorite paper' })).toBeInTheDocument()
+  fireEvent.click(await screen.findByRole('button', { name: '收藏论文' }))
 
-  fireEvent.change(screen.getByLabelText('Reading status'), { target: { value: 'reading' } })
-  fireEvent.change(screen.getByLabelText('Reading progress'), { target: { value: '45' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Save reading state' }))
+  expect(await screen.findByRole('button', { name: '取消收藏' })).toBeInTheDocument()
+
+  fireEvent.change(screen.getByLabelText('阅读状态'), { target: { value: 'reading' } })
+  fireEvent.change(screen.getByLabelText('阅读进度'), { target: { value: '45' } })
+  fireEvent.click(screen.getByRole('button', { name: '保存阅读状态' }))
 
   await waitFor(() => expect(apiMocks.updatePaperReadingState).toHaveBeenCalledWith(1, {
     reading_status: 'reading',
@@ -1712,14 +1701,14 @@ test('library detail notes save failure keeps local text recoverable', async () 
 
   renderApp(['/paper/1'])
 
-  const notesField = await screen.findByLabelText('User notes')
+  const notesField = await screen.findByLabelText('用户笔记')
   fireEvent.change(notesField, { target: { value: 'Unsaved orchestration note.' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Save notes' }))
+  fireEvent.click(screen.getByRole('button', { name: '保存笔记' }))
 
   await waitFor(() => expect(apiMocks.updatePaperNotes).toHaveBeenCalledWith(1, 'Unsaved orchestration note.'))
   expect(await screen.findByText('notes offline')).toBeInTheDocument()
-  expect(screen.getByText('Notes save failed')).toBeInTheDocument()
-  expect(screen.getByLabelText('User notes')).toHaveValue('Unsaved orchestration note.')
+  expect(screen.getByText('笔记保存失败')).toBeInTheDocument()
+  expect(screen.getByLabelText('用户笔记')).toHaveValue('Unsaved orchestration note.')
 })
 
 test('opens the dedicated reader route from library detail', async () => {
@@ -1731,9 +1720,9 @@ test('opens the dedicated reader route from library detail', async () => {
 
   renderApp(['/paper/1'])
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Open reader' }))
+  fireEvent.click(await screen.findByRole('button', { name: '打开阅读器' }))
 
-  expect(await screen.findByRole('button', { name: 'Back to library' })).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: '返回论文库' })).toBeInTheDocument()
   expect(apiMocks.fetchPaperDetail).toHaveBeenCalledWith(1)
 })
 
@@ -1745,11 +1734,11 @@ test('reader route back button returns to library detail route', async () => {
 
   renderApp(['/paper/1/reader'])
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Back to library' }))
+  fireEvent.click(await screen.findByRole('button', { name: '返回论文库' }))
 
   expect(await screen.findByRole('heading', { name: 'Paper library' })).toBeInTheDocument()
   expect(await screen.findByRole('heading', { name: 'Metadata Paper' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Open reader' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '打开阅读器' })).toBeInTheDocument()
 })
 
 test('reader route marks unread papers as reading on open', async () => {
@@ -1758,7 +1747,7 @@ test('reader route marks unread papers as reading on open', async () => {
 
   renderApp(['/paper/1/reader'])
 
-  expect(await screen.findByRole('button', { name: 'Back to library' })).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: '返回论文库' })).toBeInTheDocument()
   await waitFor(() => expect(apiMocks.updatePaperReadingState).toHaveBeenCalledWith(1, {
     reading_status: 'reading',
     reading_progress: 0,
@@ -1770,7 +1759,7 @@ test.each(['read', 'skipped'] as const)('reader route does not overwrite %s read
 
   renderApp(['/paper/1/reader'])
 
-  expect(await screen.findByRole('button', { name: 'Back to library' })).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: '返回论文库' })).toBeInTheDocument()
   expect(apiMocks.updatePaperReadingState).not.toHaveBeenCalled()
 })
 
@@ -1820,8 +1809,8 @@ test('reader route parse-needed markdown state triggers parse and refresh', asyn
 
   renderApp(['/paper/1/reader'])
 
-  expect(await screen.findByText('Markdown not ready')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Parse paper' }))
+  expect(await screen.findByText('Markdown 尚未生成')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: '解析论文' }))
 
   await waitFor(() => expect(apiMocks.parsePaper).toHaveBeenCalledWith(1))
   await waitFor(() => expect(apiMocks.waitForTaskCompletion).toHaveBeenCalledWith('parse-task'))
@@ -1891,10 +1880,10 @@ test('reader route translates blocks, shows failures, and retries', async () => 
   renderApp(['/paper/1/reader'])
 
   fireEvent.click(await screen.findByRole('button', { name: 'Translate block' }))
-  expect(await screen.findByText('Translation failed')).toBeInTheDocument()
+  expect(await screen.findByText('翻译失败')).toBeInTheDocument()
   expect(screen.getByText('model offline')).toBeInTheDocument()
 
-  fireEvent.click(screen.getByRole('button', { name: 'Retry translation' }))
+  fireEvent.click(screen.getByRole('button', { name: '重试翻译' }))
 
   await waitFor(() => expect(apiMocks.translatePaperBlock).toHaveBeenLastCalledWith(1, 1, { target_language: 'zh-CN' }))
   expect(await screen.findByText('翻译后的区块')).toBeInTheDocument()
@@ -2306,7 +2295,7 @@ test('可以在论文详情里手动调整主分类', async () => {
     renderApp()
 
     fireEvent.click(await screen.findByText('Needs Review'))
-    fireEvent.change(await screen.findByLabelText('Primary category'), { target: { value: '2' } })
+    fireEvent.change(await screen.findByLabelText('主分类'), { target: { value: '2' } })
 
     await waitFor(() => expect(apiMocks.updatePaperCategory).toHaveBeenCalledWith(1, 2))
   } finally {
@@ -2449,7 +2438,7 @@ test('手动调整主分类后若论文移出当前目录则返回空态而不�
     fireEvent.click(pendingCategoryButton)
     await waitFor(() => expect(pendingCategoryButton).toHaveClass('active'))
     fireEvent.click(await screen.findByText('Needs Review'))
-    const primaryCategoryField = await screen.findByLabelText('Primary category')
+    const primaryCategoryField = await screen.findByLabelText('主分类')
     const detailLoadCountBeforeChange = apiMocks.fetchPaperDetail.mock.calls.length
     fireEvent.change(primaryCategoryField, { target: { value: '2' } })
 

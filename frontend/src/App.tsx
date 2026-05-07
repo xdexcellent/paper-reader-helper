@@ -39,7 +39,7 @@ function Sidebar({ theme, setTheme }: { theme: 'dark' | 'light'; setTheme: (t: '
           <span className="side-nav-icon" aria-hidden="true"><Icon name="dashboard" /></span>
           <span className="side-nav-text">
             <strong>工作看板</strong>
-            <small>每日动态和统计</small>
+            <small>每日论文与项目速览</small>
             {isActive('/briefing') ? <em className="side-nav-context">当前模块</em> : null}
           </span>
         </Link>

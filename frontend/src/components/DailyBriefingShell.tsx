@@ -18,7 +18,6 @@ import type {
   Paper,
 } from '../types'
 import { AutomationSettingsPanel } from './AutomationSettingsPanel'
-import { BriefingDateField } from './BriefingDateField'
 import { BriefingHistoryPicker } from './BriefingHistoryPicker'
 import { BriefingProjectsSidebar } from './BriefingProjectsSidebar'
 import { BriefingTopPapers } from './BriefingTopPapers'
@@ -61,12 +60,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => {
     window.setTimeout(resolve, ms)
   })
-}
-
-function getAutomationSummary(status: AutomationTodayStatus | null): string {
-  if (!status) return '正在同步自动化状态'
-  if (!status.enabled || !status.briefing_enabled) return '当前自动化未启用'
-  return `每天 ${status.schedule_time} ${status.timezone} 自动生成`
 }
 
 function normalizeLookupText(value: string | null | undefined): string {
@@ -427,9 +420,7 @@ export function DailyBriefingShell({
 
   const statusLabel = getAutomationStatusLabel(automationStatus)
   const runModeLabel = briefing?.trigger_type === 'manual' ? '手动补跑' : briefing?.trigger_type === 'scheduled' ? '自动生成' : ''
-  const automationSummary = getAutomationSummary(automationStatus)
   const displayedBriefingDate = briefing?.briefing_date ?? selectedDate
-  const dateHelperText = displayedBriefingDate === serverToday ? '当前展示今天日报' : '当前展示历史日报'
   const feedbackMessages: Array<{ key: string; text: string; tone: 'info' | 'error' }> = []
   if (runStatus) {
     feedbackMessages.push({
@@ -500,22 +491,14 @@ export function DailyBriefingShell({
     )
   }
 
-  const briefingMetrics = [
-    { label: '日期', value: displayedBriefingDate },
-    { label: '论文候选', value: briefing.paper_count },
-    { label: '相关项目', value: briefing.project_count },
-    { label: '订阅源', value: briefing.source_count },
-  ]
   const automationProgress = automationStatus?.today_run?.progress
   const briefingHighlights = getBriefingHighlights(briefing.summary_markdown, briefing.top_papers)
   const riskCount = subscriptionIssues.length + (briefing.failed_items?.length ?? 0) + (error ? 1 : 0)
   const referenceCount = briefing.projects.length
-  const markerSummary = `${briefing.top_papers.length} 条建议 / ${riskCount} 个风险 / ${referenceCount} 条参考`
   const outlineForDisplay = outlineItems.length > 0
     ? outlineItems
     : [{ id: 'briefing-summary-content', label: '日报内容', level: 2 }]
   const generatedAtTime = getBriefingGeneratedTime(briefing.generated_at)
-  const heroStatusText = `已筛选 ${briefing.paper_count} 篇论文，生成 ${briefing.project_count} 个项目观察，发现 ${briefing.source_count} 个订阅源热点。`
   const keywordSummary = getBriefingKeywords(briefing, papers).join(' / ')
   const riskLevelLabel = getBriefingRiskLevel(riskCount)
   const readingProgress = getBriefingReadingProgress(outlineForDisplay, activeOutlineId)
@@ -531,108 +514,58 @@ export function DailyBriefingShell({
     <section className="panel-card briefing-shell">
       <header className="briefing-command-deck briefing-hero">
         <div className="briefing-hero-bar">
-          <div className="briefing-command-title-block briefing-hero-title-block">
-            <span className="briefing-command-kicker">研究看板</span>
-            <div>
-              <h2>每日速览</h2>
-              <p className="briefing-hero-purpose">聚合今日论文、项目与风险信号，用于快速决定阅读和处理顺序。</p>
-              <p className="briefing-hero-status">{heroStatusText}</p>
-              <p className="briefing-hero-meta">
-                {briefing.briefing_date} · {new Date(briefing.generated_at).toLocaleString('zh-CN')}
-                {runModeLabel ? ` · ${runModeLabel}` : ''}
-              </p>
-              <div className="briefing-hero-state">
-                <span>最后生成：{generatedAtTime}</span>
-                <span>阅读进度：{readingProgress}%</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="briefing-hero-status" aria-label="每日速览状态">
+          <span className="briefing-command-kicker">工作看板</span>
+          <div className="briefing-hero-status" aria-label="工作看板状态">
             <StatusBadge value={statusLabel} />
             {!isTodaySelected ? <span className="briefing-command-status-pill">历史日报</span> : null}
-          </div>
-        </div>
-
-        <div className="briefing-hero-actions" aria-label="每日速览工具">
-          <label className="briefing-hero-search">
-            <Icon name="search" />
-            <input aria-label="搜索论文、项目或关键词" placeholder="搜索论文、项目或关键词" />
-          </label>
-          <button
-            type="button"
-            className="briefing-hero-rerun-button"
-            aria-label="生成报告"
-            disabled={runningToday}
-            onClick={() => void handleRunToday()}
-          >
-            <Icon name="refresh" />
-            {runningToday ? '生成中' : '生成报告'}
-          </button>
-          <div className="briefing-command-status-stack">
-            {briefing.trigger_type ? <StatusBadge value={briefing.trigger_type} /> : null}
             <span className="briefing-command-status-pill">{automationStatus?.timezone ?? 'Asia/Shanghai'}</span>
+            {briefing.trigger_type ? <StatusBadge value={briefing.trigger_type} /> : null}
           </div>
         </div>
 
-        <div className="briefing-hero-cards">
-          <article className="briefing-hero-card briefing-date-card">
-            <div className="briefing-date-title">
-              <span>当前日报</span>
-              <h3>{displayedBriefingDate}</h3>
-              <p>{dateHelperText}</p>
-            </div>
-            <div className="briefing-date-card-head">
-              <BriefingDateField
-                label="日期切换"
-                value={selectedDate}
-                helperText="打开日期选择器"
-                ariaLabel="选择日报日期"
-                onChange={setSelectedDate}
-                buttonLabel="更换日期"
-                variant="compact"
-              />
-              {history.length > 0 ? (
-                <button
-                  type="button"
-                  className="briefing-history-pill"
-                  aria-expanded={isHistoryOpen}
-                  onClick={() => setIsHistoryOpen((open) => !open)}
-                >
-                  历史日报（{history.length}） ›
-                </button>
-              ) : null}
-            </div>
-            <div className="briefing-hero-metrics" aria-label="日报指标">
-              {briefingMetrics.map((metric) => (
-                <span key={metric.label}>
-                  <strong>{metric.value}</strong>
-                  {metric.label}
-                </span>
-              ))}
-            </div>
-          </article>
+        <div className="briefing-hero-title-row">
+          <div className="briefing-hero-title-block">
+            <h2>今日工作概览</h2>
+            <p className="briefing-hero-purpose">聚合今日论文、项目、风险与关键信号，用于快速判断处理优先级。</p>
+          </div>
+          <div className="briefing-hero-actions">
+            <label className="briefing-hero-search">
+              <Icon name="search" />
+              <input aria-label="搜索论文、项目或关键词" placeholder="搜索论文、项目或关键词" />
+            </label>
+            <button
+              type="button"
+              className="briefing-hero-rerun-button"
+              aria-label="生成报告"
+              disabled={runningToday}
+              onClick={() => void handleRunToday()}
+            >
+              <Icon name="refresh" />
+              {runningToday ? '生成中' : '生成报告'}
+            </button>
+          </div>
+        </div>
 
-          <article className="briefing-hero-card briefing-automation-panel">
-            <div className="briefing-automation-head">
-              <span className="briefing-command-card-label">自动化设置</span>
-              <Icon name="gear" />
-            </div>
-            <div className="briefing-automation-copy">
-              <h3>{automationSummary}</h3>
-              <p>可调整生成时间、时区以及项目侧栏展示策略。</p>
-              <div className="briefing-automation-meta">
-                <span>计划时间 {automationStatus?.schedule_time ?? '--:--'}</span>
-                {automationStatus?.today_run?.completed_at ? (
-                  <span>最近完成 {new Date(automationStatus.today_run.completed_at).toLocaleString('zh-CN')}</span>
-                ) : null}
-              </div>
-            </div>
-            <AutomationSettingsPanel
-              onSaved={handleSettingsSaved}
-              buttonClassName="btn btn-action briefing-automation-button"
-            />
-          </article>
+        <div className="briefing-hero-status-bar">
+          <span>{displayedBriefingDate}</span>
+          <span>最后生成 {generatedAtTime}</span>
+          <span>阅读进度 {readingProgress}%</span>
+          {runModeLabel ? <span>{runModeLabel}</span> : null}
+        </div>
+
+        <div className="briefing-hero-stat-tags">
+          <span>论文候选 <strong>{briefing.paper_count}</strong></span>
+          <span>相关项目 <strong>{briefing.project_count}</strong></span>
+          <span>订阅源 <strong>{briefing.source_count}</strong></span>
+          <span>风险热点 <strong>{riskCount}</strong></span>
+        </div>
+
+        <div className="briefing-hero-auto-bar">
+          <span>自动生成：每天 {automationStatus?.schedule_time ?? '12:00'} · {automationStatus?.timezone ?? 'Asia/Shanghai'}</span>
+          {automationStatus?.today_run?.completed_at ? (
+            <span>最近完成 {new Date(automationStatus.today_run.completed_at).toLocaleString('zh-CN')}</span>
+          ) : null}
+          <AutomationSettingsPanel onSaved={handleSettingsSaved} buttonClassName="briefing-auto-settings-btn" buttonLabel="自动化设置" />
         </div>
 
         {feedbackMessages.length > 0 ? (
@@ -852,65 +785,6 @@ export function DailyBriefingShell({
                 </details>
               ) : null}
             </div>
-
-            <nav className="briefing-marker-rail" aria-label="滚动标记说明">
-              <div className="briefing-marker-card">
-                <span className="briefing-marker-label">滚动标记</span>
-                <div className="briefing-marker-counts" aria-label={markerSummary} title={markerSummary}>
-                  <span>
-                    <strong>{briefing.top_papers.length}</strong>
-                    <em>建议</em>
-                  </span>
-                  <span>
-                    <strong>{riskCount}</strong>
-                    <em>风险</em>
-                  </span>
-                  <span>
-                    <strong>{referenceCount}</strong>
-                    <em>参考</em>
-                  </span>
-                </div>
-                <div className="briefing-marker-track" aria-label="滚动锚点">
-                  <a
-                    href="#briefing-highlights"
-                    className={`briefing-marker-dot highlight${activeOutlineId === 'briefing-highlights' ? ' active' : ''}`}
-                    title="跳转到今日重点"
-                    aria-label="跳转到今日重点"
-                    onClick={() => setActiveOutlineId('briefing-highlights')}
-                  />
-                  {outlineForDisplay.slice(0, 5).map((item) => (
-                    <a
-                      key={`marker-${item.id}`}
-                      href={`#${item.id}`}
-                      className={`briefing-marker-dot paper level-${item.level}${activeOutlineId === item.id ? ' active' : ''}`}
-                      title={`跳转到${item.label}`}
-                      aria-label={`跳转到${item.label}`}
-                      onClick={() => setActiveOutlineId(item.id)}
-                    />
-                  ))}
-                  <a
-                    href="#briefing-risks"
-                    className={`briefing-marker-dot risk${activeOutlineId === 'briefing-risks' ? ' active' : ''}`}
-                    title="跳转到风险点"
-                    aria-label="跳转到风险点"
-                    onClick={() => setActiveOutlineId('briefing-risks')}
-                  />
-                  <a
-                    href="#briefing-references"
-                    className={`briefing-marker-dot project${activeOutlineId === 'briefing-references' ? ' active' : ''}`}
-                    title="跳转到参考资料"
-                    aria-label="跳转到参考资料"
-                    onClick={() => setActiveOutlineId('briefing-references')}
-                  />
-                </div>
-                <div className="briefing-marker-legend" aria-label="滚动标记图例">
-                  <span aria-label="蓝色：论文" title="蓝色：论文"><i className="paper" /><b>论文</b></span>
-                  <span aria-label="绿色：项目" title="绿色：项目"><i className="project" /><b>项目</b></span>
-                  <span aria-label="红色：风险" title="红色：风险"><i className="risk" /><b>风险</b></span>
-                  <span aria-label="黄色：重点" title="黄色：重点"><i className="highlight" /><b>重点</b></span>
-                </div>
-              </div>
-            </nav>
           </div>
         </article>
 

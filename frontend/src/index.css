@@ -1,17 +1,17 @@
 :root, :root[data-theme="dark"] {
   --theme-type: "dark";
-  --bg-page: #000000;
-  --bg-panel: #1d1d1f;
-  --bg-muted: #272729;
-  --bg-hover: rgba(255, 255, 255, 0.08);
+  --bg-page: #0a0e14;
+  --bg-panel: #10141c;
+  --bg-muted: #1a1f2a;
+  --bg-hover: rgba(255, 255, 255, 0.06);
   --bg-selected: rgba(0, 113, 227, 0.15);
-  --border-subtle: transparent;
-  --border-strong: rgba(255, 255, 255, 0.04);
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --border-strong: rgba(255, 255, 255, 0.08);
   --text-primary: #ffffff;
   --text-secondary: rgba(255, 255, 255, 0.8);
   --text-muted: rgba(255, 255, 255, 0.48);
-  --input-bg: #1c1c1e;
-  --input-border: rgba(255, 255, 255, 0.12);
+  --input-bg: #141922;
+  --input-border: rgba(255, 255, 255, 0.1);
   --input-focus-border: rgba(0, 113, 227, 0.5);
   
   --accent-blue: #0071e3;
@@ -29,8 +29,8 @@
   --shadow-soft: rgba(0, 0, 0, 0.22) 3px 5px 30px 0px;
   --shadow-hover: rgba(0, 0, 0, 0.3) 5px 10px 40px 0px;
   
-  --bg-layer-1: #262628;
-  --bg-layer-2: #28282a;
+  --bg-layer-1: #161b24;
+  --bg-layer-2: #1c2230;
   --bg-glass-highlight: transparent;
   --bg-glass-hover: transparent;
   
@@ -3858,31 +3858,28 @@ textarea {
 .briefing-command-deck {
   position: relative;
   display: grid;
-  gap: 24px;
+  gap: 14px;
   overflow: visible;
   border: 0;
+  border-bottom: 1px solid var(--border-subtle);
   border-radius: 0;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--bg-layer-1) 78%, var(--accent-blue) 8%), transparent 74%);
-  padding: 22px 8px 0;
+  background: var(--bg-panel);
+  padding: 18px 12px 16px;
   box-shadow: none;
 }
 
 .briefing-hero-bar {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 28px;
-  min-height: 58px;
+  gap: 16px;
+  min-height: 0;
 }
 
 .briefing-command-title-block {
-  display: grid;
-  gap: 6px;
-}
-
-.briefing-command-title-block > div {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .briefing-command-kicker {
@@ -3896,38 +3893,49 @@ textarea {
 .briefing-command-title-block h2 {
   margin: 0;
   color: var(--text-primary);
-  font-size: 38px;
-  line-height: 1;
+  font-size: 28px;
+  line-height: 1.1;
   letter-spacing: 0;
 }
 
-.briefing-command-title-block p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 14px;
+.briefing-hero-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
 }
 
-.briefing-hero-title-block {
-  max-width: 620px;
+.briefing-hero-title-block h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 28px;
+  line-height: 1.15;
+  font-weight: 800;
+}
+
+.briefing-hero-purpose {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 400;
 }
 
 .briefing-hero-status {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .briefing-hero-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 14px;
-  width: 100%;
+  gap: 10px;
   flex-wrap: wrap;
-  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 76%, var(--text-primary) 7%);
-  padding-top: 14px;
+  flex-shrink: 0;
 }
 
 .briefing-hero-search {
@@ -3985,226 +3993,95 @@ textarea {
   color: #ffffff;
 }
 
-.briefing-command-status-stack {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-left: auto;
-}
-
 .briefing-command-status-pill {
   display: inline-flex;
   align-items: center;
-  padding: 6px 10px;
+  padding: 4px 8px;
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--bg-layer-1) 86%, transparent);
+  background: var(--bg-layer-2);
   color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.briefing-hero-actions .status-badge,
-.briefing-hero-actions .briefing-command-status-pill {
-  background: color-mix(in srgb, var(--bg-layer-1) 82%, transparent);
-  color: var(--text-secondary);
-  border-color: var(--border-subtle);
-}
-
-.briefing-hero-cards {
-  display: grid;
-  grid-template-columns: minmax(0, 1.34fr) minmax(360px, 0.96fr);
-  align-items: stretch;
-  gap: 24px;
-}
-
-.briefing-hero-card {
-  min-width: 0;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 24px 26px;
-  background: color-mix(in srgb, var(--bg-panel) 84%, transparent);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.18);
-}
-
-.briefing-date-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  gap: 24px;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--accent-blue) 8%, transparent), transparent 62%),
-    color-mix(in srgb, var(--bg-panel) 88%, transparent);
-}
-
-.briefing-date-title {
-  display: grid;
-  gap: 7px;
-}
-
-.briefing-date-title span {
-  color: var(--text-muted);
   font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 
-.briefing-date-title h3 {
-  margin: 0;
-  color: var(--text-primary);
-  font-size: 30px;
-  line-height: 1.05;
-}
-
-.briefing-date-title p {
-  margin: 0;
-  color: color-mix(in srgb, var(--text-secondary) 86%, var(--text-primary) 14%);
-  font-size: 14px;
-  line-height: 1.55;
-}
-
-.briefing-date-card-head {
+.briefing-hero-status-bar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
-  min-height: 0;
-}
-
-.briefing-date-card .briefing-date-field-label {
-  display: none;
-}
-
-.briefing-date-card .briefing-date-field-trigger {
-  align-items: center;
-  justify-content: flex-start;
-  min-height: 40px;
-  border: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--bg-layer-1) 78%, transparent);
-  padding: 9px 12px;
-  transform: none;
-}
-
-.briefing-date-card .briefing-date-field-trigger:hover {
-  background: var(--bg-hover);
-  transform: none;
-}
-
-.briefing-date-card .briefing-date-field-copy strong {
-  font-size: 13px;
-  line-height: 1.2;
-}
-
-.briefing-date-card .briefing-date-field-copy small {
-  color: color-mix(in srgb, var(--text-secondary) 86%, var(--text-primary) 14%);
-}
-
-.briefing-date-card .briefing-date-field-icon {
-  display: block;
-  width: 16px;
-  height: 16px;
-}
-
-.briefing-history-pill {
-  border: 1px solid color-mix(in srgb, var(--text-primary) 16%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--bg-layer-1) 78%, transparent);
-  color: var(--text-secondary);
-  padding: 9px 14px;
-  font-size: 13px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.briefing-hero-metrics {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.briefing-hero-metrics span {
-  display: grid;
-  align-content: center;
-  gap: 7px;
-  min-height: 92px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--text-primary) 4%, transparent), transparent),
-    color-mix(in srgb, var(--bg-layer-1) 78%, transparent);
+  gap: 6px 14px;
   color: var(--text-muted);
-  padding: 14px 16px;
   font-size: 12px;
-  font-weight: 800;
-}
-
-.briefing-hero-metrics strong {
-  color: var(--text-primary);
-  font-size: 28px;
-  line-height: 1;
-}
-
-.briefing-automation-panel {
-  display: grid;
-  grid-template-rows: auto auto auto;
-  align-content: space-between;
-  gap: 14px;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--accent-blue) 7%, transparent), transparent 64%),
-    color-mix(in srgb, var(--bg-panel) 88%, transparent);
-}
-
-.briefing-automation-head,
-.briefing-automation-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.briefing-automation-head .ui-icon {
-  width: 16px;
-  height: 16px;
-  color: var(--text-muted);
-}
-
-.briefing-automation-copy {
-  display: grid;
-  gap: 8px;
-}
-
-.briefing-automation-copy h3 {
-  margin: 0;
-  color: var(--text-primary);
-  font-size: 21px;
-  line-height: 1.2;
-  letter-spacing: 0;
-}
-
-.briefing-automation-copy p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 13px;
   line-height: 1.6;
 }
 
-.briefing-automation-meta {
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  color: var(--text-muted);
-  font-size: 12px;
+.briefing-hero-status-bar > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.briefing-automation-button {
-  width: 100%;
-  min-height: 42px;
-  justify-content: center;
-  border-color: var(--border-subtle);
-  background: color-mix(in srgb, var(--bg-layer-1) 82%, transparent);
+.briefing-hero-status-bar > span + span::before {
+  content: "·";
+  color: var(--text-muted);
+  margin-right: 14px;
+  opacity: 0.5;
+}
+
+.briefing-hero-stat-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.briefing-hero-stat-tags > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-blue) 8%, var(--bg-layer-1));
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.briefing-hero-stat-tags > span strong {
   color: var(--text-primary);
-  box-shadow: none;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.briefing-hero-auto-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.briefing-auto-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-layer-2);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.briefing-auto-settings-btn:hover {
+  border-color: var(--accent-blue-soft);
+  background: var(--bg-selected);
+  color: var(--text-primary);
 }
 
 .briefing-command-feedback-row {
@@ -5161,8 +5038,6 @@ textarea {
 
 .briefing-main-layout {
   display: grid;
-  grid-template-columns: 178px minmax(0, 1fr) 42px;
-  gap: 28px;
   align-items: start;
 }
 
@@ -5170,14 +5045,10 @@ textarea {
   min-width: 0;
 }
 
-.briefing-document-outline,
-.briefing-marker-rail {
+.briefing-document-outline {
   position: sticky;
   top: 24px;
   align-self: start;
-}
-
-.briefing-document-outline {
   display: grid;
   gap: 6px;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, var(--text-primary) 8%);
@@ -5186,8 +5057,7 @@ textarea {
   padding: 12px;
 }
 
-.briefing-outline-title,
-.briefing-marker-rail > span {
+.briefing-outline-title {
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 900;
@@ -5221,68 +5091,6 @@ textarea {
   background: color-mix(in srgb, var(--accent-blue) 12%, transparent);
   color: var(--text-primary);
   outline: none;
-}
-
-.briefing-marker-rail {
-  display: grid;
-  justify-items: center;
-  gap: 9px;
-  color: var(--text-muted);
-}
-
-.briefing-marker-rail small {
-  writing-mode: vertical-rl;
-  max-height: 210px;
-  color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.35;
-}
-
-.briefing-marker-dot {
-  width: 12px;
-  height: 34px;
-  border: 1px solid color-mix(in srgb, var(--accent-blue) 38%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent-blue) 30%, transparent);
-  cursor: pointer;
-  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease;
-}
-
-.briefing-marker-dot:hover,
-.briefing-marker-dot:focus-visible {
-  border-color: var(--text-primary);
-  background: var(--accent-blue);
-  outline: none;
-}
-
-.briefing-marker-dot.level-2 {
-  height: 24px;
-  background: color-mix(in srgb, var(--accent-green) 26%, transparent);
-  border-color: color-mix(in srgb, var(--accent-green) 38%, transparent);
-}
-
-.briefing-marker-dot.level-3 {
-  height: 18px;
-}
-
-.briefing-marker-dot.risk {
-  background: color-mix(in srgb, var(--accent-red) 28%, transparent);
-  border-color: color-mix(in srgb, var(--accent-red) 46%, transparent);
-}
-
-.briefing-marker-dot.reference {
-  background: color-mix(in srgb, var(--accent-orange) 30%, transparent);
-  border-color: color-mix(in srgb, var(--accent-orange) 48%, transparent);
-}
-
-.briefing-hero-purpose {
-  color: color-mix(in srgb, var(--text-primary) 82%, var(--text-secondary) 18%) !important;
-  font-size: 15px !important;
-  line-height: 1.58;
-}
-
-.briefing-hero-meta {
-  color: var(--text-muted) !important;
 }
 
 .briefing-hero-rerun-button:hover:not(:disabled),
@@ -5492,21 +5300,7 @@ textarea {
   margin-bottom: 4px;
 }
 
-@media (max-width: 1280px) {
-  .briefing-main-layout {
-    grid-template-columns: minmax(0, 1fr) 36px;
-  }
 
-  .briefing-document-outline {
-    position: static;
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
-  }
-
-  .briefing-outline-title {
-    grid-column: 1 / -1;
-  }
-}
 
 @media (max-width: 900px) {
   .briefing-main {
@@ -5515,24 +5309,6 @@ textarea {
 
   .briefing-main-layout {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .briefing-marker-rail {
-    position: static;
-    display: flex;
-    justify-content: flex-start;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-
-  .briefing-marker-rail small {
-    writing-mode: horizontal-tb;
-    max-height: none;
-  }
-
-  .briefing-marker-dot {
-    width: 28px;
-    height: 10px;
   }
 
   .briefing-summary h1 {
@@ -5544,14 +5320,6 @@ textarea {
   .paper-management-shell,
   .paper-management-grid {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .briefing-hero-cards {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .briefing-hero-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .briefing-hero-search {
@@ -5698,23 +5466,9 @@ textarea {
     padding: 16px;
   }
 
-  .briefing-hero-cards,
-  .briefing-date-card,
-  .briefing-hero-metrics {
-    grid-template-columns: 1fr;
-  }
-
-  .briefing-date-card-head {
-    align-items: flex-start;
-    padding-right: 0;
-  }
-
-  .briefing-history-pill {
-    justify-self: start;
-  }
-
-  .briefing-highlight-panel {
-    grid-template-columns: 1fr;
+  .briefing-hero-search {
+    width: 100%;
+    min-width: 0;
   }
 
   .recommendation-hero,
@@ -5744,9 +5498,7 @@ textarea {
     flex-direction: column;
   }
 
-  .briefing-hero-actions,
-  .briefing-command-status-stack,
-  .briefing-automation-meta {
+  .briefing-hero-actions {
     justify-content: flex-start;
   }
 
@@ -5897,50 +5649,24 @@ textarea {
 .briefing-main-header p,
 .briefing-document-outline,
 .briefing-side,
-.briefing-highlight-panel,
-.briefing-hero-status,
-.briefing-hero-state {
+.briefing-highlight-panel {
   font-family: var(--briefing-readable-font);
   font-weight: 400;
 }
 
 .briefing-grid {
-  grid-template-columns: minmax(0, 1.9fr) minmax(260px, 0.52fr);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.42fr);
   gap: 24px;
   align-items: start;
 }
 
 .briefing-main {
-  padding: 30px 34px;
+  padding: 28px 32px;
 }
 
 .briefing-main-layout {
-  grid-template-columns: 168px minmax(0, 1fr) 64px;
-  gap: 22px;
-}
-
-.briefing-hero-status {
-  margin: 6px 0 0 !important;
-  color: color-mix(in srgb, var(--text-primary) 80%, var(--text-secondary) 20%);
-  font-size: 14px !important;
-  line-height: 1.62;
-}
-
-.briefing-hero-state {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.briefing-hero-state span {
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, var(--text-primary) 8%);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--bg-layer-2) 68%, transparent);
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1;
-  padding: 7px 10px;
+  grid-template-columns: minmax(156px, 0.22fr) minmax(0, 1fr);
+  gap: 24px;
 }
 
 .briefing-highlight-panel {
@@ -6058,8 +5784,7 @@ textarea {
 .briefing-summary h2,
 .briefing-summary h3,
 .briefing-summary h4,
-.briefing-top-paper-rank,
-.briefing-hero-metrics strong {
+.briefing-top-paper-rank {
   font-family: var(--font-briefing);
 }
 
@@ -6154,7 +5879,7 @@ textarea {
 }
 
 .briefing-side-stack {
-  max-width: 340px;
+  max-width: 420px;
   gap: 16px;
 }
 
@@ -6252,91 +5977,14 @@ textarea {
   font-weight: 700;
 }
 
-.briefing-marker-rail {
-  width: 64px;
-  justify-items: start;
-  gap: 8px;
-}
-
-.briefing-marker-rail > span {
-  justify-self: center;
-}
-
-.briefing-marker-legend {
-  display: grid;
-  gap: 4px;
-  width: 100%;
-  font-family: var(--briefing-readable-font);
-}
-
-.briefing-marker-legend span {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-muted);
-  font-size: 10px;
-  line-height: 1.2;
-}
-
-.briefing-marker-legend i {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  flex: 0 0 auto;
-}
-
-.briefing-marker-legend .paper,
-.briefing-marker-dot.paper {
-  background: color-mix(in srgb, var(--accent-blue) 34%, transparent);
-  border-color: color-mix(in srgb, var(--accent-blue) 48%, transparent);
-}
-
-.briefing-marker-legend .project,
-.briefing-marker-dot.project {
-  background: color-mix(in srgb, var(--accent-green) 32%, transparent);
-  border-color: color-mix(in srgb, var(--accent-green) 48%, transparent);
-}
-
-.briefing-marker-legend .risk,
-.briefing-marker-dot.risk {
-  background: color-mix(in srgb, var(--accent-red) 32%, transparent);
-  border-color: color-mix(in srgb, var(--accent-red) 48%, transparent);
-}
-
-.briefing-marker-legend .highlight,
-.briefing-marker-dot.highlight {
-  background: color-mix(in srgb, var(--accent-orange) 36%, transparent);
-  border-color: color-mix(in srgb, var(--accent-orange) 54%, transparent);
-}
-
-.briefing-marker-dot {
-  justify-self: center;
-  width: 11px;
-  height: 28px;
-}
-
-.briefing-marker-dot.level-2 {
-  height: 22px;
-}
-
-.briefing-marker-dot.level-3 {
-  height: 17px;
-}
-
-.briefing-marker-dot.active {
-  border-color: var(--text-primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--text-primary) 10%, transparent);
-  transform: scaleX(1.18);
-}
-
 @media (max-width: 1280px) {
   .briefing-main-layout {
-    grid-template-columns: minmax(0, 1fr) 56px;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .briefing-document-outline {
     position: static;
-    grid-column: 1 / -1;
+    grid-column: auto;
     grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   }
 
@@ -6366,237 +6014,8 @@ textarea {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .briefing-marker-rail {
-    position: static;
-    display: flex;
-    width: auto;
-    align-items: center;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-  }
-
-  .briefing-marker-rail small {
-    writing-mode: horizontal-tb;
-    max-height: none;
-  }
-
-  .briefing-marker-legend {
-    display: flex;
-    width: auto;
-    flex-wrap: wrap;
-  }
-
-  .briefing-marker-dot,
-  .briefing-marker-dot.level-2,
-  .briefing-marker-dot.level-3 {
-    width: 28px;
-    height: 9px;
-  }
-}
-
-.briefing-main-layout {
-  grid-template-columns: 168px minmax(0, 1fr) 52px;
-}
-
-.briefing-marker-rail {
-  width: 52px;
-  justify-items: center;
-}
-
-.briefing-marker-card {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  width: 46px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, var(--text-primary) 8%);
-  border-radius: 14px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--bg-layer-1) 86%, transparent), color-mix(in srgb, var(--bg-layer-2) 72%, transparent)),
-    color-mix(in srgb, var(--bg-layer-1) 76%, transparent);
-  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.22);
-  padding: 8px 5px;
-}
-
-.briefing-marker-label {
-  color: color-mix(in srgb, var(--text-primary) 92%, var(--text-secondary) 8%);
-  font-family: var(--briefing-readable-font);
-  font-size: 10.5px;
-  font-weight: 800;
-  line-height: 1.1;
-  text-align: center;
-  white-space: nowrap;
-  transform: scale(0.92);
-}
-
-.briefing-marker-counts {
-  display: grid;
-  gap: 4px;
-  width: 100%;
-}
-
-.briefing-marker-counts span {
-  display: grid;
-  justify-items: center;
-  gap: 1px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 58%, transparent);
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--bg-layer-1) 56%, transparent);
-  padding: 3px 0;
-}
-
-.briefing-marker-counts strong {
-  color: var(--text-primary);
-  font-family: var(--font-briefing);
-  font-size: 12px;
-  font-weight: 850;
-  line-height: 1;
-}
-
-.briefing-marker-counts em {
-  color: var(--text-muted);
-  font-size: 9px;
-  font-style: normal;
-  font-weight: 650;
-  line-height: 1.1;
-}
-
-.briefing-marker-track {
-  position: relative;
-  display: grid;
-  justify-items: center;
-  gap: 5px;
-  min-height: 176px;
-  padding: 6px 0;
-}
-
-.briefing-marker-track::before {
-  content: "";
-  position: absolute;
-  top: 8px;
-  bottom: 8px;
-  left: 50%;
-  width: 2px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--border-subtle) 62%, transparent);
-  transform: translateX(-50%);
-}
-
-.briefing-marker-dot {
-  position: relative;
-  z-index: 1;
-  width: 10px;
-  height: 18px;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bg-layer-1) 72%, transparent);
-}
-
-.briefing-marker-dot.level-2 {
-  height: 14px;
-}
-
-.briefing-marker-dot.level-3 {
-  height: 10px;
-}
-
-.briefing-marker-dot:hover,
-.briefing-marker-dot:focus-visible {
-  transform: scaleX(1.25);
-}
-
-.briefing-marker-dot.active {
-  border-color: var(--text-primary);
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--bg-layer-1) 78%, transparent),
-    0 0 0 5px color-mix(in srgb, var(--text-primary) 10%, transparent);
-  transform: scaleX(1.35);
-}
-
-.briefing-marker-legend {
-  display: grid;
-  gap: 4px;
-  width: 100%;
-}
-
-.briefing-marker-legend span {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  width: 100%;
-  color: var(--text-muted);
-  font-size: 9.5px;
-  line-height: 1.1;
-}
-
-.briefing-marker-legend b {
-  font-weight: 650;
-}
-
-.briefing-marker-legend i {
-  width: 6px;
-  height: 6px;
-}
-
-@media (max-width: 1280px) {
-  .briefing-main-layout {
-    grid-template-columns: minmax(0, 1fr) 48px;
-  }
-}
-
-@media (max-width: 900px) {
-  .briefing-main-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .briefing-marker-rail {
-    width: auto;
-  }
-
-  .briefing-marker-card {
-    display: flex;
-    width: 100%;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 10px;
-    padding: 8px 10px;
-  }
-
-  .briefing-marker-label {
-    transform: none;
-  }
-
-  .briefing-marker-counts,
-  .briefing-marker-legend {
-    display: flex;
-    width: auto;
-    flex-wrap: wrap;
-  }
-
-  .briefing-marker-counts span {
-    min-width: 42px;
-    padding: 3px 6px;
-  }
-
-  .briefing-marker-track {
-    display: flex;
-    min-height: 0;
-    padding: 0 6px;
-  }
-
-  .briefing-marker-track::before {
-    top: 50%;
-    right: 6px;
-    bottom: auto;
-    left: 6px;
-    width: auto;
-    height: 2px;
-    transform: translateY(-50%);
-  }
-
-  .briefing-marker-dot,
-  .briefing-marker-dot.level-2,
-  .briefing-marker-dot.level-3 {
-    width: 18px;
-    height: 8px;
+  .briefing-summary p {
+    margin-bottom: 22px;
   }
 }
 
