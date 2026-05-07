@@ -1,11 +1,9 @@
-import type { PaperBlock, PaperDetail, ReadingStatus } from '../../types'
-import { PaperOverviewPanel } from '../library/PaperOverviewPanel'
+import type { PaperBlock, PaperDetail } from '../../types'
 import { Icon } from '../UiIcon'
 import { MarkdownReaderPane } from './MarkdownReaderPane'
 import { PdfReaderPane } from './PdfReaderPane'
-import { ReaderBlocksPanel } from './ReaderBlocksPanel'
-import { ReaderNotesPanel } from './ReaderNotesPanel'
 import { ReaderToolbar } from './ReaderToolbar'
+import { RightDrawer } from './RightDrawer'
 import type { ReaderBlockFilters, ReaderBlockTranslationState } from './readerBlockTypes'
 import type { ReaderMode } from './readerTypes'
 
@@ -20,12 +18,15 @@ type ReaderShellProps = {
   isBlocksLoading: boolean
   isBlocksRebuilding: boolean
   isSavingNotes: boolean
-  isUpdatingReadingState: boolean
   blockError: string
   blockFilters: ReaderBlockFilters
   blocks: PaperBlock[]
   selectedBlockId: number | null
   translationStates: Record<number, ReaderBlockTranslationState>
+  drawerOpen: boolean
+  readingStatusLabel: string
+  readingProgress: number
+  autoSaved: boolean
   onBack: () => void
   onBlockFiltersChange: (filters: ReaderBlockFilters) => void
   onBlockForceRefreshTranslation?: (block: PaperBlock) => void
@@ -33,14 +34,11 @@ type ReaderShellProps = {
   onBlockRebuild: () => Promise<void> | void
   onBlockSelect: (block: PaperBlock) => void
   onBlockTranslate: (block: PaperBlock) => void
+  onDrawerToggle: () => void
   onModeChange: (mode: ReaderMode) => void
   onPdfRetry: () => Promise<void> | void
   onParse: () => Promise<void> | void
   onNotesSave: (notes: string) => Promise<void> | void
-  onReadingStateChange: (payload: {
-    reading_status: ReadingStatus
-    reading_progress: number
-  }) => Promise<void> | void
 }
 
 export function ReaderShell({
@@ -54,12 +52,15 @@ export function ReaderShell({
   isBlocksLoading,
   isBlocksRebuilding,
   isSavingNotes,
-  isUpdatingReadingState,
   blockError,
   blockFilters,
   blocks,
   selectedBlockId,
   translationStates,
+  drawerOpen,
+  readingStatusLabel,
+  readingProgress,
+  autoSaved,
   onBack,
   onBlockFiltersChange,
   onBlockForceRefreshTranslation,
@@ -67,11 +68,11 @@ export function ReaderShell({
   onBlockRebuild,
   onBlockSelect,
   onBlockTranslate,
+  onDrawerToggle,
   onModeChange,
   onPdfRetry,
   onParse,
   onNotesSave,
-  onReadingStateChange,
 }: ReaderShellProps) {
   if (isLoading) {
     return (
@@ -94,46 +95,57 @@ export function ReaderShell({
   return (
     <main className="reader-shell">
       <ReaderToolbar
-        isUpdatingReadingState={isUpdatingReadingState}
+        autoSaved={autoSaved}
         mode={mode}
         onBack={onBack}
         onModeChange={onModeChange}
-        onReadingStateChange={onReadingStateChange}
         paper={paper}
+        readingProgress={readingProgress}
+        readingStatusLabel={readingStatusLabel}
       />
-      <div className="reader-shell-grid">
-        <div className="reader-primary-pane">
-          {mode === 'pdf' ? (
-            <PdfReaderPane
-              errorMessage={pdfError}
-              isLoading={isPdfLoading}
-              onRetry={onPdfRetry}
-              pdfUrl={pdfUrl}
-            />
-          ) : (
-            <MarkdownReaderPane isParsing={isParsing} onParse={onParse} paper={paper} />
-          )}
+      <div className="reader-primary-pane">
+        <div className="reader-drawer-toggle-wrap">
+          <button
+            className={`reader-drawer-toggle${drawerOpen ? ' active' : ''}`}
+            onClick={onDrawerToggle}
+            title={drawerOpen ? '收起 AI 辅助' : '展开 AI 辅助'}
+            type="button"
+          >
+            <Icon name="assistant" />
+            AI 辅助
+          </button>
         </div>
-        <aside className="reader-side-pane">
-          <ReaderBlocksPanel
-            blocks={blocks}
-            errorMessage={blockError}
-            filters={blockFilters}
-            isLoading={isBlocksLoading}
-            isRebuilding={isBlocksRebuilding}
-            onFiltersChange={onBlockFiltersChange}
-            onForceRefreshTranslation={onBlockForceRefreshTranslation}
-            onOpenPage={onBlockOpenPage}
-            onRebuild={onBlockRebuild}
-            onSelectBlock={onBlockSelect}
-            onTranslate={onBlockTranslate}
-            selectedBlockId={selectedBlockId}
-            translationStates={translationStates}
+        {mode === 'pdf' ? (
+          <PdfReaderPane
+            errorMessage={pdfError}
+            isLoading={isPdfLoading}
+            onRetry={onPdfRetry}
+            pdfUrl={pdfUrl}
           />
-          <PaperOverviewPanel paper={paper} />
-          <ReaderNotesPanel isSaving={isSavingNotes} onSave={onNotesSave} paper={paper} />
-        </aside>
+        ) : (
+          <MarkdownReaderPane isParsing={isParsing} onParse={onParse} paper={paper} />
+        )}
       </div>
+      <RightDrawer
+        blockError={blockError}
+        blockFilters={blockFilters}
+        blocks={blocks}
+        isBlocksLoading={isBlocksLoading}
+        isBlocksRebuilding={isBlocksRebuilding}
+        isOpen={drawerOpen}
+        isSavingNotes={isSavingNotes}
+        onBlockFiltersChange={onBlockFiltersChange}
+        onBlockForceRefreshTranslation={onBlockForceRefreshTranslation}
+        onBlockOpenPage={onBlockOpenPage}
+        onBlockRebuild={onBlockRebuild}
+        onBlockSelect={onBlockSelect}
+        onBlockTranslate={onBlockTranslate}
+        onClose={() => onDrawerToggle()}
+        onNotesSave={onNotesSave}
+        paper={paper}
+        selectedBlockId={selectedBlockId}
+        translationStates={translationStates}
+      />
     </main>
   )
 }

@@ -184,9 +184,9 @@ describe('library navigation components', () => {
     expect(screen.queryByText('Library Failure Modes')).not.toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('搜索论文'), { target: { value: 'failure' } })
-    fireEvent.change(screen.getByLabelText('状态筛选'), { target: { value: 'parse_failed' } })
-    fireEvent.change(screen.getByLabelText('收藏筛选'), { target: { value: 'favorites' } })
-    fireEvent.change(screen.getByLabelText('阅读筛选'), { target: { value: 'read' } })
+    fireEvent.change(screen.getByLabelText('状态'), { target: { value: 'parse_failed' } })
+    fireEvent.change(screen.getByLabelText('收藏'), { target: { value: 'favorites' } })
+    fireEvent.change(screen.getByLabelText('阅读'), { target: { value: 'read' } })
     fireEvent.click(screen.getByRole('button', { name: '清除标签筛选 RAG' }))
     fireEvent.click(screen.getByRole('button', { name: 'Agentic Retrieval arxiv ready Agent RAG' }))
     fireEvent.click(screen.getByRole('button', { name: '删除 Agentic Retrieval' }))

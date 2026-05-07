@@ -46,7 +46,7 @@ export function PdfReaderPane({ pdfUrl, isLoading, errorMessage, onRetry }: PdfR
 
   return (
     <section className="reader-pdf-pane" aria-label="PDF reader">
-      <iframe src={pdfUrl} title="PDF preview" />
+      <iframe className="reader-pdf-iframe" src={pdfUrl} title="PDF preview" />
     </section>
   )
 }

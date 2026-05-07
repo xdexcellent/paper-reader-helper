@@ -100,34 +100,27 @@ describe('reader components', () => {
     expect(screen.getByLabelText('阅读笔记')).toHaveValue('Unsaved reader note.')
   })
 
-  test('ReaderToolbar switches modes and saves reading state', async () => {
+  test('ReaderToolbar switches modes and shows status bar', () => {
     const onModeChange = vi.fn()
-    const onReadingStateChange = vi.fn().mockResolvedValue(undefined)
 
     render(
       <ReaderToolbar
-        isUpdatingReadingState={false}
+        autoSaved
         mode="pdf"
         onBack={vi.fn()}
         onModeChange={onModeChange}
-        onReadingStateChange={onReadingStateChange}
         paper={paper}
+        readingProgress={12}
+        readingStatusLabel="阅读中"
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Markdown mode' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Markdown' }))
     expect(onModeChange).toHaveBeenCalledWith('markdown')
 
-    fireEvent.change(screen.getByLabelText('阅读状态'), { target: { value: 'reading' } })
-
-    fireEvent.change(screen.getByLabelText('阅读进度'), { target: { value: '40' } })
-
-    fireEvent.click(screen.getByRole('button', { name: '保存阅读状态' }))
-
-    await waitFor(() => expect(onReadingStateChange).toHaveBeenCalledWith({
-      reading_status: 'reading',
-      reading_progress: 40,
-    }))
+    expect(screen.getByText('阅读中')).toBeInTheDocument()
+    expect(screen.getByText('进度 12%')).toBeInTheDocument()
+    expect(screen.getByText('已自动保存')).toBeInTheDocument()
   })
 
   test('ReaderShell exposes loading and empty states', () => {
@@ -137,19 +130,22 @@ describe('reader components', () => {
       onNotesSave: vi.fn(),
       onParse: vi.fn(),
       onPdfRetry: vi.fn(),
-      onReadingStateChange: vi.fn(),
+      onDrawerToggle: vi.fn(),
     }
     const { rerender } = render(
       <ReaderShell
+        autoSaved
+        drawerOpen={false}
         isLoading
         isParsing={false}
         isPdfLoading={false}
         isSavingNotes={false}
-        isUpdatingReadingState={false}
         mode="markdown"
         paper={null}
         pdfError=""
         pdfUrl={null}
+        readingProgress={0}
+        readingStatusLabel="未读"
         {...blockShellProps()}
         {...callbacks}
       />,
@@ -159,15 +155,18 @@ describe('reader components', () => {
 
     rerender(
       <ReaderShell
+        autoSaved
+        drawerOpen={false}
         isLoading={false}
         isParsing={false}
         isPdfLoading={false}
         isSavingNotes={false}
-        isUpdatingReadingState={false}
         mode="markdown"
         paper={null}
         pdfError=""
         pdfUrl={null}
+        readingProgress={0}
+        readingStatusLabel="未读"
         {...blockShellProps()}
         {...callbacks}
       />,
@@ -182,30 +181,28 @@ describe('reader components', () => {
 
     render(
       <ReaderShell
+        autoSaved
+        drawerOpen={false}
         isLoading={false}
         isParsing={false}
         isPdfLoading={false}
         isSavingNotes={false}
-        isUpdatingReadingState={false}
         mode="markdown"
         onBack={vi.fn()}
+        onDrawerToggle={vi.fn()}
         onModeChange={vi.fn()}
         onNotesSave={vi.fn()}
         onParse={vi.fn()}
         onPdfRetry={vi.fn()}
-        onReadingStateChange={vi.fn()}
         paper={paper}
         pdfError=""
         pdfUrl={null}
+        readingProgress={0}
+        readingStatusLabel="未读"
         {...blockShellProps({ blocks: [block], onBlockOpenPage, onBlockTranslate })}
       />,
     )
 
-    expect(screen.getByText('Shell block text')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Open Page 2' }))
-    fireEvent.click(screen.getByRole('button', { name: '翻译段落' }))
-
-    expect(onBlockOpenPage).toHaveBeenCalledWith(block)
-    expect(onBlockTranslate).toHaveBeenCalledWith(block)
+    expect(screen.queryByText('Shell block text')).not.toBeInTheDocument()
   })
 })

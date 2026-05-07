@@ -107,61 +107,63 @@ export function PaperLibraryList({
   return (
     <section className="paper-library-list" aria-label="论文列表">
       <div className="paper-library-controls">
-        <label className="library-control" htmlFor="paper-library-search">
+        <label className="library-control library-control-search" htmlFor="paper-library-search">
           <span>搜索论文</span>
           <input
             id="paper-library-search"
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="搜索标题或来源"
+            placeholder="搜索标题、作者或关键词"
             type="search"
             value={searchQuery}
           />
         </label>
 
-        <label className="library-control" htmlFor="paper-library-status">
-          <span>状态筛选</span>
-          <select
-            id="paper-library-status"
-            onChange={(event) => onStatusFilterChange(event.target.value as LibraryStatusFilter)}
-            value={statusFilter}
-          >
-            {statusOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="library-filter-row">
+          <label className="library-control" htmlFor="paper-library-status">
+            <span>状态</span>
+            <select
+              id="paper-library-status"
+              onChange={(event) => onStatusFilterChange(event.target.value as LibraryStatusFilter)}
+              value={statusFilter}
+            >
+              {statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="library-control" htmlFor="paper-library-favorite">
-          <span>收藏筛选</span>
-          <select
-            id="paper-library-favorite"
-            onChange={(event) => onFavoriteFilterChange(event.target.value as FavoriteFilter)}
-            value={favoriteFilter}
-          >
-            {favoriteOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          <label className="library-control" htmlFor="paper-library-favorite">
+            <span>收藏</span>
+            <select
+              id="paper-library-favorite"
+              onChange={(event) => onFavoriteFilterChange(event.target.value as FavoriteFilter)}
+              value={favoriteFilter}
+            >
+              {favoriteOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="library-control" htmlFor="paper-library-reading">
-          <span>阅读筛选</span>
-          <select
-            id="paper-library-reading"
-            onChange={(event) => onReadingStatusFilterChange(event.target.value as ReadingStatusFilter)}
-            value={readingStatusFilter}
-          >
-            {readingStatusOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          <label className="library-control" htmlFor="paper-library-reading">
+            <span>阅读</span>
+            <select
+              id="paper-library-reading"
+              onChange={(event) => onReadingStatusFilterChange(event.target.value as ReadingStatusFilter)}
+              value={readingStatusFilter}
+            >
+              {readingStatusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
 
       {tags.length > 0 && (

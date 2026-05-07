@@ -29,6 +29,13 @@ function revokeBlobUrl(url: string) {
   }
 }
 
+const readingStatusLabels: Record<ReadingStatus, string> = {
+  unread: '未读',
+  reading: '阅读中',
+  read: '已读',
+  skipped: '已跳过',
+}
+
 export function ReaderPage({ refreshLibrary }: ReaderPageProps) {
   const { paperId } = useParams()
   const navigate = useNavigate()
@@ -43,12 +50,16 @@ export function ReaderPage({ refreshLibrary }: ReaderPageProps) {
   const [isParsing, setIsParsing] = useState(false)
   const [isSavingNotes, setIsSavingNotes] = useState(false)
   const [isUpdatingReadingState, setIsUpdatingReadingState] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [autoSaved, setAutoSaved] = useState(false)
   const detailRequestRef = useRef(0)
   const pdfRequestRef = useRef(0)
   const pdfUrlRef = useRef<string | null>(null)
   const autoMarkedPaperIdsRef = useRef(new Set<number>())
   const isMountedRef = useRef(true)
   const refreshLibraryRef = useRef(refreshLibrary)
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastSavedRef = useRef<ReadingStatePayload | null>(null)
 
   useEffect(() => {
     refreshLibraryRef.current = refreshLibrary
@@ -131,9 +142,11 @@ export function ReaderPage({ refreshLibrary }: ReaderPageProps) {
       isMountedRef.current = false
       pdfRequestRef.current += 1
       revokeCurrentPdfUrl(false)
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
     }
   }, [revokeCurrentPdfUrl])
 
+  // 首次打开未读论文自动标记为"阅读中"
   useEffect(() => {
     if (!paper || paper.reading_status !== 'unread' || autoMarkedPaperIdsRef.current.has(paper.id)) return
     let cancelled = false
@@ -149,6 +162,8 @@ export function ReaderPage({ refreshLibrary }: ReaderPageProps) {
         setPaper((current) => current?.id === paper.id
           ? { ...current, reading_status: 'reading' }
           : current)
+        lastSavedRef.current = { reading_status: 'reading', reading_progress: payload.reading_progress }
+        setAutoSaved(true)
         void refreshLibraryRef.current()
       })
       .catch(() => {
@@ -159,6 +174,51 @@ export function ReaderPage({ refreshLibrary }: ReaderPageProps) {
       })
     return () => {
       cancelled = true
+    }
+  }, [paper?.id, paper?.reading_progress, paper?.reading_status])
+
+  // 自动保存：阅读状态或进度变化时 debounce 500ms 后自动保存
+  useEffect(() => {
+    if (!paper) return
+    const currentStatus = paper.reading_status ?? 'unread'
+    const currentProgress = paper.reading_progress ?? 0
+    const lastSaved = lastSavedRef.current
+
+    // 首次加载：记录初始值，不触发保存
+    if (!lastSaved) {
+      lastSavedRef.current = { reading_status: currentStatus, reading_progress: currentProgress }
+      return
+    }
+
+    // 与上次保存值相同，不触发
+    if (lastSaved.reading_status === currentStatus && lastSaved.reading_progress === currentProgress) {
+      return
+    }
+
+    setAutoSaved(false)
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+
+    autoSaveTimerRef.current = setTimeout(() => {
+      if (!paper?.id || !isMountedRef.current) return
+      const payload: ReadingStatePayload = {
+        reading_status: currentStatus,
+        reading_progress: currentProgress,
+      }
+      void (async () => {
+        try {
+          await updatePaperReadingState(paper.id!, payload)
+          lastSavedRef.current = payload
+          setAutoSaved(true)
+          setPaper((current) => current?.id === paper.id ? { ...current, reading_status: currentStatus, reading_progress: currentProgress } : current)
+          void refreshLibraryRef.current()
+        } catch {
+          // 自动保存静默失败
+        }
+      })()
+    }, 500)
+
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
     }
   }, [paper?.id, paper?.reading_progress, paper?.reading_status])
 
@@ -210,38 +270,49 @@ export function ReaderPage({ refreshLibrary }: ReaderPageProps) {
     }
   }
 
-  async function handleReadingStateChange(payload: ReadingStatePayload) {
-    if (!paper) return
-    setIsUpdatingReadingState(true)
-    try {
-      const updatedPaper = await updatePaperReadingState(paper.id, payload)
-      setPaper((current) => current?.id === paper.id ? { ...current, ...updatedPaper } : current)
-      await refreshLibraryRef.current()
-    } finally {
-      setIsUpdatingReadingState(false)
-    }
+  function handleDrawerToggle() {
+    setDrawerOpen((v) => !v)
   }
 
   const visiblePdfUrl = pdfUrl && pdfPage ? `${pdfUrl}#page=${pdfPage}` : pdfUrl
 
+  const readingStatus = paper?.reading_status ?? 'unread'
+  const readingStatusLabel = readingStatusLabels[readingStatus]
+  const readingProgress = paper?.reading_progress ?? 0
+
   return (
     <ReaderShell
+      autoSaved={autoSaved}
+      blockError={blockShellProps.blockError}
+      blockFilters={blockShellProps.blockFilters}
+      blocks={blockShellProps.blocks}
+      drawerOpen={drawerOpen}
+      isBlocksLoading={blockShellProps.isBlocksLoading}
+      isBlocksRebuilding={blockShellProps.isBlocksRebuilding}
       isLoading={isLoading}
       isParsing={isParsing}
       isPdfLoading={isPdfLoading}
       isSavingNotes={isSavingNotes}
-      isUpdatingReadingState={isUpdatingReadingState}
       mode={mode}
       onBack={handleBack}
+      onBlockFiltersChange={blockShellProps.onBlockFiltersChange}
+      onBlockForceRefreshTranslation={blockShellProps.onBlockForceRefreshTranslation}
+      onBlockOpenPage={blockShellProps.onBlockOpenPage}
+      onBlockRebuild={blockShellProps.onBlockRebuild}
+      onBlockSelect={blockShellProps.onBlockSelect}
+      onBlockTranslate={blockShellProps.onBlockTranslate}
+      onDrawerToggle={handleDrawerToggle}
       onModeChange={handleModeChange}
       onNotesSave={handleNotesSave}
       onParse={handleParse}
       onPdfRetry={loadPdf}
-      onReadingStateChange={handleReadingStateChange}
       paper={paper}
       pdfError={pdfError}
       pdfUrl={visiblePdfUrl}
-      {...blockShellProps}
+      readingProgress={readingProgress}
+      readingStatusLabel={readingStatusLabel}
+      selectedBlockId={blockShellProps.selectedBlockId}
+      translationStates={blockShellProps.translationStates}
     />
   )
 }

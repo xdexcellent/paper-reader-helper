@@ -1,88 +1,62 @@
-import { useEffect, useState, type FormEvent } from 'react'
-
-import type { PaperDetail, ReadingStatus } from '../../types'
-import { StatusBadge } from '../StatusBadge'
+import type { PaperDetail } from '../../types'
 import { Icon } from '../UiIcon'
 import type { ReaderMode } from './readerTypes'
 
 type ReaderToolbarProps = {
   paper: PaperDetail
   mode: ReaderMode
-  isUpdatingReadingState: boolean
+  readingStatusLabel: string
+  readingProgress: number
+  autoSaved: boolean
   onBack: () => void
   onModeChange: (mode: ReaderMode) => void
-  onReadingStateChange: (payload: {
-    reading_status: ReadingStatus
-    reading_progress: number
-  }) => Promise<void> | void
 }
-
-const readingOptions: { value: ReadingStatus; label: string }[] = [
-  { value: 'unread', label: '未读' },
-  { value: 'reading', label: '阅读中' },
-  { value: 'read', label: '已读' },
-  { value: 'skipped', label: '已跳过' },
-]
 
 export function ReaderToolbar({
   paper,
   mode,
-  isUpdatingReadingState,
+  readingStatusLabel,
+  readingProgress,
+  autoSaved,
   onBack,
   onModeChange,
-  onReadingStateChange,
 }: ReaderToolbarProps) {
-  const [readingStatus, setReadingStatus] = useState<ReadingStatus>(paper.reading_status ?? 'unread')
-  const [readingProgress, setReadingProgress] = useState(String(paper.reading_progress ?? 0))
-
-  useEffect(() => {
-    setReadingStatus(paper.reading_status ?? 'unread')
-    setReadingProgress(String(paper.reading_progress ?? 0))
-  }, [paper.id, paper.reading_status, paper.reading_progress])
-
-  async function saveReadingState(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    await onReadingStateChange({
-      reading_status: readingStatus,
-      reading_progress: Number(readingProgress),
-    })
-  }
-
   return (
-    <header className="reader-toolbar">
-      <button className="btn btn-secondary" onClick={onBack} type="button">
-        <Icon name="library" />
-        返回论文库
-      </button>
-      <div className="reader-toolbar-title">
-        <h1>{paper.title}</h1>
-        <StatusBadge value={paper.status} />
+    <header className="reader-toolbar-v2">
+      <div className="reader-toolbar-row-main">
+        <button className="btn btn-secondary" onClick={onBack} type="button">
+          <Icon name="library" />
+          返回论文库
+        </button>
+        <h1 className="reader-toolbar-title-v2">{paper.title}</h1>
+        <div className="reader-mode-segmented" role="group" aria-label="阅读模式">
+          <button
+            aria-pressed={mode === 'markdown'}
+            className={`segmented-btn${mode === 'markdown' ? ' active' : ''}`}
+            onClick={() => onModeChange('markdown')}
+            type="button"
+          >
+            <Icon name="fileText" />
+            Markdown
+          </button>
+          <button
+            aria-pressed={mode === 'pdf'}
+            className={`segmented-btn${mode === 'pdf' ? ' active' : ''}`}
+            onClick={() => onModeChange('pdf')}
+            type="button"
+          >
+            <Icon name="pdf" />
+            PDF
+          </button>
+        </div>
       </div>
-      <div className="reader-mode-toggle" role="group" aria-label="Reader mode">
-        <button aria-label="PDF mode" aria-pressed={mode === 'pdf'} className="btn btn-secondary" onClick={() => onModeChange('pdf')} type="button">
-          <Icon name="pdf" />
-          PDF
-        </button>
-        <button aria-label="Markdown mode" aria-pressed={mode === 'markdown'} className="btn btn-secondary" onClick={() => onModeChange('markdown')} type="button">
-          <Icon name="fileText" />
-          Markdown
-        </button>
+      <div className="reader-status-bar">
+        <span className="reader-status-label">{readingStatusLabel}</span>
+        <span className="reader-status-sep">·</span>
+        <span className="reader-status-progress">进度 {readingProgress}%</span>
+        <span className="reader-status-sep">·</span>
+        <span className="reader-status-saved">{autoSaved ? '已自动保存' : '保存中…'}</span>
       </div>
-      <form className="reader-state-form" onSubmit={saveReadingState}>
-        <label className="library-control" htmlFor="reader-reading-status">
-          <span>阅读状态</span>
-          <select id="reader-reading-status" onChange={(event) => setReadingStatus(event.target.value as ReadingStatus)} value={readingStatus}>
-            {readingOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </label>
-        <label className="library-control" htmlFor="reader-reading-progress">
-          <span>阅读进度</span>
-          <input id="reader-reading-progress" max="100" min="0" onChange={(event) => setReadingProgress(event.target.value)} type="number" value={readingProgress} />
-        </label>
-        <button className="btn btn-secondary" disabled={isUpdatingReadingState} type="submit">
-          保存阅读状态
-        </button>
-      </form>
     </header>
   )
 }

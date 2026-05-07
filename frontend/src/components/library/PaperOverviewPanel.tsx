@@ -2,6 +2,7 @@ import type { PaperDetail } from '../../types'
 
 type PaperOverviewPanelProps = {
   paper: PaperDetail | null
+  singleColumn?: boolean
 }
 
 type OverviewSection = {
@@ -20,7 +21,7 @@ function buildOverviewSections(paper: PaperDetail): OverviewSection[] {
   ].filter((section) => section.value.trim())
 }
 
-export function PaperOverviewPanel({ paper }: PaperOverviewPanelProps) {
+export function PaperOverviewPanel({ paper, singleColumn = false }: PaperOverviewPanelProps) {
   if (!paper) {
     return (
       <section className="paper-overview-panel paper-panel-empty">
@@ -32,7 +33,7 @@ export function PaperOverviewPanel({ paper }: PaperOverviewPanelProps) {
   const sections = buildOverviewSections(paper)
 
   return (
-    <section className="paper-overview-panel" aria-label="论文概览">
+    <section className={`paper-overview-panel${singleColumn ? ' single-column' : ''}`} aria-label="论文概览">
       <div className="paper-overview-header">
         <p className="panel-chip">审阅概览</p>
         <h2>论文概览</h2>
