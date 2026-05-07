@@ -88,14 +88,19 @@ class PaperPipelineService:
 
         try:
             self.block_extraction_service.rebuild_blocks(session, paper, content)
+            content.block_extraction_error = ""
+            session.add(content)
             session.commit()
-        except Exception:
+        except Exception as e:
             session.rollback()
             logger.warning(
                 "Block extraction failed for paper %s; parse remains completed",
                 paper.id,
                 exc_info=True,
             )
+            content.block_extraction_error = f"Block extraction failed: {e}"
+            session.add(content)
+            session.commit()
         session.refresh(paper)
         return paper
 

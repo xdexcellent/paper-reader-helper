@@ -111,6 +111,7 @@ def test_get_paper_blocks_returns_empty_state(client) -> None:
         "block_types": {},
         "has_blocks": False,
         "blocks": [],
+        "error": "",
     }
 
 

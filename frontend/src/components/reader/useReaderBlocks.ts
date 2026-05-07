@@ -23,7 +23,12 @@ function useBlockLoading(paper: PaperDetail | null) {
     setBlockError('')
     try {
       const payload = await fetchPaperBlocks(paperId)
-      if (blocksRequestRef.current === requestId) setBlocks(payload.blocks)
+      if (blocksRequestRef.current === requestId) {
+        setBlocks(payload.blocks)
+        if (!payload.has_blocks && payload.error) {
+          setBlockError(payload.error)
+        }
+      }
     } catch (error) {
       if (blocksRequestRef.current === requestId) {
         setBlocks([])

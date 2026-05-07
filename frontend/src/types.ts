@@ -91,6 +91,7 @@ export type PaperBlocksResponse = {
   block_types: Record<string, number>
   has_blocks: boolean
   blocks: PaperBlock[]
+  error: string
 }
 
 export type PaperBlockRebuildResponse = {

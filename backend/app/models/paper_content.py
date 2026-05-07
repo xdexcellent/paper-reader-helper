@@ -13,3 +13,4 @@ class PaperContent(SQLModel, table=True):
     conclusion_md: str = ""
     content_json_path: str = ""
     full_zip_path: str = ""
+    block_extraction_error: str = ""

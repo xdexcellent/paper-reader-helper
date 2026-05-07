@@ -35,7 +35,13 @@ def list_paper_blocks(
     _require_paper(session, paper_id)
     blocks = _load_ordered_blocks(session, paper_id)
     filtered = _filter_blocks(blocks, page=page, block_type=block_type, search=search or q)
-    return _blocks_response(paper_id, blocks, filtered)
+    content = session.exec(
+        select(PaperContent).where(PaperContent.paper_id == paper_id)
+    ).first()
+    return _blocks_response(
+        paper_id, blocks, filtered,
+        error=content.block_extraction_error if content else "",
+    )
 
 
 @router.post("/{paper_id}/blocks/rebuild", response_model=PaperBlockRebuildResponse)
@@ -52,6 +58,8 @@ def rebuild_paper_blocks(
 
     try:
         result = BlockExtractionService().rebuild_blocks(session, paper, content)
+        content.block_extraction_error = ""
+        session.add(content)
         session.commit()
     except Exception as exc:
         session.rollback()
@@ -138,6 +146,7 @@ def _blocks_response(
     paper_id: int,
     blocks: list[PaperBlock],
     filtered: list[PaperBlock],
+    error: str = "",
 ) -> PaperBlocksResponse:
     pages = sorted({block.page_index for block in blocks if block.page_index is not None})
     type_counts = Counter(block.block_type for block in blocks)
@@ -149,6 +158,7 @@ def _blocks_response(
         block_types=dict(sorted(type_counts.items())),
         has_blocks=bool(blocks),
         blocks=[_block_response(block) for block in filtered],
+        error=error,
     )
 
 

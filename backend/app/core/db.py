@@ -104,6 +104,7 @@ def _migrate_add_columns() -> None:
         ("daily_run", "progress_message", "TEXT DEFAULT ''"),
         ("automation_settings", "http_proxy", "TEXT"),
         ("automation_settings", "https_proxy", "TEXT"),
+        ("papercontent", "block_extraction_error", "TEXT DEFAULT ''"),
     ]
     with engine.connect() as conn:
         for table, column, col_type in migrations:

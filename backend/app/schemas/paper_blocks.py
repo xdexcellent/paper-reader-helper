@@ -20,6 +20,7 @@ class PaperBlocksResponse(BaseModel):
     block_types: dict[str, int]
     has_blocks: bool
     blocks: list[PaperBlockResponse]
+    error: str = ""
 
 
 class PaperBlockRebuildResponse(BaseModel):
