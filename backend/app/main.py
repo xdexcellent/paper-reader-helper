@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.routes.health import router as health_router
 from app.api.routes.papers import router as papers_router
+from app.api.routes.paper_blocks import router as paper_blocks_router
 from app.api.routes.chat import router as chat_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.stats import router as stats_router
@@ -16,7 +17,9 @@ from app.api.routes.recommendations import router as recommendations_router
 from app.api.routes.tasks import router as tasks_router
 from app.api.routes.automation import router as automation_router
 from app.api.routes.subscriptions import router as subscriptions_router
+from app.api.routes.agent import router as agent_router
 from app.api.routes.categories import router as categories_router
+from app.api.routes.zotero import router as zotero_router
 from app.core.config import settings
 from app.core.db import init_db
 from app.core.auth import get_current_user
@@ -39,8 +42,15 @@ from app.models.daily_briefing import (  # noqa: F401
 )
 from app.models.subscription import Subscription  # noqa: F401
 from app.models.paper_embedding import PaperEmbedding  # noqa: F401
+from app.models.paper_block import PaperBlock  # noqa: F401
+from app.models.paper_block_translation import PaperBlockTranslation  # noqa: F401
 from app.models.category import Category  # noqa: F401
 from app.models.category_alias import CategoryAlias  # noqa: F401
+from app.models.agent_run import AgentRun  # noqa: F401
+from app.models.agent_tool_event import AgentToolEvent  # noqa: F401
+from app.models.agent_action import AgentAction  # noqa: F401
+from app.models.zotero_import_run import ZoteroImportRun  # noqa: F401
+from app.models.zotero_import_candidate import ZoteroImportCandidate  # noqa: F401
 
 
 @asynccontextmanager
@@ -71,6 +81,7 @@ app.include_router(auth_router)
 # Protect all API routes with get_current_user dependency
 protected_dependencies = [Depends(get_current_user)]
 app.include_router(papers_router, dependencies=protected_dependencies)
+app.include_router(paper_blocks_router, dependencies=protected_dependencies)
 app.include_router(chat_router, dependencies=protected_dependencies)
 app.include_router(stats_router, dependencies=protected_dependencies)
 app.include_router(briefing_router, dependencies=protected_dependencies)
@@ -78,7 +89,9 @@ app.include_router(recommendations_router, dependencies=protected_dependencies)
 app.include_router(tasks_router, dependencies=protected_dependencies)
 app.include_router(automation_router, dependencies=protected_dependencies)
 app.include_router(subscriptions_router, dependencies=protected_dependencies)
+app.include_router(agent_router, dependencies=protected_dependencies)
 app.include_router(categories_router, dependencies=protected_dependencies)
+app.include_router(zotero_router, dependencies=protected_dependencies)
 
 # Mount storage directory as static files so MinerU API can download PDFs
 storage_path = Path(settings.storage_root)
