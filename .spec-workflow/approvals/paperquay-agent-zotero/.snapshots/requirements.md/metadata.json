@@ -1,0 +1,14 @@
+{
+  "filePath": ".spec-workflow/specs/paperquay-agent-zotero/requirements.md",
+  "currentVersion": 1,
+  "snapshots": [
+    {
+      "version": 1,
+      "filename": "snapshot-001.json",
+      "timestamp": "2026-05-06T14:09:21.122Z",
+      "trigger": "initial",
+      "approvalId": "approval_1778076561065_fqy9qnbc0",
+      "approvalTitle": "PaperQuay Phase 4 Agent and Zotero requirements"
+    }
+  ]
+}

@@ -54,6 +54,87 @@ Fix the 10 optimization issues identified in the project audit while keeping the
 
 ---
 
+# PaperQuay Blocks and Translation Phase 3 Spec Plan
+
+## Goal
+
+Implement PRD Phase 3 by adding MinerU structured block storage, reader block exploration, PDF page linkage, and explicit cached translation while preserving the existing FastAPI + React/Vite stack.
+
+## Scope
+
+- New spec: `.spec-workflow/specs/paperquay-blocks-translation`.
+- Phase 3 only: structured blocks and translation cache.
+- Phase 4 Agent operations and Zotero import are explicitly deferred to a separate spec after Phase 3.
+- No implementation code until requirements, design, and tasks are approved through spec-workflow.
+
+## Phase Table
+
+| ID | Phase | Output | Status |
+| --- | --- | --- | --- |
+| PQ3-1 | Derive Phase 3 scope from PRD/technical draft | Blocks + translation, Phase 4 deferred | complete |
+| PQ3-2 | Create Phase 3 questionnaire | `requirements-questionnaire.md` with 120 questions | complete |
+| PQ3-3 | Create Phase 3 requirements | `requirements.md` | complete |
+| PQ3-4 | Requirements approval | `approval_1778050130036_z0lvsk3op` approved and deleted | complete |
+| PQ3-5 | Create Phase 3 design after approval | `approval_1778050432849_ohekbcsmj` approved and deleted | complete |
+| PQ3-6 | Create Phase 3 tasks after design approval | `tasks.md`; approval `approval_1778050663548_a1x8r6twn` approved and deleted | complete |
+| PQ3-7 | Implement approved Phase 3 tasks | Tasks 1-11 complete with final focused backend/frontend/typecheck/build verification | complete |
+
+## Decisions
+
+- Do not merge Phase 4 into the Phase 3 task list; Agent operations and Zotero import are independent enough to need separate approval and task breakdown.
+- Keep source-level PaperQuay reuse blocked unless AGPL implications are explicitly accepted later.
+- Treat MinerU structured output as local derived data from the existing parse pipeline, not as a replacement for Markdown/PDF reading.
+- Treat translation as explicit, server-side, cached work; no automatic full-library translation in Phase 3.
+- Phase 3 implementation follows the task-log gate: mark a task `[-]`, implement and verify it, call `log_implementation`, then mark it `[x]`.
+- Task 1 implementation log: `5412778a-dcd2-4233-ace4-299e2b2d8cdb`.
+- Task 2 implementation log: `77738576-abf5-49eb-ac12-fcdbf24e55c6`.
+- Task 3 implementation log: `c26409d3-de27-4794-bb96-b1880c31e3b1`.
+- Task 4 implementation log: `dfe05ba8-6e97-4854-9361-5b56911285a7`.
+- Task 5 implementation log: `f0fa6bc7-536c-4067-8e77-71908eedd64f`.
+- Task 6 implementation log: `fe556093-194c-4b7e-a620-c00046fbc164`.
+- Task 7 implementation log: `bf5c6ffb-b8f6-4233-932c-6bb9e34e6c4f`.
+- Task 8 implementation log: `06bdee84-e1a1-42db-90fd-da1d59b9c180`.
+- Task 9 implementation log: `bfe28952-3d76-404f-a478-bd6cde0a1fd9`.
+- Task 10 implementation log: `ab027c46-9a79-4d39-b7fa-9ddb6329c82b`.
+- Task 11 implementation log: `d4dc8a9d-655e-408f-a02b-19bce8a00fd8`.
+
+---
+
+# PaperQuay Agent and Zotero Phase 4 Spec Plan
+
+## Goal
+
+Prepare the PRD Phase 4 specification and external-AI handoff package for a controlled library Agent workspace and read-only Zotero import flow.
+
+## Scope
+
+- New spec: `.spec-workflow/specs/paperquay-agent-zotero`.
+- Phase 4 only: Agent workspace, human-confirmed library operations, audit/revert, Zotero read-only scan/preview/import.
+- No source-level PaperQuay code reuse and no Tauri/Rust migration.
+- No implementation code in this pass.
+
+## Phase Table
+
+| ID | Phase | Output | Status |
+| --- | --- | --- | --- |
+| PQ4-1 | Derive Phase 4 scope from PRD and completed Phase 1/2/3 specs | Agent + Zotero scope with safety boundaries | complete |
+| PQ4-2 | Create Phase 4 questionnaire | `requirements-questionnaire.md` with 120 questions | complete |
+| PQ4-3 | Create Phase 4 requirements | `requirements.md`; approval `approval_1778076561065_fqy9qnbc0` approved | complete |
+| PQ4-4 | Create external-AI handoff plan | `implementation-handoff-plan.md` with 14 draft tasks/prompts | complete |
+| PQ4-5 | Create formal design | `design.md`; approval `approval_1778077303169_aa3kpj1mzt` pending | in progress |
+| PQ4-6 | Design approval | Await dashboard or VS Code approval | pending |
+| PQ4-7 | Create formal tasks after design approval | `tasks.md`; approval `approval_1778077629511_kavm663xh0` pending | in progress |
+
+## Decisions
+
+- Treat Agent and Zotero as one Phase 4 spec because both share the same safety, confirmation, audit, and import/write boundaries.
+- Keep formal spec-workflow sequencing: requirements approval must be approved and deleted before formal design; design approval must be approved and deleted before formal tasks.
+- Provide `implementation-handoff-plan.md` as a draft package for other AI models, but do not treat it as formal `tasks.md` until approvals are complete.
+- Agent write operations must be proposed, human-approved, audited, and reversible where practical.
+- Zotero import must copy `zotero.sqlite` to a temporary workspace and never mutate the original Zotero database.
+
+---
+
 # Workbench Reading Experience Refresh Plan
 
 ## Goal
@@ -129,9 +210,10 @@ Prepare PRD, requirements, and a pre-development questionnaire for gradually rep
 | PQ-2 | Create requirements questionnaire | `.spec-workflow/specs/paperquay-integration/requirements-questionnaire.md` | complete |
 | PQ-3 | Create PRD | `.spec-workflow/specs/paperquay-integration/prd.md` | complete |
 | PQ-4 | Create requirements/spec draft | `.spec-workflow/specs/paperquay-integration/requirements.md` and `technical-spec-draft.md` | complete |
-| PQ-5 | User review and questionnaire completion | Awaiting user input | pending |
-| PQ-6 | Revise requirements/design after answers | `design.md` created and awaiting approval | in_progress |
-| PQ-7 | Create implementation tasks only after approval | `.spec-workflow/specs/paperquay-integration/tasks.md` | pending |
+| PQ-5 | User review and questionnaire completion | Requirements approved through spec workflow | complete |
+| PQ-6 | Revise requirements/design after answers | `design.md` approved and approval cleaned up | complete |
+| PQ-7 | Create implementation tasks only after approval | `.spec-workflow/specs/paperquay-integration/tasks.md` approved and approval cleaned up | complete |
+| PQ-8 | Implement Phase 1 library shell tasks | Tasks 1-8 complete with final route-level verification | complete |
 
 ## Decisions
 
@@ -139,6 +221,43 @@ Prepare PRD, requirements, and a pre-development questionnaire for gradually rep
 - Treat direct PaperQuay source reuse as blocked until AGPL implications are explicitly approved.
 - Do not start coding until P0/P1 questionnaire answers are captured and requirements/design are approved.
 - Requirements approval `approval_1777794616007_s8idfuhxg` was approved and deleted on 2026-05-03.
-- Design approval `approval_1777797111834_7pugbqinq` is pending; tasks and implementation remain blocked until it is approved and deleted.
+- Design approval `approval_1777797111834_7pugbqinq` was approved and deleted on 2026-05-03.
+- Tasks approval `approval_1777798145356_lnlkqejqy` was approved and deleted on 2026-05-03.
+- Implementation tasks 1-8 are complete; Phase 1 route replacement, library shell, import confirmation, responsive styling, and targeted verification are done.
+
+---
+
+# PaperQuay Reader and Metadata Phase 2 Spec Plan
+
+## Goal
+
+Continue PaperQuay integration by adding the next focused phase: richer persisted metadata, favorites, reading state/progress, user notes, and a dedicated PDF/Markdown reader shell.
+
+## Scope
+
+- New spec: `.spec-workflow/specs/paperquay-reader-metadata`.
+- Requirements and questionnaire only until approval.
+- Keep current FastAPI + React/Vite stack.
+- Defer MinerU structured blocks, translation cache, Agent operations, Zotero import, normalized author tables, multi-category membership, and PDF annotations.
+
+## Phase Table
+
+| ID | Phase | Output | Status |
+| --- | --- | --- | --- |
+| PQ2-1 | Derive next scope from Phase 1 PRD/requirements/design | Phase 2 scope narrowed to reader + metadata | complete |
+| PQ2-2 | Create Phase 2 questionnaire | `requirements-questionnaire.md` with 120 questions | complete |
+| PQ2-3 | Create Phase 2 requirements | `requirements.md` with 10 requirements | complete |
+| PQ2-4 | Requirements approval | `approval_1777819679973_29v8sw8ud` approved and deleted | complete |
+| PQ2-5 | Create Phase 2 design after approval | `approval_1777819998532_9z71aj1gz` approved and deleted | complete |
+| PQ2-6 | Create Phase 2 tasks after design approval | `tasks.md`; approval `approval_1777820623647_l781xpx2x` approved and deleted | complete |
+| PQ2-7 | Implement approved Phase 2 tasks | Tasks 1-12 complete with implementation logs and final focused frontend/backend/build verification | complete |
+
+## Decisions
+
+- Continue with a new spec instead of modifying the completed Phase 1 spec.
+- Choose the lowest-risk next slice: reader shell plus persisted metadata and personal organization.
+- Do not code until the Phase 2 requirements, design, and tasks are approved through spec-workflow.
+- The user asked the AI to self-approve, but spec-workflow only permits dashboard or VS Code extension approval; proceed only after tool status returns `approved`.
+- Phase 2 implementation follows the task-log gate: mark a task `[-]`, implement and verify it, call `log_implementation`, then mark it `[x]`.
 
 ---

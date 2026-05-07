@@ -116,5 +116,376 @@
 - ACE semantic search remained blocked by `backend/.pytest_tmp` EPERM, so design analysis used direct reads of `App.tsx`, `PaperManagementPage.tsx`, `PaperList.tsx`, `PaperDetail.tsx`, `ImportForm.tsx`, `types.ts`, `api.ts`, paper models/schemas/routes, category service, and DB migration helper.
 - Self-review for design: placeholder scan returned no matches; design is 371 lines.
 - Requested design approval `approval_1777797111834_7pugbqinq`; status is `pending`, so tasks and implementation are blocked.
+- Design approval `approval_1777797111834_7pugbqinq` was later approved and deleted successfully.
+- Confirmed spec status moved to `tasks-needed`.
+- Created `.spec-workflow/specs/paperquay-integration/tasks.md` with 8 atomic Phase 1 tasks covering library helpers, upload title support, import confirmation, library components, detail/overview panels, route orchestration, CSS, and integration tests.
+- Tasks self-review:
+  - Placeholder scan returned no matches for template leftovers or generic plan markers.
+  - Found 8 task checkboxes and 8 required `_Prompt` prefixes.
+  - Confirmed no custom user tasks template exists, so `.spec-workflow/templates/tasks-template.md` was the applicable template.
+- Requested tasks approval `approval_1777798145356_lnlkqejqy`; status is `pending`, so implementation remains blocked until approval is granted and deleted.
+- Tasks approval `approval_1777798145356_lnlkqejqy` was later approved and deleted successfully.
+- Entered implementation phase and completed tasks 1-5:
+  - Task 1 created library helper types, filters, and tests.
+  - Task 2 extended `uploadPaper` title support and added upload title regression coverage.
+  - Task 3 created `ImportConfirmDialog` with component tests.
+  - Task 4 created controlled sidebar, toolbar, and dense paper list components with tests.
+  - Task 5 created metadata and overview panels with tests.
+- Task 6 is complete:
+  - Added `LibraryPage` and switched `/` plus `/paper/:paperId` routes in `App.tsx`.
+  - Added `CategoryCreateForm`, `LibraryDetailStack`, `LibraryImportModal`, `LibraryPageHeader`, and `libraryBulkActions` to keep route orchestration bounded.
+  - Added a route-level App test expecting the new PaperQuay-style library workspace.
+  - Verification passed:
+    - `frontend` `.\\node_modules\\.bin\\tsc.cmd --noEmit`
+    - `frontend` `.\\node_modules\\.bin\\vitest.cmd run src\\App.test.tsx -t "PaperQuay-style library workspace" --reporter=dot`
+    - `frontend` `.\\node_modules\\.bin\\vitest.cmd run src\\components\\library\\libraryFilters.test.ts src\\components\\library\\ImportConfirmDialog.test.tsx src\\components\\library\\LibraryNavigation.test.tsx src\\components\\library\\PaperPanels.test.tsx --reporter=dot`
+  - Logged implementation `8bd13f05-053a-4467-8f76-9ffc2358f956`.
+  - Marked task 6 `[x]`; task 7 responsive styling is next.
+- Task 7 is complete:
+  - Added responsive `.library-*`, `.paper-library-*`, metadata/overview, tag, empty/loading, focus, and import modal styles in `frontend/src/index.css`.
+  - Verified the CSS diff does not introduce the scanned forbidden palette/decorative patterns for the new block.
+  - Verification passed:
+    - `frontend` `npm run build` passed when rerun outside the sandbox after the sandbox build failed with esbuild `spawn EPERM`.
+    - `frontend` `.\\node_modules\\.bin\\vitest.cmd run src\\App.test.tsx -t "PaperQuay-style library workspace" --reporter=dot`
+  - Logged implementation `b0d3ba8b-2ebb-4eb6-9ffe-b98378c9c387`.
+  - Marked task 7 `[x]`; task 8 final route-level integration coverage is next.
+- Task 8 is complete:
+  - Updated route-level integration coverage in `frontend/src/App.test.tsx` for the active PaperQuay-style library workspace, `/paper/:paperId` detail selection, import confirmation, duplicate-title warning, preserved parse/summarize/embed/category workflows, parse-failed bulk actions, and daily briefing paper links into the new detail route.
+  - Fixed test-surfaced route details in `LibraryPage`: request dedupe, failure loading cleanup, category move-out selection clearing, accessible loading/status output, and a split `LibraryWorkspaceLayout` so `LibraryPage.tsx` stays under 300 lines.
+  - Verification passed:
+    - `frontend` `.\\node_modules\\.bin\\vitest.cmd run src\\App.test.tsx src\\components\\library\\libraryFilters.test.ts --reporter=dot`: 34 tests passed.
+    - `backend` `$env:PYTHONPATH='.'; uv run pytest tests/test_upload_paper.py -q`: 4 tests passed.
+    - `frontend` `npm run build`: passed; Vite still reports the existing chunk-size warning.
+  - Logged implementation `7ed3e492-41d6-4e59-9aac-3de02ff63196`.
+  - Marked task 8 `[x]`; Phase 1 PaperQuay integration tasks are complete.
+- Continued with the next PaperQuay phase as `paperquay-reader-metadata`.
+  - Created `.spec-workflow/specs/paperquay-reader-metadata/requirements-questionnaire.md` with 120 fill-in questions covering reader, metadata, favorites, reading state, notes, backend migration, testing, and deferred boundaries.
+  - Created `.spec-workflow/specs/paperquay-reader-metadata/requirements.md` with 10 scoped requirements.
+  - Deliberately deferred MinerU structured blocks, translation cache, Agent operations, Zotero import, normalized author tables, multi-category membership, and PDF annotations.
+  - Self-review found no `TBD`, `TODO`, or template placeholder markers.
+  - Requested requirements approval `approval_1777819679973_29v8sw8ud`; next phase is blocked until dashboard approval.
+- Phase 2 requirements approval `approval_1777819679973_29v8sw8ud` was approved and deleted successfully.
+- Created `.spec-workflow/specs/paperquay-reader-metadata/design.md`.
+  - Design extends existing `Paper` fields, `PaperResponse`/`PaperDetailResponse`, SQLite migration helper, `PATCH /papers/{id}`, frontend `api.ts`, Phase 1 library components, and a new focused `components/reader` route/component set.
+  - Design keeps `/paper/:paperId` as library detail and proposes a dedicated reader route.
+  - Self-review found no template placeholder markers.
+  - Requested design approval `approval_1777819998532_9z71aj1gz`; next phase is blocked until dashboard approval.
+- Phase 2 design approval `approval_1777819998532_9z71aj1gz` was approved and deleted successfully.
+- Created `.spec-workflow/specs/paperquay-reader-metadata/tasks.md`.
+  - Added 12 implementation tasks covering backend fields/migrations, backend update contract, frontend API types, library filters/list/panel orchestration, reader utilities/components/route, styling, and final verification.
+  - Self-review found 12 task checkboxes and 12 required `_Prompt` prefixes, with no template placeholder markers.
+  - Requested tasks approval `approval_1777820623647_l781xpx2x`; implementation is blocked until dashboard approval.
+- Phase 2 tasks approval `approval_1777820623647_l781xpx2x` was approved and deleted successfully.
+- Phase 2 Task 1 is complete:
+  - Added Phase 2 paper metadata and reader-state persistence fields.
+  - Added additive SQLite migration entries for legacy `paper` tables.
+  - Added migration regression coverage for legacy table upgrade defaults.
+  - Verification passed: `python -m pytest tests/test_db_migrations.py -q` returned 3 passed.
+  - Logged implementation `498212db-3e35-4015-a37c-05919cef2a94`.
+- Phase 2 Task 2 is complete:
+  - Added `PaperUpdateRequest` with validation for title, year, URL, reading status, and reading progress.
+  - Extended paper list/detail response schemas with Phase 2 metadata and reader-state fields.
+  - Updated `PATCH /papers/{paper_id}` to accept JSON partial updates while preserving legacy title/source query parameters.
+  - Added backend coverage for metadata persistence, favorite toggles, reading progress/state, notes, invalid payloads, and legacy compatibility.
+  - Verification passed: `python -m pytest tests/test_db_migrations.py tests/test_paper_metadata.py tests/test_paper_queries.py -q` returned 13 passed.
+  - Logged implementation `b2113d89-4f86-4ec2-89c1-8b976ca89f64`.
+- Phase 2 Task 3 is complete:
+  - Added `ReadingStatus` and `PaperUpdatePayload` frontend types.
+  - Extended `Paper` with optional Phase 2 metadata and reader-state fields to preserve existing fixtures and callers.
+  - Updated `updatePaper` to send JSON PATCH payloads and added favorite, reading-state, and notes wrappers.
+  - Added API wrapper coverage for URL, method, headers, and payload shape.
+  - Verification passed:
+    - `.\node_modules\.bin\vitest.cmd run src\lib\api.test.ts --reporter=dot` returned 15 passed.
+    - `.\node_modules\.bin\tsc.cmd --noEmit` returned exit code 0.
+  - Logged implementation `6b554219-6570-41fe-9fcf-daa3577c4e45`.
+- Phase 2 Task 4 is complete:
+  - Added `FavoriteFilter` and `ReadingStatusFilter` helper types.
+  - Extended `filterPapers` to combine favorite and reading-state filters with existing search/category/status/tag filters.
+  - Added `getPaperReadingStatus` so missing legacy reader state is treated as `unread`.
+  - Added helper coverage for favorite-only, every reading state, missing state defaults, and combined filters.
+  - Verification passed:
+    - `.\node_modules\.bin\vitest.cmd run src\components\library\libraryFilters.test.ts --reporter=dot` returned 8 passed.
+    - `.\node_modules\.bin\tsc.cmd --noEmit` returned exit code 0.
+  - Logged implementation `95a160da-2932-4621-b2be-ba7ffcafc83a`.
+- Phase 2 Task 5 is complete:
+  - Added controlled favorite and reading-state filters to the dense library list.
+  - Added compact row indicators for favorite, reading state, and reading progress.
+  - Wired filter state through `LibraryPage` and `LibraryWorkspaceLayout` into `PaperLibraryList`.
+  - Added component coverage for indicators, filter callbacks, favorites-only filtering, and reading-state filtering.
+  - Verification passed:
+    - `.\node_modules\.bin\vitest.cmd run src\components\library\LibraryNavigation.test.tsx --reporter=dot` returned 5 passed.
+    - `.\node_modules\.bin\vitest.cmd run src\components\library\libraryFilters.test.ts --reporter=dot` returned 8 passed.
+    - `.\node_modules\.bin\tsc.cmd --noEmit` returned exit code 0.
+  - Logged implementation `18c4a827-9b53-475e-8569-b92fe53dac50`.
+- Phase 2 Task 6 is complete:
+  - Added explicit editable controls to `PaperMetadataPanel` for title, authors, year, venue, DOI, URL, abstract, favorite, reading status/progress, and user notes.
+  - Preserved existing category, status, tag, and Open reader behavior, and moved tag editing into `PaperTagEditor` so the metadata panel stays under the project file-length limit.
+  - Added component coverage for metadata save payloads, favorite toggle, reading state/progress update, notes save, and notes failure preserving unsaved text.
+  - Verification passed:
+    - `.\node_modules\.bin\vitest.cmd run src\components\library\PaperPanels.test.tsx --reporter=dot` returned 7 passed.
+    - `.\node_modules\.bin\tsc.cmd --noEmit` returned exit code 0.
+  - Logged implementation `061e8e32-7ba2-4dc2-8703-354a76badb51`.
+- Phase 2 Task 7 is complete:
+  - Added `createLibraryMetadataActions` to keep persistence orchestration out of presentational components.
+  - Wired metadata, favorite, reading-state/progress, and notes callbacks through `LibraryPage`, `LibraryWorkspaceLayout`, and `LibraryDetailStack` into `PaperMetadataPanel`.
+  - Added route-level coverage for metadata save refreshing visible detail, favorite and reading-state API wrappers, and notes save failure preserving local text.
+  - Verification passed:
+    - `.\node_modules\.bin\vitest.cmd run src\App.test.tsx -t "library detail" --reporter=dot` returned 3 passed and 29 skipped.
+    - `.\node_modules\.bin\vitest.cmd run src\App.test.tsx --reporter=dot` returned 32 passed.
+    - `.\node_modules\.bin\tsc.cmd --noEmit` returned exit code 0.
+  - Logged implementation `98bb6a38-3901-40e3-b02a-6250fcd5f132`.
+- Phase 2 Task 8 is complete:
+  - Added reader types, deterministic Markdown heading extraction, duplicate-safe heading IDs, and Markdown content detection.
+  - Added `MarkdownReaderPane` with ReactMarkdown, GFM/math/KaTeX rendering, table-of-contents links, and parse-needed empty state delegated through props.
+  - Used TDD: the new reader tests first failed because modules were missing, then passed after implementation.
+  - Verification passed:
+    - `.\node_modules\.bin\vitest.cmd run src\components\reader\readerUtils.test.ts src\components\reader\MarkdownReaderPane.test.tsx --reporter=dot` returned 5 passed.
+    - `.\node_modules\.bin\tsc.cmd --noEmit` returned exit code 0.
+  - Logged implementation `31643787-248d-4fb3-9d39-3571e89afb46`.
+- Phase 2 Task 9 is complete:
+  - Added `PdfReaderPane`, `ReaderNotesPanel`, `ReaderToolbar`, and `ReaderShell` as presentational reader components.
+  - Covered retryable PDF failure, note save failure preserving local text, mode switching, reading-state/progress payloads, and reader shell loading/empty states.
+  - Used TDD: `ReaderComponents.test.tsx` first failed because the reader components were missing, then passed after implementation.
+  - Verification passed:
+    - `.\node_modules\.bin\vitest.cmd run src\components\reader\ReaderComponents.test.tsx --reporter=dot` returned 4 passed.
+    - `.\node_modules\.bin\vitest.cmd run src\components\reader\readerUtils.test.ts src\components\reader\MarkdownReaderPane.test.tsx src\components\reader\ReaderComponents.test.tsx --reporter=dot` returned 9 passed.
+    - `.\node_modules\.bin\tsc.cmd --noEmit` returned exit code 0.
+  - Logged implementation `b3b76bd8-4751-4a2b-b701-e84a55fe129d`.
+- Phase 2 Task 10 is complete:
+  - Added `ReaderPage` for the dedicated `/paper/:paperId/reader` route.
+  - Wired route-level PaperDetail loading, back navigation to `/paper/:paperId`, unread-to-reading auto-marking, explicit reading-state saves, notes saves, PDF blob loading/retry/revocation, and parse-needed Markdown refresh.
+  - Updated `LibraryPage` so `Open reader` enters `/paper/:paperId/reader` without replacing the existing library detail route.
+  - Added jsdom URL cleanup support in route tests and route-level coverage for open reader, auto-marking, read/skipped preservation, PDF/Markdown switching, PDF failure retry, and parse-needed refresh.
+  - Verification passed:
+    - `.\node_modules\.bin\vitest.cmd run src\App.test.tsx -t "reader route|dedicated reader" --reporter=dot` returned 7 passed and 32 skipped.
+    - `.\node_modules\.bin\vitest.cmd run src\App.test.tsx --reporter=dot` returned 39 passed.
+    - `.\node_modules\.bin\vitest.cmd run src\components\reader\readerUtils.test.ts src\components\reader\MarkdownReaderPane.test.tsx src\components\reader\ReaderComponents.test.tsx --reporter=dot` returned 9 passed.
+    - `.\node_modules\.bin\tsc.cmd --noEmit` returned exit code 0.
+  - Logged implementation `2af11f21-61f5-441c-9003-b69d57d5f17f`.
+- Phase 2 Task 11 is complete:
+  - Added a dedicated Phase 2 reader CSS block for `ReaderShell`, toolbar, mode toggle, reading-state form, Markdown pane, table of contents, PDF iframe pane, notes panel, empty states, focus states, and mobile/tablet stacking.
+  - Kept the existing utilitarian dashboard style; the new block avoids the scanned banned patterns (`vw`, blob/orb terms, radial/linear gradients, and negative letter-spacing).
+  - Verification passed:
+    - Scoped CSS block scan for `vw|orb|blob|radial-gradient|linear-gradient|letter-spacing:\s*-` returned no matches.
+    - `.\node_modules\.bin\vitest.cmd run src\App.test.tsx --reporter=dot` returned 39 passed.
+    - `npm run build` passed; Vite still reports the existing chunk-size warning for the main JS bundle.
+  - Logged implementation `0e27cd0c-c9ed-44f0-8a4d-5f9eafd5f91a`.
+- Phase 2 Task 12 is complete:
+  - Added route-level coverage for recommendation action compatibility with the library detail route.
+  - Added route-level coverage for combining favorite and reading-state filters in the library route.
+  - Added route-level coverage for reader back navigation returning to the existing library detail route.
+  - Debugged the recommendation compatibility test. Root cause: `RecommendationShell` loads recommendations once with an empty paper list and again after the paper list refreshes, so the test was clicking a transient disconnected button. The test now mocks repeated recommendation loads and waits for the second load before clicking.
+  - Continued verification on 2026-05-05 exposed one full `App.test.tsx` regression: the AI recommendation route reused a stale module-level recommendation cache from another paper fixture and rendered the wrong title. Root cause: `buildCacheSignature` only included id/status/parse/summary/updated fields, so papers with the same processing state but different title/tags could share stale cached recommendations when `updated_at` is missing. Fixed `RecommendationShell` by using a structured paper signature that includes id, title, source, processing states, category status, sorted tags, and updated_at.
+  - Verification evidence:
+    - `.\node_modules\.bin\vitest.cmd run src\App.test.tsx -t "recommendation action|favorite and reading state together|back button returns" --reporter=dot` returned 3 passed and 39 skipped.
+    - `.\node_modules\.bin\tsc.cmd --noEmit` returned exit code 0.
+    - `git diff --check -- frontend/src/App.test.tsx frontend/src/components/RecommendationShell.tsx .spec-workflow/specs/paperquay-reader-metadata/tasks.md` returned exit code 0 with only Git LF-to-CRLF warnings.
+    - `.\.venv\Scripts\python.exe -m pytest tests\test_paper_metadata.py tests\test_db_migrations.py -q` returned 9 passed and 3 setup errors; the passing tests are the paper metadata tests, while DB migration tests failed before execution due pytest temp lock/mkdir permission errors.
+    - 2026-05-05 elevated `.\node_modules\.bin\vitest.cmd run src\App.test.tsx --reporter=dot` reached execution and returned 41 passed and 1 failed before the cache-signature fix; the failure was `Recommend Me` missing on the AI recommendation route.
+    - After the cache-signature fix, `.\node_modules\.bin\tsc.cmd --noEmit` returned exit code 0.
+    - After the cache-signature fix, `.\.venv\Scripts\python.exe -m pytest tests\test_paper_metadata.py -q` returned 9 passed.
+    - After the cache-signature fix, `git diff --check -- frontend/src/components/RecommendationShell.tsx frontend/src/App.test.tsx progress.md task_plan.md` returned exit code 0 with only Git LF-to-CRLF warnings.
+    - 2026-05-06 elevated `.\node_modules\.bin\vitest.cmd run src\App.test.tsx --reporter=dot` returned 42 passed.
+    - 2026-05-06 elevated Phase 2 frontend focused tests (`api`, library filters/navigation/panels, and reader utilities/components) returned 44 passed across 7 files.
+    - 2026-05-06 `.\node_modules\.bin\tsc.cmd --noEmit` returned exit code 0.
+    - 2026-05-06 elevated `npm run build` passed; Vite still reports the existing chunk-size warning.
+    - 2026-05-06 elevated `.\.venv\Scripts\python.exe -m pytest tests\test_paper_metadata.py tests\test_db_migrations.py -q` returned 12 passed.
+  - Environment note:
+    - Non-elevated frontend Vite/Vitest/build still hits sandbox `spawn EPERM`.
+    - Non-elevated backend combined pytest still hits pytest Temp `.lock` permission, but elevated target verification passed.
+  - Logged implementation `427f962c-f2c3-4972-ba39-f9c2b1e533d9`.
+
+---
+
+# 2026-05-06 PaperQuay Phase 3 Task 11 Final Verification
+
+- Phase 3 Task 11 is complete:
+  - Added route-level cached translation coverage in `frontend/src/App.test.tsx` with `reader route displays cached block translations from loaded blocks`.
+  - The test proves a block translation already returned by `fetchPaperBlocks` is rendered directly and does not call `translatePaperBlock`.
+  - Final frontend focused verification passed:
+    - `.\node_modules\.bin\vitest.cmd run src\App.test.tsx src\lib\api.test.ts src\components\reader\readerUtils.test.ts src\components\reader\MarkdownReaderPane.test.tsx src\components\reader\ReaderComponents.test.tsx src\components\reader\readerBlockUtils.test.ts src\components\reader\ReaderBlocks.test.tsx --reporter=dot`
+    - Result: 7 test files passed, 82 tests passed.
+  - Final backend focused verification passed:
+    - `.\.venv\Scripts\python.exe -m pytest tests\test_db_migrations.py tests\test_block_extraction_service.py tests\test_parse_pipeline.py tests\test_paper_blocks_api.py tests\test_block_translation_service.py tests\test_deepseek_client.py -q`
+    - Result: 39 tests passed in 8.12s.
+  - TypeScript verification passed:
+    - `.\node_modules\.bin\tsc.cmd --noEmit`
+    - Result: exit code 0.
+  - Production build passed:
+    - `npm run build`
+    - Result: exit code 0; Vite built 365 modules in 3.10s.
+    - Non-blocking warning: the main JS chunk is larger than 500 kB after minification.
+  - Whitespace verification passed:
+    - `git diff --check` for Task 11 files returned exit code 0 with only LF-to-CRLF warnings.
+  - Logged implementation `d4dc8a9d-655e-408f-a02b-19bce8a00fd8`.
+  - Marked task 11 `[x]`; all Phase 3 tasks 1-11 are complete.
+
+# 2026-05-06 PaperQuay Phase 4 Spec Preparation
+
+- Started Phase 4 spec package for Agent and Zotero:
+  - New spec directory: `.spec-workflow/specs/paperquay-agent-zotero`.
+  - Created `requirements-questionnaire.md` with 120 P0/P1/P2 questions for Agent and Zotero constraints.
+  - Created formal `requirements.md` with 12 requirements covering Agent scope/tools/proposals/confirmation/audit/revert, Zotero source safety/mapping/dedupe/import audit, frontend accessibility, and non-functional constraints.
+  - Created `implementation-handoff-plan.md` with a 14-task draft plan and task prompts for external AI models.
+- Formal spec-workflow status:
+  - Requirements approval requested: `approval_1778076561065_fqy9qnbc0`.
+  - Requirements approval approved ("已批准") on 2026-05-06T14:12:16.567Z.
+- After requirements approval, generated formal design and tasks:
+  - Created `design.md` (comprehensive design with architecture, component interfaces, data models, backend flow, frontend flow, error handling, testing strategy).
+  - Design approval requested: `approval_1778077303169_aa3kpj1mzt` (pending).
+  - Created `tasks.md` (14 formal tasks with file maps, detailed prompts, verification criteria).
+  - Tasks approval requested: `approval_1778077629511_kavm663xh0` (pending).
+- Validation:
+  - Placeholder scan for `TBD`, `TODO`, template placeholders, and unfinished template markers returned no matches across all five Phase 4 docs.
+  - `git diff --check` for Phase 4 docs returned exit code 0 with only LF-to-CRLF warnings.
+
+# 2026-05-06 PaperQuay Phase 3 Blocks and Translation Spec Pass
+
+- Started PRD Phase 3 after Phase 1 and Phase 2 specs were confirmed complete.
+- Scope decision:
+  - Phase 3 is `paperquay-blocks-translation`: MinerU structured blocks, reader block workspace, PDF page linkage, and explicit cached block translation.
+  - Phase 4 remains separate: Agent library operations and Zotero read-only import will get their own spec after Phase 3.
+- Loaded `spec_workflow_guide`; workflow requires Requirements -> Design -> Tasks -> Implementation with dashboard approvals.
+- Loaded Superpowers `brainstorming` and `writing-plans` guidance; no implementation code was changed in this pass.
+- ACE semantic search is still blocked by `backend/.pytest_tmp` permission, so direct file reads and `rg --files` were used.
+- Researched primary references:
+  - MinerU structured output includes content blocks with page indexes and bbox coordinates mapped to 0-1000.
+  - Zotero official docs require direct `zotero.sqlite` access to be read-only, which confirms Phase 4 import constraints.
+- Created `.spec-workflow/specs/paperquay-blocks-translation/requirements-questionnaire.md` with 120 Phase 3 scoping questions.
+- Created `.spec-workflow/specs/paperquay-blocks-translation/requirements.md` with 10 requirements covering block persistence, migration, extraction, APIs, reader UI, translation cache/API/UI, security, and Phase 4 handoff.
+- Self-review:
+  - Placeholder scan returned no matches.
+  - Questionnaire count is 120 questions.
+  - `git diff --check` for the new Phase 3 documents returned exit code 0.
+- Requested requirements approval `approval_1778050130036_z0lvsk3op`; next phase is blocked until dashboard approval.
+- Phase 3 requirements approval `approval_1778050130036_z0lvsk3op` was approved and deleted successfully.
+- Created `.spec-workflow/specs/paperquay-blocks-translation/design.md`.
+  - Design adds `PaperBlock` and `PaperBlockTranslation`, `BlockExtractionService`, `BlockTranslationService`, a separate `paper_blocks.py` API route, frontend block API wrappers, and reader block components.
+  - Design keeps PDF linkage page-level in Phase 3 because the current reader uses an iframe PDF surface; precise bbox overlay is deferred.
+  - Design keeps Agent operations and Zotero import out of Phase 3 and reserves them for a separate Phase 4 spec.
+  - Self-review found no template placeholder markers, and `git diff --check` returned exit code 0 with only CRLF warnings for existing docs.
+  - Requested design approval `approval_1778050432849_ohekbcsmj`; next phase is blocked until dashboard approval.
+- Phase 3 design approval `approval_1778050432849_ohekbcsmj` was approved and deleted successfully.
+- Created `.spec-workflow/specs/paperquay-blocks-translation/tasks.md`.
+  - Added 11 implementation tasks covering block/translation models, extraction normalization, parse integration, block API, translation service/API, frontend API wrappers, reader block components, reader route orchestration, styling, and final verification.
+  - Self-review found 11 task checkboxes and 11 required `_Prompt` prefixes, with no template placeholder markers.
+  - `git diff --check` for `tasks.md` returned exit code 0.
+  - Requested tasks approval `approval_1778050663548_a1x8r6twn`; implementation is blocked until dashboard approval.
+- Phase 3 tasks approval `approval_1778050663548_a1x8r6twn` was approved and deleted successfully.
+- Phase 3 Task 1 is complete:
+  - Added `PaperBlock` and `PaperBlockTranslation` SQLModel tables for normalized MinerU blocks and cached block translations.
+  - Registered the new models for SQLModel metadata creation during app startup.
+  - Added legacy SQLite migration coverage proving new block tables are additive and existing paper rows keep status/reader metadata defaults.
+  - Verification passed:
+    - Elevated backend `.\.venv\Scripts\python.exe -m pytest tests\test_db_migrations.py -q` returned 4 passed.
+    - `git diff --check` for Task 1 files returned exit code 0 with only LF-to-CRLF warnings.
+  - Logged implementation `5412778a-dcd2-4233-ace4-299e2b2d8cdb`.
+  - Marked task 1 `[x]`; task 2 block normalization and hashing service is next.
+- Phase 3 Task 2 is complete:
+  - Added `BlockExtractionService` and `BlockCandidate` for pure MinerU structured artifact loading and normalization.
+  - Covered legacy `content_list.json`, development `content_list_v2.json`, VLM page-grouped model output, and pipeline `middle.json` shapes.
+  - Added stable source hashing, VLM 0-1 bbox normalization to 0-1000, bounded source JSON, recoverable malformed-entry handling, and local JSON/ZIP parse artifact loading.
+  - Added `backend/tests/fixtures/mineru_blocks_sample.json` and focused unit coverage for supported block types, malformed data, invalid bbox, hash stability, no-block output, and local artifact extraction.
+  - Verification passed:
+    - Elevated backend `.\.venv\Scripts\python.exe -m pytest tests\test_block_extraction_service.py -q` returned 7 passed.
+    - Elevated backend `.\.venv\Scripts\python.exe -m pytest tests\test_db_migrations.py tests\test_block_extraction_service.py -q` returned 11 passed.
+    - `git diff --check` for Task 2 files returned exit code 0 with only LF-to-CRLF warnings.
+  - Logged implementation `77738576-abf5-49eb-ac12-fcdbf24e55c6`.
+  - Marked task 2 `[x]`; task 3 block persistence replacement and parse-pipeline integration is next.
+- Phase 3 Task 3 is complete:
+  - Added `BlockRebuildResult`, `BlockExtractionService.rebuild_blocks`, and `BlockExtractionService.replace_blocks`.
+  - `replace_blocks` deletes stale `PaperBlockTranslation` rows and stale `PaperBlock` rows for one paper before inserting normalized candidates in reading order.
+  - `PaperPipelineService.parse_paper` now commits successful Markdown/content parsing first, then attempts block rebuild in a recoverable transaction.
+  - If block extraction fails, the block transaction rolls back and logs a warning while the paper remains `parsed` / `parse_status=completed`.
+  - Verification passed:
+    - Elevated backend `.\.venv\Scripts\python.exe -m pytest tests\test_block_extraction_service.py tests\test_parse_pipeline.py -q` returned 16 passed.
+    - Elevated backend `.\.venv\Scripts\python.exe -m pytest tests\test_db_migrations.py tests\test_block_extraction_service.py tests\test_parse_pipeline.py -q` returned 20 passed.
+    - `git diff --check` for Task 3 files returned exit code 0 with only LF-to-CRLF warnings.
+  - Logged implementation `c26409d3-de27-4794-bb96-b1880c31e3b1`.
+  - Marked task 3 `[x]`; task 4 block API schemas and routes is next.
+- Phase 3 Task 4 is complete:
+  - Added `backend/app/schemas/paper_blocks.py` with `PaperBlockResponse`, `PaperBlocksResponse`, and `PaperBlockRebuildResponse`.
+  - Added separate authenticated route module `backend/app/api/routes/paper_blocks.py`.
+  - Implemented `GET /papers/{paper_id}/blocks` with ordered block retrieval, page/type/search filtering, summary metadata, bbox parsing, and no `source_json` exposure.
+  - Implemented `POST /papers/{paper_id}/blocks/rebuild` with 404 missing paper, 409 no parse artifact, and service-backed rebuild behavior.
+  - Registered the new router in `backend/app/main.py` under the same protected dependency list as existing paper APIs.
+  - Verification passed:
+    - Elevated backend `.\.venv\Scripts\python.exe -m pytest tests\test_paper_blocks_api.py -q` returned 6 passed.
+    - Elevated backend `.\.venv\Scripts\python.exe -m pytest tests\test_db_migrations.py tests\test_block_extraction_service.py tests\test_parse_pipeline.py tests\test_paper_blocks_api.py -q` returned 26 passed.
+    - `git diff --check` for Task 4 files returned exit code 0 with only LF-to-CRLF warnings.
+  - Logged implementation `dfe05ba8-6e97-4854-9361-5b56911285a7`.
+  - Marked task 4 `[x]`; task 5 cached block translation service is next.
+- Phase 3 Task 5 is complete:
+  - Added `BlockTranslationService` with source-hash-aware cache lookup, force refresh, empty-text validation, model success persistence, and model failure persistence.
+  - Added `BlockTranslatorClient` protocol for dependency-injected model calls in tests and production.
+  - Added `DeepSeekClient.translate_block_text` and `BLOCK_TRANSLATION_PROMPT_VERSION` for dedicated block translation requests.
+  - The block translation prompt wrapper only receives block text, target language, model, page index, and block type; it does not accept local paths, API keys, user notes, or arbitrary frontend prompt text.
+  - Model failures create failed translation rows while preserving previous completed translations.
+  - Verification passed:
+    - Elevated backend `.\.venv\Scripts\python.exe -m pytest tests\test_block_translation_service.py -q` returned 7 passed.
+    - Elevated backend `.\.venv\Scripts\python.exe -m pytest tests\test_db_migrations.py tests\test_block_extraction_service.py tests\test_parse_pipeline.py tests\test_paper_blocks_api.py tests\test_block_translation_service.py tests\test_deepseek_client.py -q` returned 34 passed.
+    - `git diff --check` for Task 5 files returned exit code 0 with only LF-to-CRLF warnings.
+  - Logged implementation `f0fa6bc7-536c-4067-8e77-71908eedd64f`.
+  - Marked task 5 `[x]`; task 6 block translation API endpoint is next.
+- Phase 3 Task 6 is complete:
+  - Added `BlockTranslateRequest` and `PaperBlockTranslationResponse` to `backend/app/schemas/paper_blocks.py`.
+  - Added `POST /papers/{paper_id}/blocks/{block_id}/translate` to `backend/app/api/routes/paper_blocks.py`.
+  - The endpoint validates paper existence and block ownership, applies safe defaults, supports cache hits and forced refresh, and converts empty block text to HTTP 400.
+  - The endpoint reuses `BlockTranslationService`; it does not expose model credentials or accept arbitrary frontend prompt text.
+  - Verification passed:
+    - Elevated backend `.\.venv\Scripts\python.exe -m pytest tests\test_paper_blocks_api.py -q` returned 11 passed.
+    - Elevated backend `.\.venv\Scripts\python.exe -m pytest tests\test_db_migrations.py tests\test_block_extraction_service.py tests\test_parse_pipeline.py tests\test_paper_blocks_api.py tests\test_block_translation_service.py tests\test_deepseek_client.py -q` returned 39 passed.
+    - `git diff --check` for Task 6 files returned exit code 0 with only LF-to-CRLF warnings.
+  - Logged implementation `fe556093-194c-4b7e-a620-c00046fbc164`.
+  - Marked task 6 `[x]`; task 7 frontend block types and API wrappers is next.
+- Phase 3 Task 7 is complete:
+  - Added frontend block and translation contracts in `frontend/src/types.ts`: `PaperBlock`, `PaperBlocksResponse`, `PaperBlockTranslation`, rebuild response, filters, and translate payload.
+  - Added `fetchPaperBlocks`, `rebuildPaperBlocks`, and `translatePaperBlock` to `frontend/src/lib/api.ts`, using existing auth header and `readJson` behavior.
+  - Added API wrapper regression coverage for query construction, methods, auth headers, JSON payloads, and backend error propagation.
+  - Used TDD: the new API tests first failed because `fetchPaperBlocks` was not exported, then passed after wrapper implementation.
+  - Verification passed:
+    - Frontend `.\\node_modules\\.bin\\vitest.cmd run src\\lib\\api.test.ts --reporter=dot` returned 17 passed.
+    - Frontend `.\\node_modules\\.bin\\tsc.cmd --noEmit` returned exit code 0.
+    - `git diff --check` for Task 7 files returned exit code 0 with only LF-to-CRLF warnings.
+  - Logged implementation `bf5c6ffb-b8f6-4233-932c-6bb9e34e6c4f`.
+  - Marked task 7 `[x]`; task 8 reader block utilities and presentational components is next.
+- Phase 3 Task 8 is complete:
+  - Added reader block UI types, utility helpers, and tests for labels, page hrefs, filtering, truncation, and translation view-state derivation.
+  - Added presentational `ReaderBlockCard`, `ReaderBlockTranslation`, and `ReaderBlocksPanel` components.
+  - Components safely render block/translation text as React text, delegate side effects through callbacks, and do not fetch data directly.
+  - Added component coverage for block selection, page action, no-block rebuild state, filtering, translation action, cached translation, loading state, failed retry, and stale refresh.
+  - Kept new files under 300 lines and split `ReaderBlocksPanel` into small internal components after a length/shape review.
+  - Used TDD: the new reader block tests first failed because modules were missing, then passed after implementation.
+  - Verification passed:
+    - Elevated frontend `.\\node_modules\\.bin\\vitest.cmd run src\\components\\reader\\readerBlockUtils.test.ts src\\components\\reader\\ReaderBlocks.test.tsx --reporter=dot` returned 8 passed.
+    - Elevated frontend reader regression `.\\node_modules\\.bin\\vitest.cmd run src\\components\\reader\\readerUtils.test.ts src\\components\\reader\\MarkdownReaderPane.test.tsx src\\components\\reader\\ReaderComponents.test.tsx src\\components\\reader\\readerBlockUtils.test.ts src\\components\\reader\\ReaderBlocks.test.tsx --reporter=dot` returned 17 passed.
+    - Elevated frontend `.\\node_modules\\.bin\\tsc.cmd --noEmit` returned exit code 0.
+    - `git diff --check` for Task 8 files returned exit code 0 with only LF-to-CRLF warnings.
+  - Logged implementation `06bdee84-e1a1-42db-90fd-da1d59b9c180`.
+  - Marked task 8 `[x]`; task 9 reader route orchestration is next.
+- Phase 3 Task 9 is complete:
+  - Added `useReaderBlocks` to keep route-level block loading, rebuild, selection, translation, and PDF page action orchestration out of presentational components.
+  - Extended `ReaderShell` to render `ReaderBlocksPanel` while preserving the existing Markdown/PDF primary pane and notes/overview behavior.
+  - Updated `ReaderPage` to load blocks after paper detail, rebuild blocks, update local translation state, retry failed translations, preserve cached translations, and append `#page=N` to PDF blob URLs when opening a block page.
+  - Added route-level coverage for block loading, no-block state, rebuild success, translation failure retry/success, and PDF page action switching.
+  - Verification passed:
+    - Elevated frontend focused Task 9 red/green test run returned 5 passed across `ReaderComponents.test.tsx` and `App.test.tsx`.
+    - Elevated frontend reader component regression returned 18 passed across 5 reader test files.
+    - Elevated frontend reader route regression `.\\node_modules\\.bin\\vitest.cmd run src\\App.test.tsx -t "reader route|dedicated reader" --reporter=dot` returned 12 passed and 34 skipped.
+    - Elevated frontend `.\\node_modules\\.bin\\tsc.cmd --noEmit` returned exit code 0.
+    - `git diff --check` for Task 9 files returned exit code 0 with only LF-to-CRLF warnings.
+  - Logged implementation `bfe28952-3d76-404f-a478-bd6cde0a1fd9`.
+  - Marked task 9 `[x]`; task 10 responsive block-reader styling is next.
+- Phase 3 Task 10 is complete:
+  - Added responsive CSS for the structured block workspace in `frontend/src/index.css`, including panel layout, filters, block cards, selected state, page/type/order chips, safe wrapping, translation states, stale markers, retry controls, and mobile stacking.
+  - Reused existing reader/library design tokens and avoided viewport font scaling, decorative blobs/orbs, new gradients, and negative letter-spacing in the new `.reader-block*` styles.
+  - Verification passed:
+    - Elevated frontend `.\\node_modules\\.bin\\vitest.cmd run src\\components\\reader\\readerBlockUtils.test.ts src\\components\\reader\\ReaderBlocks.test.tsx src\\components\\reader\\ReaderComponents.test.tsx --reporter=dot` returned 13 passed.
+    - Elevated frontend `.\\node_modules\\.bin\\vitest.cmd run src\\App.test.tsx -t "reader route|dedicated reader" --reporter=dot` returned 12 passed and 34 skipped.
+    - Elevated frontend `.\\node_modules\\.bin\\tsc.cmd --noEmit` returned exit code 0.
+    - Scoped CSS scan `reader-block.*(vw|orb|blob|radial-gradient|linear-gradient|letter-spacing:\\s*-)` returned no matches.
+    - `git diff --check` for Task 10 files returned exit code 0 with only LF-to-CRLF warnings.
+  - Logged implementation `ab027c46-9a79-4d39-b7fa-9ddb6329c82b`.
+  - Marked task 10 `[x]`; task 11 final Phase 3 integration verification is next.
 
 ---
