@@ -19,7 +19,18 @@ const DEFAULT_MODEL = 'gpt-5.4'
 function buildCacheSignature(papers: Paper[], model: string): string {
   const today = new Date().toISOString().slice(0, 10)
   const paperHash = papers
-    .map(p => `${p.id}:${p.status}:${p.parse_status}:${p.summary_status}:${p.updated_at ?? ''}`)
+    .map(p => JSON.stringify({
+      id: p.id,
+      title: p.title,
+      source: p.source,
+      status: p.status,
+      parse_status: p.parse_status,
+      summary_status: p.summary_status,
+      embedding_status: p.embedding_status,
+      category_status: p.category_status ?? '',
+      tags: [...(p.tags ?? [])].sort(),
+      updated_at: p.updated_at ?? '',
+    }))
     .sort()
     .join('|')
   return `${today}::${model}::${paperHash}`

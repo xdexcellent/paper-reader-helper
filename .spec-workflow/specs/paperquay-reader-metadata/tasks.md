@@ -1,0 +1,184 @@
+# Tasks Document
+
+## File Map
+
+- `backend/app/models/paper.py`: additive Phase 2 paper fields for metadata, favorite, reading state, progress, and notes.
+- `backend/app/core/db.py`: SQLite-safe column migration for existing databases.
+- `backend/app/schemas/paper.py`: typed response and update payload schemas.
+- `backend/app/api/routes/papers.py`: existing paper detail/update routes extended for Phase 2 fields.
+- `backend/tests/test_db_migrations.py`: migration regression coverage.
+- `backend/tests/test_paper_metadata.py`: paper update validation and persistence coverage.
+- `frontend/src/types.ts`: shared Phase 2 frontend paper and update payload types.
+- `frontend/src/lib/api.ts`: typed frontend wrappers for paper metadata, favorite, reading state, and notes updates.
+- `frontend/src/lib/api.test.ts`: frontend API wrapper regression coverage.
+- `frontend/src/components/library/libraryTypes.ts`: favorite and reading filter type additions.
+- `frontend/src/components/library/libraryFilters.ts`: deterministic favorite and reading-state filtering.
+- `frontend/src/components/library/libraryFilters.test.ts`: helper coverage for new filters.
+- `frontend/src/components/library/PaperLibraryList.tsx`: dense list indicators and filter controls.
+- `frontend/src/components/library/LibraryNavigation.test.tsx`: list and filter component coverage.
+- `frontend/src/components/library/PaperMetadataPanel.tsx`: editable metadata, favorite, reading state, progress, notes entry, and reader entry.
+- `frontend/src/components/library/PaperPanels.test.tsx`: metadata panel behavior tests.
+- `frontend/src/components/library/LibraryDetailStack.tsx`: pass new metadata callbacks into the metadata panel.
+- `frontend/src/components/library/LibraryPage.tsx`: orchestrate Phase 2 update calls and navigate to reader route.
+- `frontend/src/components/reader/readerTypes.ts`: reader mode and heading types.
+- `frontend/src/components/reader/readerUtils.ts`: markdown heading extraction and reader helpers.
+- `frontend/src/components/reader/readerUtils.test.ts`: unit coverage for reader helpers.
+- `frontend/src/components/reader/MarkdownReaderPane.tsx`: markdown reader state and table of contents surface.
+- `frontend/src/components/reader/PdfReaderPane.tsx`: authenticated PDF blob loading state, retry, and cleanup surface.
+- `frontend/src/components/reader/ReaderNotesPanel.tsx`: note editing surface with failure-preserving local text.
+- `frontend/src/components/reader/ReaderToolbar.tsx`: reader mode switch, back action, and compact paper state controls.
+- `frontend/src/components/reader/ReaderShell.tsx`: focused reader layout composition.
+- `frontend/src/components/reader/ReaderPage.tsx`: route-level reader orchestrator.
+- `frontend/src/App.tsx`: add `/paper/:paperId/reader` route.
+- `frontend/src/App.test.tsx`: route-level integration coverage for Phase 2.
+- `frontend/src/index.css`: reader, metadata edit, favorite, reading-state, and notes styling.
+
+- [x] 1. Add Phase 2 paper fields and SQLite migration coverage
+  - File: `backend/app/models/paper.py`
+  - File: `backend/app/core/db.py`
+  - File: `backend/tests/test_db_migrations.py`
+  - Add additive `Paper` fields: `year`, `venue`, `doi`, `url`, `favorite`, `reading_status`, `reading_progress`, and `user_notes` with safe defaults.
+  - Extend `_migrate_add_columns` so older SQLite databases receive the new columns without destructive migration.
+  - Add migration tests proving an existing `paper` table missing Phase 2 columns is migrated with defaults: favorite false, reading status `unread`, progress `0`, text fields empty, and nullable year.
+  - Purpose: Establish persistent backend storage before API, frontend types, or UI depend on Phase 2 fields.
+  - _Leverage: `backend/app/models/paper.py`, `backend/app/core/db.py`, existing migration tests in `backend/tests/test_db_migrations.py`_
+  - _Requirements: Requirement 2 AC 1 and 5, Requirement 4 AC 1 and 4, Requirement 5 AC 1 and 4, Requirement 10 AC 1_
+  - _Prompt: Implement the task for spec paperquay-reader-metadata, first run spec-workflow-guide to get the workflow guide then implement the task: Role: Backend persistence developer. Task: add the Phase 2 paper storage fields and SQLite-safe migration coverage for existing databases. Restrictions: do not create new tables, do not delete or rewrite existing data, do not change authentication, do not modify paper-processing task status fields, and keep the migration additive only. _Leverage: `Paper` model, `_migrate_add_columns`, and existing DB migration tests. _Requirements: Requirement 2 AC 1 and 5, Requirement 4 AC 1 and 4, Requirement 5 AC 1 and 4, Requirement 10 AC 1. Success: existing and new databases expose all Phase 2 columns with safe defaults, migration tests pass, and no frontend code changes are included in this task. Before coding, mark this task from `[ ]` to `[-]` in `tasks.md`; after implementation and verification, call `log_implementation` with structured artifacts for fields and migration functions, then mark the task `[x]`._
+
+- [x] 2. Extend paper schemas and backend update route validation
+  - File: `backend/app/schemas/paper.py`
+  - File: `backend/app/api/routes/papers.py`
+  - File: `backend/tests/test_paper_metadata.py`
+  - Extend `PaperResponse` and `PaperDetailResponse` to include Phase 2 fields.
+  - Add `PaperUpdateRequest` with validation for non-blank title, year range 1500-3000, HTTP(S) URL, allowed reading statuses, and 0-100 progress.
+  - Update `PATCH /papers/{paper_id}` to accept a JSON body for metadata, favorite, reading state, progress, and notes while keeping existing title/source callers compatible where practical.
+  - Add backend tests for successful metadata save, favorite toggle, reading state/progress update, notes save, invalid reading status, invalid progress, invalid year, and invalid URL.
+  - Purpose: Provide the typed backend API contract for Phase 2.
+  - _Leverage: existing `PATCH /papers/{paper_id}`, `PaperResponse.extract_tags`, `PaperDetailResponse`, and backend API test patterns_
+  - _Requirements: Requirement 2 AC 1-4, Requirement 3 AC 1 and 4, Requirement 4 AC 2 and 5, Requirement 5 AC 1-4, Requirement 8 AC 2-5, Requirement 9 AC 1 and 3, Requirement 10 AC 2_
+  - _Prompt: Implement the task for spec paperquay-reader-metadata, first run spec-workflow-guide to get the workflow guide then implement the task: Role: FastAPI contract developer. Task: extend paper response schemas and the existing paper update route with typed Phase 2 partial updates and validation tests. Restrictions: do not add unauthenticated routes, do not split to new tables, do not change parse/summarize/embed routes, do not expose local file paths beyond the existing response contract, and do not remove legacy source-compatible update behavior unless a test proves it is unused. _Leverage: `backend/app/schemas/paper.py`, `backend/app/api/routes/papers.py`, and existing paper route fixtures. _Requirements: Requirement 2 AC 1-4, Requirement 3 AC 1 and 4, Requirement 4 AC 2 and 5, Requirement 5 AC 1-4, Requirement 8 AC 2-5, Requirement 9 AC 1 and 3, Requirement 10 AC 2. Success: backend tests prove valid Phase 2 updates persist and invalid payloads are rejected without breaking existing paper detail/list responses. Before coding, mark this task from `[ ]` to `[-]` in `tasks.md`; after implementation and verification, call `log_implementation` with structured artifacts for API endpoints and schema classes, then mark the task `[x]`._
+
+- [x] 3. Extend frontend types and API wrapper coverage
+  - File: `frontend/src/types.ts`
+  - File: `frontend/src/lib/api.ts`
+  - File: `frontend/src/lib/api.test.ts`
+  - Add `ReadingStatus` and `PaperUpdatePayload` frontend types.
+  - Extend `Paper`/`PaperDetail` with authors, abstract, year, venue, DOI, URL, favorite, reading status, progress, and notes fields.
+  - Update `updatePaper` to send JSON body payloads and add convenience wrappers `updatePaperFavorite`, `updatePaperReadingState`, and `updatePaperNotes`.
+  - Add API wrapper tests for request method, URL, headers, and payload shapes.
+  - Purpose: Keep Phase 2 frontend components typed and route all writes through `api.ts`.
+  - _Leverage: existing `readJson`, `getAuthHeaders`, `updatePaper`, and `frontend/src/lib/api.test.ts` fetch mocks_
+  - _Requirements: Requirement 2 AC 1-3, Requirement 3 AC 1, Requirement 4 AC 2-5, Requirement 5 AC 1-3, Requirement 8 AC 1 and 3-4, Requirement 10 AC 3_
+  - _Prompt: Implement the task for spec paperquay-reader-metadata, first run spec-workflow-guide to get the workflow guide then implement the task: Role: Frontend API contract developer. Task: extend frontend paper types and API wrappers for Phase 2 metadata, favorite, reading state, progress, and notes updates, with unit coverage. Restrictions: do not make ad hoc fetch calls in components, do not remove existing API wrapper exports, do not change auth token behavior, and do not add UI in this task. _Leverage: `frontend/src/types.ts`, `frontend/src/lib/api.ts`, and `frontend/src/lib/api.test.ts`. _Requirements: Requirement 2 AC 1-3, Requirement 3 AC 1, Requirement 4 AC 2-5, Requirement 5 AC 1-3, Requirement 8 AC 1 and 3-4, Requirement 10 AC 3. Success: API tests prove the new wrappers send typed JSON payloads and existing callers remain source-compatible. Before coding, mark this task from `[ ]` to `[-]` in `tasks.md`; after implementation and verification, call `log_implementation` with structured artifacts for functions and types, then mark the task `[x]`._
+
+- [x] 4. Add favorite and reading-state filtering helpers
+  - File: `frontend/src/components/library/libraryTypes.ts`
+  - File: `frontend/src/components/library/libraryFilters.ts`
+  - File: `frontend/src/components/library/libraryFilters.test.ts`
+  - Add `FavoriteFilter`, `ReadingStatusFilter`, and helper inputs for Phase 2 filtering.
+  - Extend `filterPapers` to combine search, category, status, tag, favorite, and reading-state filters deterministically.
+  - Add helper tests for favorites-only filtering, each reading state, combined filters, default missing reading status as unread, and stable tag/category behavior from Phase 1.
+  - Purpose: Keep list behavior pure before list UI consumes it.
+  - _Leverage: existing `libraryTypes.ts`, `filterPapers`, `collectTags`, and `libraryFilters.test.ts`_
+  - _Requirements: Requirement 3 AC 2-3, Requirement 4 AC 1-2, Requirement 7 AC 1-2, Requirement 10 AC 4_
+  - _Prompt: Implement the task for spec paperquay-reader-metadata, first run spec-workflow-guide to get the workflow guide then implement the task: Role: Frontend TypeScript utility developer. Task: add pure favorite and reading-state filter types/helpers and focused Vitest coverage. Restrictions: do not fetch data, do not mutate paper objects, do not add UI, do not change category/tag semantics from Phase 1, and treat missing reading status as `unread`. _Leverage: existing library helper patterns and tests. _Requirements: Requirement 3 AC 2-3, Requirement 4 AC 1-2, Requirement 7 AC 1-2, Requirement 10 AC 4. Success: helper tests prove combined Phase 1 and Phase 2 filters work deterministically. Before coding, mark this task from `[ ]` to `[-]` in `tasks.md`; after implementation and verification, call `log_implementation` with structured artifacts for helper functions and types, then mark the task `[x]`._
+
+- [x] 5. Update dense library list for favorite and reading filters
+  - File: `frontend/src/components/library/PaperLibraryList.tsx`
+  - File: `frontend/src/components/library/LibraryNavigation.test.tsx`
+  - File: `frontend/src/index.css`
+  - Add compact favorite and reading-state indicators to paper rows.
+  - Add controlled favorite and reading-state filter controls to the list toolbar area.
+  - Keep row dimensions stable and preserve existing search/status/tag/category interactions.
+  - Add component tests for favorite indicators, reading-state indicators, favorites-only filter, and reading-state filter.
+  - Purpose: Surface Phase 2 organization state in the existing library list.
+  - _Leverage: `PaperLibraryList.tsx`, `libraryFilters.ts`, `StatusBadge`, `UiIcon`, existing list tests, and current `.paper-library-*` CSS patterns_
+  - _Requirements: Requirement 3 AC 2-3, Requirement 4 AC 1-2, Requirement 7 AC 1-2, Requirement 10 AC 4_
+  - _Prompt: Implement the task for spec paperquay-reader-metadata, first run spec-workflow-guide to get the workflow guide then implement the task: Role: React list UI developer. Task: update the dense paper list with favorite/reading indicators and controlled filters backed by the Phase 2 helpers. Restrictions: do not fetch data in the list, do not change selection routing, do not create layout shift, do not use decorative gradients or one-note palettes, and do not remove Phase 1 filters. _Leverage: `PaperLibraryList`, `libraryFilters`, `LibraryNavigation.test.tsx`, and existing CSS variables. _Requirements: Requirement 3 AC 2-3, Requirement 4 AC 1-2, Requirement 7 AC 1-2, Requirement 10 AC 4. Success: component tests prove the new indicators and filters work while existing list interactions still pass. Before coding, mark this task from `[ ]` to `[-]` in `tasks.md`; after implementation and verification, call `log_implementation` with structured artifacts for component and CSS changes, then mark the task `[x]`._
+
+- [x] 6. Add editable metadata, favorite, reading state, and notes panel behavior
+  - File: `frontend/src/components/library/PaperMetadataPanel.tsx`
+  - File: `frontend/src/components/library/PaperPanels.test.tsx`
+  - File: `frontend/src/index.css`
+  - Add labeled editable fields for title, authors, year, venue, DOI, URL, abstract, favorite, reading state, reading progress, and user notes.
+  - Use explicit save actions for metadata and notes; preserve unsaved notes on save failure.
+  - Keep category, tags, status, and Open reader behavior.
+  - Add tests for metadata save payload, favorite toggle, reading state/progress update, notes save success, and notes save failure preserving text.
+  - Purpose: Make Phase 2 data useful from library detail before the reader route lands.
+  - _Leverage: current `PaperMetadataPanel`, `PaperPanels.test.tsx`, `StatusBadge`, `UiIcon`, Phase 2 frontend types_
+  - _Requirements: Requirement 2 AC 1-4, Requirement 3 AC 1-4, Requirement 4 AC 2 and 5, Requirement 5 AC 1-5, Requirement 7 AC 3, Requirement 9 AC 2-3, Requirement 10 AC 4_
+  - _Prompt: Implement the task for spec paperquay-reader-metadata, first run spec-workflow-guide to get the workflow guide then implement the task: Role: React form and accessibility developer. Task: extend `PaperMetadataPanel` with Phase 2 editable metadata, favorite, reading state/progress, notes, and failure-preserving local note behavior. Restrictions: do not display full local PDF paths, do not autosave notes, do not mix user notes with generated summary fields, do not send notes to model APIs, and do not remove existing category/tag controls. _Leverage: current metadata panel patterns and component tests. _Requirements: Requirement 2 AC 1-4, Requirement 3 AC 1-4, Requirement 4 AC 2 and 5, Requirement 5 AC 1-5, Requirement 7 AC 3, Requirement 9 AC 2-3, Requirement 10 AC 4. Success: tests cover all new callbacks and failure states with accessible labels. Before coding, mark this task from `[ ]` to `[-]` in `tasks.md`; after implementation and verification, call `log_implementation` with structured artifacts for component props and behaviors, then mark the task `[x]`._
+
+- [x] 7. Wire Phase 2 metadata actions through library orchestration
+  - File: `frontend/src/components/library/LibraryDetailStack.tsx`
+  - File: `frontend/src/components/library/LibraryPage.tsx`
+  - File: `frontend/src/components/library/LibraryWorkspaceLayout.tsx`
+  - Pass metadata, favorite, reading-state, and notes callbacks from `LibraryPage` through the detail stack to `PaperMetadataPanel`.
+  - Use frontend API wrappers from task 3 and refresh selected detail/library state after successful updates.
+  - Preserve current `/paper/:paperId` detail route behavior and current parse/summarize/embed/category/tag actions.
+  - Purpose: Connect Phase 2 metadata UI to persistence without expanding presentational components with fetch logic.
+  - _Leverage: `LibraryPage` orchestration, `LibraryDetailStack`, `LibraryWorkspaceLayout`, `updatePaper`, `updatePaperFavorite`, `updatePaperReadingState`, `updatePaperNotes`_
+  - _Requirements: Requirement 1 AC 1-3, Requirement 2 AC 2-3, Requirement 3 AC 1 and 4, Requirement 4 AC 2 and 5, Requirement 5 AC 1-3, Requirement 7 AC 3-4, Requirement 8 AC 1 and 4_
+  - _Prompt: Implement the task for spec paperquay-reader-metadata, first run spec-workflow-guide to get the workflow guide then implement the task: Role: Senior React integration developer. Task: wire Phase 2 metadata, favorite, reading-state, progress, and notes callbacks through the library route orchestration using typed API wrappers. Restrictions: do not fetch inside presentational components, do not change `/paper/:id` to the reader route, do not break existing parse/summarize/embed/category/tag flows, and keep `LibraryPage.tsx` under the project line limit. _Leverage: Phase 1 LibraryPage/DetailStack/WorkspaceLayout split and new API wrappers. _Requirements: Requirement 1 AC 1-3, Requirement 2 AC 2-3, Requirement 3 AC 1 and 4, Requirement 4 AC 2 and 5, Requirement 5 AC 1-3, Requirement 7 AC 3-4, Requirement 8 AC 1 and 4. Success: route-level or component tests prove successful updates refresh visible detail state and failures show recoverable errors. Before coding, mark this task from `[ ]` to `[-]` in `tasks.md`; after implementation and verification, call `log_implementation` with structured artifacts for integration patterns, then mark the task `[x]`._
+
+- [x] 8. Add reader utilities and Markdown reader pane
+  - File: `frontend/src/components/reader/readerTypes.ts`
+  - File: `frontend/src/components/reader/readerUtils.ts`
+  - File: `frontend/src/components/reader/readerUtils.test.ts`
+  - File: `frontend/src/components/reader/MarkdownReaderPane.tsx`
+  - Define reader mode and heading types.
+  - Implement deterministic Markdown heading extraction with stable anchor IDs.
+  - Build `MarkdownReaderPane` with readable Markdown rendering, table of contents, empty parse-needed state, and parse action.
+  - Add tests for heading extraction, duplicate heading ID stability, markdown available state, and parse-needed state.
+  - Purpose: Create the Markdown side of the reader without touching PDF or routing yet.
+  - _Leverage: existing Markdown rendering dependencies in `PaperDetail.tsx`, Phase 2 `PaperDetail` type, `UiIcon`_
+  - _Requirements: Requirement 6 AC 3 and 6, Requirement 10 AC 4_
+  - _Prompt: Implement the task for spec paperquay-reader-metadata, first run spec-workflow-guide to get the workflow guide then implement the task: Role: React reader utility developer. Task: create reader types, Markdown heading utilities, tests, and a Markdown reader pane with TOC and parse-needed state. Restrictions: do not add PDF behavior, do not use raw HTML rendering, do not persist heading data, do not modify `PaperDetail.tsx`, and keep utilities deterministic. _Leverage: `ReactMarkdown`, `remarkGfm`, `remarkMath`, `rehypeKatex`, existing markdown safety pattern, and `UiIcon`. _Requirements: Requirement 6 AC 3 and 6, Requirement 10 AC 4. Success: reader utility tests and component tests prove heading extraction and parse-needed behavior. Before coding, mark this task from `[ ]` to `[-]` in `tasks.md`; after implementation and verification, call `log_implementation` with structured artifacts for components and utility functions, then mark the task `[x]`._
+
+- [x] 9. Add PDF, notes, and toolbar reader components
+  - File: `frontend/src/components/reader/PdfReaderPane.tsx`
+  - File: `frontend/src/components/reader/ReaderNotesPanel.tsx`
+  - File: `frontend/src/components/reader/ReaderToolbar.tsx`
+  - File: `frontend/src/components/reader/ReaderShell.tsx`
+  - Build `PdfReaderPane` with loading, retryable failure, iframe display, and blob URL cleanup responsibility delegated through props.
+  - Build `ReaderNotesPanel` with explicit save and failure-preserving local text behavior.
+  - Build `ReaderToolbar` for back action, PDF/Markdown mode switch, status, reading state, and progress controls.
+  - Compose `ReaderShell` from toolbar, Markdown/PDF pane, overview/metadata context, and notes panel.
+  - Purpose: Build the reader UI surface before route orchestration.
+  - _Leverage: `MarkdownReaderPane`, `PaperOverviewPanel`, `StatusBadge`, `UiIcon`, Phase 2 types_
+  - _Requirements: Requirement 4 AC 2-5, Requirement 5 AC 1-5, Requirement 6 AC 1-5, Requirement 9 AC 2-3, Requirement 10 AC 4_
+  - _Prompt: Implement the task for spec paperquay-reader-metadata, first run spec-workflow-guide to get the workflow guide then implement the task: Role: Frontend reader UI developer. Task: create the PDF pane, notes panel, toolbar, and shell for the focused reader experience. Restrictions: do not fetch paper detail in these components, do not access local file paths directly, do not send notes to model APIs, do not add PDF annotations, and keep all controls labeled and keyboard reachable. _Leverage: reader Markdown pane, Phase 1 overview panel, `StatusBadge`, `UiIcon`, and current CSS variables. _Requirements: Requirement 4 AC 2-5, Requirement 5 AC 1-5, Requirement 6 AC 1-5, Requirement 9 AC 2-3, Requirement 10 AC 4. Success: component tests cover mode controls, PDF failure retry, notes save failure preserving text, and shell empty/loading states. Before coding, mark this task from `[ ]` to `[-]` in `tasks.md`; after implementation and verification, call `log_implementation` with structured artifacts for created React components, then mark the task `[x]`._
+
+- [x] 10. Orchestrate reader route and app navigation
+  - File: `frontend/src/components/reader/ReaderPage.tsx`
+  - File: `frontend/src/App.tsx`
+  - File: `frontend/src/App.test.tsx`
+  - Add `/paper/:paperId/reader` route that loads paper detail, opens the reader shell, and navigates back to `/paper/:paperId`.
+  - Use `getPdfBlobUrl` for PDF mode and revoke blob URLs when switching paper/unmounting.
+  - On opening unread papers, mark them as `reading` without overwriting `read` or `skipped`.
+  - Add route tests for opening reader from library detail, loading unread paper as reading, not overwriting read/skipped, switching PDF/Markdown, PDF failure retry state, and missing Markdown parse-needed state.
+  - Purpose: Make the reader reachable without replacing library detail routing.
+  - _Leverage: `fetchPaperDetail`, `getPdfBlobUrl`, `updatePaperReadingState`, `parsePaper`, `ReaderShell`, current App route test mocks_
+  - _Requirements: Requirement 1 AC 2-3, Requirement 4 AC 3-5, Requirement 6 AC 1-6, Requirement 7 AC 4, Requirement 8 AC 1 and 3-4, Requirement 10 AC 4_
+  - _Prompt: Implement the task for spec paperquay-reader-metadata, first run spec-workflow-guide to get the workflow guide then implement the task: Role: React Router integration developer. Task: add the dedicated reader route and route-level orchestration for detail loading, PDF blob loading/cleanup, reading-state auto-marking, parse-needed action, and back navigation. Restrictions: do not change `/paper/:id` to render the reader directly, do not overwrite `read` or `skipped` states on open, do not leak blob URLs, do not bypass `api.ts`, and do not break daily briefing/recommendation links. _Leverage: current `App.tsx`, `App.test.tsx`, frontend API wrappers, and reader components. _Requirements: Requirement 1 AC 2-3, Requirement 4 AC 3-5, Requirement 6 AC 1-6, Requirement 7 AC 4, Requirement 8 AC 1 and 3-4, Requirement 10 AC 4. Success: route-level tests prove reader navigation and failure states while existing library route tests still pass. Before coding, mark this task from `[ ]` to `[-]` in `tasks.md`; after implementation and verification, call `log_implementation` with structured artifacts for route integration, then mark the task `[x]`._
+
+- [x] 11. Add Phase 2 responsive styling
+  - File: `frontend/src/index.css`
+  - Add styling for reader shell, toolbar, Markdown/PDF panes, reader notes panel, metadata edit fields, favorite controls, reading-state controls, and list indicators.
+  - Keep styles compatible with Phase 1 `.library-*` layout and current app shell.
+  - Ensure mobile stacking, visible focus states, stable row dimensions, and non-overflowing button text.
+  - Purpose: Make Phase 2 reader and metadata controls usable without changing product navigation.
+  - _Leverage: existing app shell styles, Phase 1 library CSS, `StatusBadge`, button/icon patterns_
+  - _Requirements: Requirement 6 AC 1-6, Requirement 7 AC 1-3, Non-Functional Usability and Performance_
+  - _Prompt: Implement the task for spec paperquay-reader-metadata, first run spec-workflow-guide to get the workflow guide then implement the task: Role: Product UI/CSS engineer. Task: add responsive, accessible styles for the reader shell and Phase 2 metadata/list controls. Restrictions: do not add a landing page, do not use viewport-width font scaling, do not introduce decorative gradient blobs, do not create a one-note purple or beige palette, do not nest cards inside cards, and do not let button text overflow on mobile. _Leverage: existing `index.css` app shell, library layout, button, badge, and focus patterns. _Requirements: Requirement 6 AC 1-6, Requirement 7 AC 1-3, Non-Functional Usability and Performance. Success: targeted route tests still pass, build passes, and CSS diff scan finds no banned palette/decorative/font-scaling patterns in the new block. Before coding, mark this task from `[ ]` to `[-]` in `tasks.md`; after implementation and verification, call `log_implementation` with structured artifacts for CSS/layout work, then mark the task `[x]`._
+
+- [x] 12. Add final route-level coverage and targeted verification
+  - File: `frontend/src/App.test.tsx`
+  - File: `backend/tests/test_paper_metadata.py`
+  - File: `frontend/src/lib/api.test.ts`
+  - Ensure route-level tests cover metadata save, favorite toggle, reading-state filter/update, notes failure preservation, reader open/back, PDF/Markdown switching, PDF failure retry, missing Markdown parse action, and daily briefing/recommendation compatibility.
+  - Run focused frontend, backend, and build verification; record any blocker honestly.
+  - Purpose: Prove Phase 2 preserves Phase 1 library workflows while adding reader and personal organization behavior.
+  - _Leverage: existing `App.test.tsx` route mocks, backend paper tests, frontend API wrapper tests, `libraryFilters.test.ts`, reader tests_
+  - _Requirements: Requirement 1 AC 1-4, Requirement 2 AC 1-5, Requirement 3 AC 1-4, Requirement 4 AC 1-5, Requirement 5 AC 1-5, Requirement 6 AC 1-6, Requirement 7 AC 1-4, Requirement 8 AC 1-5, Requirement 9 AC 1-4, Requirement 10 AC 1-5_
+  - _Prompt: Implement the task for spec paperquay-reader-metadata, first run spec-workflow-guide to get the workflow guide then implement the task: Role: Full-stack integration test engineer. Task: complete route-level and targeted verification coverage for Phase 2, then run the focused backend/frontend commands and production build. Restrictions: do not skip tests, do not weaken Phase 1 assertions, do not claim completion without command output, do not make large production changes in this final verification task except small fixes required by failing tests, and document any unrelated blocker with exact error output. _Leverage: existing route mocks, backend tests, frontend API tests, library helper tests, and reader tests. _Requirements: Requirement 1 AC 1-4, Requirement 2 AC 1-5, Requirement 3 AC 1-4, Requirement 4 AC 1-5, Requirement 5 AC 1-5, Requirement 6 AC 1-6, Requirement 7 AC 1-4, Requirement 8 AC 1-5, Requirement 9 AC 1-4, Requirement 10 AC 1-5. Success: targeted frontend Vitest, targeted backend pytest, and `npm run build` results are recorded in the implementation log; all tasks are complete or blockers are explicitly documented. Before coding, mark this task from `[ ]` to `[-]` in `tasks.md`; after implementation and verification, call `log_implementation` with structured artifacts for test coverage and verification, then mark the task `[x]`._

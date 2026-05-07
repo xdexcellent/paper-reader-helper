@@ -1,0 +1,14 @@
+{
+  "filePath": ".spec-workflow/specs/paperquay-reader-metadata/tasks.md",
+  "currentVersion": 1,
+  "snapshots": [
+    {
+      "version": 1,
+      "filename": "snapshot-001.json",
+      "timestamp": "2026-05-03T15:03:43.663Z",
+      "trigger": "initial",
+      "approvalId": "approval_1777820623647_l781xpx2x",
+      "approvalTitle": "PaperQuay Phase 2 Reader and Metadata Tasks"
+    }
+  ]
+}
