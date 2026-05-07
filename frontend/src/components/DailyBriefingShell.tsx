@@ -501,6 +501,7 @@ export function DailyBriefingShell({
   }
 
   const briefingMetrics = [
+    { label: '日期', value: displayedBriefingDate },
     { label: '论文候选', value: briefing.paper_count },
     { label: '相关项目', value: briefing.project_count },
     { label: '订阅源', value: briefing.source_count },

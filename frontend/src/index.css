@@ -10,6 +10,9 @@
   --text-primary: #ffffff;
   --text-secondary: rgba(255, 255, 255, 0.8);
   --text-muted: rgba(255, 255, 255, 0.48);
+  --input-bg: #1c1c1e;
+  --input-border: rgba(255, 255, 255, 0.12);
+  --input-focus-border: rgba(0, 113, 227, 0.5);
   
   --accent-blue: #0071e3;
   --accent-blue-soft: rgba(0, 113, 227, 0.2);
@@ -80,6 +83,30 @@ body {
   background: var(--app-gradient);
   background-attachment: fixed; font-weight: 400;
   transition: background 0.3s ease, color 0.3s ease;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+
+input, textarea, select {
+  background: var(--input-bg, #1c1c1e);
+  color: var(--text-primary);
+  border: 1px solid var(--input-border, rgba(255,255,255,0.12));
+  border-radius: 4px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--input-focus-border, rgba(0,113,227,0.5));
+}
+input[type="checkbox"], input[type="radio"] {
+  background: transparent;
+  border: 1px solid var(--input-border);
+  accent-color: var(--accent-blue);
 }
 
 .theme-toggle-btn {
@@ -4093,7 +4120,7 @@ textarea {
 
 .briefing-hero-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -5523,6 +5550,10 @@ textarea {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .briefing-hero-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .briefing-hero-search {
     width: min(360px, 48vw);
   }
@@ -6076,6 +6107,8 @@ textarea {
   padding: 7px 8px 7px 14px;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .briefing-document-outline a::before {
