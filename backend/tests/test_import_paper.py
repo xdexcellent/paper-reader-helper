@@ -75,7 +75,7 @@ def test_import_paper_rejects_directory_path_without_creating_storage_artifacts(
 ) -> None:
     invalid_path = tmp_path / "not-a-pdf"
     invalid_path.mkdir()
-    papers_dir = Path(settings.storage_root) / "papers"
+    papers_dir = Path(settings.effective_storage_root) / "papers"
     before_dirs = {path for path in papers_dir.glob("*") if path.is_dir()} if papers_dir.exists() else set()
 
     response = client.post(
@@ -99,7 +99,7 @@ def test_import_paper_cleans_up_stored_file_when_database_commit_fails(
 ) -> None:
     pdf_path = tmp_path / "commit-fail.pdf"
     pdf_path.write_bytes(b"%PDF-1.4 commit fail")
-    papers_dir = Path(settings.storage_root) / "papers"
+    papers_dir = Path(settings.effective_storage_root) / "papers"
     before_dirs = {path for path in papers_dir.glob("*") if path.is_dir()} if papers_dir.exists() else set()
 
     from app.api.routes import papers as papers_route_module

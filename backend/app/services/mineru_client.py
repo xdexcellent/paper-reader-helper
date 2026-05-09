@@ -38,7 +38,7 @@ class MineruClient:
         self.api_base = (api_base or settings.mineru_api_base).rstrip("/")
         self.api_token = api_token or settings.mineru_api_token
         self.server_base_url = (server_base_url or settings.server_base_url).rstrip("/")
-        self.storage_root = Path(storage_root or settings.storage_root).resolve()
+        self.storage_root = Path(storage_root or settings.effective_storage_root).resolve()
 
     def _headers(self) -> dict[str, str]:
         return {

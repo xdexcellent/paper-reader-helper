@@ -6,7 +6,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from app.core.config import settings
 
-engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})
+engine = create_engine(settings.effective_database_url, connect_args={"check_same_thread": False})
 
 
 @event.listens_for(engine, "connect")
@@ -30,7 +30,7 @@ def ensure_sqlite_parent_dir(database_url: str) -> None:
 
 
 def init_db() -> None:
-    ensure_sqlite_parent_dir(settings.database_url)
+    ensure_sqlite_parent_dir(settings.effective_database_url)
     SQLModel.metadata.create_all(engine)
     _migrate_add_columns()
     _bootstrap_category_data()

@@ -10,6 +10,7 @@ TEST_DB_DIR = "test-data"
 TEST_DATABASE_URL = f"sqlite:///./{TEST_DB_DIR}/test.db"
 
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+os.environ["STORAGE_ROOT"] = f"./{TEST_DB_DIR}/storage"
 os.environ["APP_PASSWORD"] = ""
 os.environ["JWT_SECRET"] = "paper-reader-test-secret"
 

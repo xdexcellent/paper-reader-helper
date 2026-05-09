@@ -8,7 +8,7 @@ from app.core.config import settings
 
 class StorageService:
     def __init__(self, root: str | None = None) -> None:
-        self.root = Path(root or settings.storage_root)
+        self.root = Path(root or settings.effective_storage_root)
         self.root.mkdir(parents=True, exist_ok=True)
 
     def import_pdf(self, src_path: str) -> str:
