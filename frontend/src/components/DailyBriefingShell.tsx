@@ -108,11 +108,10 @@ function cleanMarkdownSummaryLine(line: string): string {
     .trim()
 }
 
-/** Remove the "今日概览" section from briefing markdown (stats already shown in hero area). */
+/** Remove the "今日概览" stats list (日期/订阅源/论文候选/相关项目) from briefing markdown. */
 function stripOverviewSection(markdown: string): string {
-  // Match "## 今日概览" or "| 今日概览" section until the next heading of same or higher level
-  return markdown.replace(/^#{1,3}\s*今日概览[^\n]*\n[\s\S]*?(?=^#{1,3}\s|\Z)/m, '')
-    // Also remove bullet lists that are just stats (日期/订阅源/论文候选/相关项目)
+  // Remove bullet items that are just stats
+  return markdown
     .replace(/^[-*]\s*(?:日期|订阅源|论文候选|论文配额|相关项目)[:：].*$/gm, '')
     // Clean up leftover empty lines
     .replace(/\n{3,}/g, '\n\n')
