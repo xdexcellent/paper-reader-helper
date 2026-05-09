@@ -133,6 +133,7 @@ export function LibraryWorkspaceLayout({
         categoryScope={categoryScope}
         onCategoryScopeChange={onCategoryScopeChange}
         onSelectCategory={onSelectCategory}
+        onRefreshCategories={onRefreshLibrary}
       />
       <main className="library-main">
         <LibraryToolbar

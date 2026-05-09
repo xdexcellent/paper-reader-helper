@@ -110,6 +110,20 @@ export async function createCategory(data: { name: string; description?: string 
   return readJson<Category>(response)
 }
 
+export interface AutoClassifyResult {
+  classified: number
+  created_categories: string[]
+  deleted_categories: string[]
+}
+
+export async function autoClassifyPendingPapers(): Promise<AutoClassifyResult> {
+  const response = await fetch(`${API_BASE}/categories/auto-classify`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  })
+  return readJson<AutoClassifyResult>(response)
+}
+
 export async function fetchPaperDetail(id: number): Promise<PaperDetail> {
   const response = await fetch(`${API_BASE}/papers/${id}`, { headers: getAuthHeaders() })
   return readJson<PaperDetail>(response)

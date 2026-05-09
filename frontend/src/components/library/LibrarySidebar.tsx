@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { autoClassifyPendingPapers } from '../../lib/api'
 import type { Category, Paper } from '../../types'
 import { filterCategoriesByScope } from './libraryFilters'
 import type { CategoryScope } from './libraryTypes'
@@ -9,6 +11,7 @@ type LibrarySidebarProps = {
   categoryScope: CategoryScope
   onCategoryScopeChange: (scope: CategoryScope) => void
   onSelectCategory: (categoryId: number | null) => void
+  onRefreshCategories?: () => void
 }
 
 const categoryScopeOptions: { value: CategoryScope; label: string }[] = [
@@ -25,8 +28,31 @@ export function LibrarySidebar({
   categoryScope,
   onCategoryScopeChange,
   onSelectCategory,
+  onRefreshCategories,
 }: LibrarySidebarProps) {
   const visibleCategories = filterCategoriesByScope(categories, categoryScope)
+  const [isClassifying, setIsClassifying] = useState(false)
+  const [classifyMessage, setClassifyMessage] = useState('')
+
+  const pendingCount = categories.find(c => c.is_pending_bucket)?.paper_count ?? 0
+
+  async function handleAutoClassify() {
+    setIsClassifying(true)
+    setClassifyMessage('')
+    try {
+      const result = await autoClassifyPendingPapers()
+      const parts: string[] = []
+      if (result.classified > 0) parts.push(`已分类 ${result.classified} 篇`)
+      if (result.created_categories.length > 0) parts.push(`新建分类: ${result.created_categories.join(', ')}`)
+      if (result.deleted_categories.length > 0) parts.push(`清理空分类: ${result.deleted_categories.join(', ')}`)
+      setClassifyMessage(parts.length > 0 ? parts.join('；') : '没有需要分类的论文')
+      onRefreshCategories?.()
+    } catch (e) {
+      setClassifyMessage('分类失败，请检查 API Key 配置')
+    } finally {
+      setIsClassifying(false)
+    }
+  }
 
   return (
     <aside className="library-sidebar" aria-label="论文分类">
@@ -52,6 +78,21 @@ export function LibrarySidebar({
           ))}
         </select>
       </label>
+
+      {pendingCount > 0 && (
+        <div className="library-control">
+          <button
+            className="btn btn-action"
+            disabled={isClassifying}
+            onClick={() => void handleAutoClassify()}
+            type="button"
+            title="使用 AI 自动为待确认论文分配分类"
+          >
+            {isClassifying ? <><span className="spinner" />分类中...</> : <>AI 智能分类 ({pendingCount})</>}
+          </button>
+          {classifyMessage && <small style={{ marginTop: '4px', display: 'block', opacity: 0.8 }}>{classifyMessage}</small>}
+        </div>
+      )}
 
       <div className="library-category-list">
         <button
