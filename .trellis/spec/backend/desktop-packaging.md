@@ -118,6 +118,60 @@ a = Analysis(
 )
 ```
 
+### 2.6 Embedding Service — Graceful Degradation
+
+```python
+# backend/app/services/embedding_service.py
+
+# Module-level import check
+try:
+    from sentence_transformers import SentenceTransformer
+    _EMBEDDING_AVAILABLE = True
+except ImportError:
+    _EMBEDDING_AVAILABLE = False
+
+class EmbeddingUnavailableError(Exception):
+    """Raised when sentence-transformers is not installed."""
+    def __init__(self):
+        super().__init__(
+            "Embedding service is not available. "
+            "Install sentence-transformers: pip install sentence-transformers"
+        )
+
+class EmbeddingService:
+    @classmethod
+    def is_available(cls) -> bool:
+        return _EMBEDDING_AVAILABLE
+    
+    async def encode(self, texts: list[str]) -> list[list[float]]:
+        if not _EMBEDDING_AVAILABLE:
+            raise EmbeddingUnavailableError()
+        # ... normal encode logic
+```
+
+### 2.7 Health Check — Embedding Status
+
+```python
+# backend/app/api/routes/health.py
+
+@router.get("")
+async def health_check():
+    return {
+        "status": "ok",
+        "embedding_available": EmbeddingService.is_available(),
+    }
+```
+
+### 2.8 PyInstaller Build Script
+
+```bash
+# backend/build_exe.py — Key behavior:
+# 1. Checks if frontend/dist/index.html exists; builds frontend if not
+# 2. Runs PyInstaller with paper-reader-backend.spec
+# 3. Copies frontend/dist/ into the output directory for DESKTOP_MODE=true serving
+# 4. Output: dist/paper-reader-backend/ directory (onedir mode for Tauri sidecar)
+```
+
 ---
 
 ## 3. Contracts
@@ -158,13 +212,15 @@ The SPA fallback middleware intercepts 404 responses and serves `index.html` for
 | `/assets/*` | Serve from `static_dir/assets/` | `static_dir` set |
 | Any other 404 path | Serve `index.html` from `static_dir` | `static_dir` set |
 
-### 3.4 Health Check Contract (unchanged)
+### 3.4 Health Check Contract
 
 ```
-GET /health → 200 {"status": "ok"}
+GET /health → 200 {"status": "ok", "embedding_available": true|false}
 ```
 
-Used by Tauri frontend to poll backend readiness before showing the app.
+`embedding_available` is `true` when `sentence_transformers` is importable, `false` when not (e.g., PyInstaller build excluding ML deps).
+
+Used by Tauri frontend to poll backend readiness before showing the app, and to determine whether to show the embedding installation notice.
 
 ---
 
@@ -178,7 +234,21 @@ Used by Tauri frontend to poll backend readiness before showing the app.
 | `storage_root` doesn't exist | Auto-create directory | Same as source mode |
 | PyInstaller exe can't find `.env` | Use defaults, log info message | App still works with defaults |
 | sentence-transformers not installed | Return graceful error from embedding endpoint | User installs via settings |
+| Embedding unavailable + semantic search | HTTP 503 with installation instructions | Frontend shows notice |
+| Embedding unavailable + agent tool | Error message with Chinese instructions | Logged and surfaced to user |
 | Sidecar fails to start | Tauri shows error dialog | User checks logs |
+
+### 4.1 Embedding Unavailability Contract
+
+When `sentence_transformers` is not installed (e.g., PyInstaller build excluding ML deps):
+
+1. **`EmbeddingService.is_available()`** returns `False`
+2. **`EmbeddingService.encode()`** raises `EmbeddingUnavailableError` — a custom exception with installation instructions
+3. **`/health`** endpoint includes `"embedding_available": False`
+4. **`/api/papers/search/semantic`** returns HTTP 503 with error message when embedding is unavailable
+5. **Agent tool `semantic_search`** catches `EmbeddingUnavailableError` and returns a user-friendly Chinese error message
+6. **Pipeline `generate_embedding`** sets status to `"unavailable"` (not `"failed"`) when `EmbeddingUnavailableError` is raised
+7. **Frontend** shows `EmbeddingNotice` banner with installation instructions when `embedding_available` is `False`
 
 ---
 
@@ -199,6 +269,14 @@ Used by Tauri frontend to poll backend readiness before showing the app.
 **Base**: Development mode, Vite dev server handles SPA fallback, no middleware needed.
 
 **Bad**: `static_dir` points to wrong directory → 404 for all frontend routes, API still works.
+
+### 5.3 Embedding Unavailability
+
+**Good**: PyInstaller build without `sentence_transformers` → `EmbeddingService.is_available()` returns `False` → health check reports `embedding_available: false` → frontend shows notice with install instructions → semantic search returns 503.
+
+**Base**: Development mode with `sentence_transformers` installed → everything works normally.
+
+**Bad**: Import crashes instead of being caught → 500 on every request involving embeddings.
 
 ---
 
