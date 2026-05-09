@@ -14,7 +14,7 @@ from app.models.paper_block_translation import PaperBlockTranslation
 from app.models.paper_content import PaperContent
 from app.models.paper_embedding import PaperEmbedding
 from app.models.paper_summary import PaperSummary
-from app.services.embedding_service import EmbeddingService
+from app.services.embedding_service import EmbeddingService, EmbeddingUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -314,6 +314,8 @@ class AgentToolRegistry:
 
             try:
                 query_vec = EmbeddingService.encode(query)
+            except EmbeddingUnavailableError:
+                return self._err("Embedding 功能不可用：sentence-transformers 未安装。桌面版默认不包含此依赖，如需启用请安装后重启应用。")
             except Exception as e:
                 return self._err(f"Embedding模型不可用: {e}")
 

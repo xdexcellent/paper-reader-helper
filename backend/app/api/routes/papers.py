@@ -262,6 +262,12 @@ def semantic_search(
     try:
         query_vec = EmbeddingService.encode(query)
     except Exception as e:
+        from app.services.embedding_service import EmbeddingUnavailableError
+        if isinstance(e, EmbeddingUnavailableError):
+            raise HTTPException(
+                status_code=503,
+                detail=str(e),
+            )
         raise HTTPException(status_code=500, detail=f"Embedding模型加载失败: {e}")
 
     embeddings = list(session.exec(select(PaperEmbedding)).all())

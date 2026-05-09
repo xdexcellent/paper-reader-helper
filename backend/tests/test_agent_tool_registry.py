@@ -411,15 +411,21 @@ def test_semantic_search_no_embeddings(client):
     from sqlmodel import Session
     from app.core.db import engine
     from app.services.agent_tool_registry import AgentToolRegistry
+    from app.services.embedding_service import _EMBEDDING_AVAILABLE
 
     registry = AgentToolRegistry()
     with Session(engine) as session:
         _seed_paper(session, title="No Embed Paper")
         result = registry.semantic_search(session, "search query")
 
-    # No embeddings -> empty results, no error
-    assert result["error"] is None
-    assert result["data"]["results"] == []
+    if _EMBEDDING_AVAILABLE:
+        # sentence-transformers is installed: no embeddings in DB → empty results
+        assert result["error"] is None
+        assert result["data"]["results"] == []
+    else:
+        # sentence-transformers is not installed → embedding unavailable error
+        assert result["error"] is not None
+        assert "Embedding" in result["error"] or "不可用" in result["error"]
 
 
 def test_semantic_search_with_embeddings(mocker, client):

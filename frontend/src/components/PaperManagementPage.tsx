@@ -13,6 +13,7 @@ import {
   waitForTaskCompletion,
 } from '../lib/api'
 import type { Category, CategoryScope, Paper, PaperDetail as PaperDetailType } from '../types'
+import { EmbeddingUnavailableNotice } from './EmbeddingNotice'
 import { FeedbackBanner } from './FeedbackBanner'
 import { ImportForm } from './ImportForm'
 import { PaperActions } from './PaperActions'
@@ -637,6 +638,7 @@ export function PaperManagementPage({
                 onEmbed={handleEmbed}
                 onRefresh={handleRefresh}
               />
+              <EmbeddingUnavailableNotice />
               <FeedbackBanner feedbackMessage={feedbackMessage} errorMessage={errorMessage} />
               <PaperDetail
                 paper={detail}

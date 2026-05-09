@@ -534,6 +534,17 @@ export async function embedPaper(paperId: number): Promise<{ task_id: string; me
   return readJson(response)
 }
 
+// ─── Health check ──────────────────────────────────────────
+export interface HealthResponse {
+  status: string
+  embedding_available: boolean
+}
+
+export async function checkHealth(): Promise<HealthResponse> {
+  const response = await fetch(`${API_BASE}/health`)
+  return readJson<HealthResponse>(response, { reportUnauthorized: false })
+}
+
 // ─── Agent ──────────────────────────────────────────────────
 export async function createAgentRun(payload: AgentRunCreatePayload): Promise<AgentRunResponse> {
   const response = await fetch(`${API_BASE}/agent/runs`, {

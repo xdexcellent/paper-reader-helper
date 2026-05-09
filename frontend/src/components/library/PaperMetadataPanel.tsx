@@ -193,7 +193,7 @@ export function PaperMetadataPanel({
   const isBusy = isRunningParse || isRunningSummarize || isRunningEmbed
   const parseDone = !paper.parse_status || paper.parse_status === 'completed' || paper.parse_status === 'done'
   const summaryDone = !paper.summary_status || paper.summary_status === 'completed' || paper.summary_status === 'done'
-  const embedDone = !paper.embedding_status || paper.embedding_status === 'completed' || paper.embedding_status === 'done'
+  const embedDone = !paper.embedding_status || paper.embedding_status === 'completed' || paper.embedding_status === 'done' || paper.embedding_status === 'unavailable'
 
   return (
     <section className="paper-metadata-panel" aria-label="论文详情">

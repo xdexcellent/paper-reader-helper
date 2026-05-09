@@ -191,8 +191,12 @@ class PaperPipelineService:
 
         try:
             vector = EmbeddingService.encode(text)
-        except Exception:
-            paper.embedding_status = "failed"
+        except Exception as exc:
+            from app.services.embedding_service import EmbeddingUnavailableError
+            if isinstance(exc, EmbeddingUnavailableError):
+                paper.embedding_status = "unavailable"
+            else:
+                paper.embedding_status = "failed"
             session.add(paper)
             session.commit()
             raise

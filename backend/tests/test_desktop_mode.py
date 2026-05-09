@@ -208,7 +208,9 @@ class TestSPAFallback:
         # The health endpoint should return JSON
         response = client.get("/health")
         assert response.status_code == 200
-        assert response.json() == {"status": "ok"}
+        data = response.json()
+        assert data["status"] == "ok"
+        assert "embedding_available" in data
         assert "text/html" not in response.headers.get("content-type", "")
 
     def test_api_404_not_intercepted_by_spa(self, tmp_path: Path):
