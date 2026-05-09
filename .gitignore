@@ -35,3 +35,11 @@ vite-dev.*.log
 # Local tool state
 .playwright-mcp/
 .agent/
+
+# Rust / Tauri build artifacts
+src-tauri/target/
+src-tauri/Cargo.lock
+
+# Tauri sidecar binaries (PyInstaller output — Phase 4)
+src-tauri/binaries/backend-*.exe
+src-tauri/binaries/backend-*
