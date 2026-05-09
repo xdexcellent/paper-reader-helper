@@ -126,8 +126,8 @@ def create_agent_run(
         chat_session_id=payload.chat_session_id,
     )
 
-    # Execute synchronously
-    runner.execute_run(session, run)
+    # Execute synchronously (pass thinking mode)
+    runner.execute_run(session, run, thinking=payload.thinking or None)
 
     # Refresh run to get updated status
     session.refresh(run)

@@ -11,6 +11,16 @@ logger = logging.getLogger(__name__)
 BLOCK_TRANSLATION_PROMPT_VERSION = "block-translate-v1"
 
 
+def _thinking_budget(level: str) -> int:
+    """Map thinking level to token budget for the thinking parameter."""
+    budgets = {
+        "low": 4096,
+        "medium": 16384,
+        "high": 32768,
+    }
+    return budgets.get(level, 16384)
+
+
 def _is_meaningful_chinese(text: str | None) -> bool:
     """Validate that text is meaningful Chinese content, not English or section labels.
     
@@ -205,14 +215,33 @@ class DeepSeekClient:
         )
         return {"translated_text": translated.strip(), "model_name": model, "prompt_version": BLOCK_TRANSLATION_PROMPT_VERSION}
 
-    def chat(self, messages: list[dict[str, str]], model: str = "gpt-5.4") -> str:
-        """Send a chat message to DeepSeek API."""
+    def chat(self, messages: list[dict[str, str]], model: str = "gpt-5.4", thinking: str | None = None) -> str:
+        """Send a chat message to DeepSeek API.
+        
+        Args:
+            messages: Chat messages
+            model: Model name
+            thinking: Thinking mode - "none", "low", "medium", "high".
+                      None means use the system default from settings.
+        """
         if not self.api_key:
             return "DeepSeek API Key 未配置，无法进行真实对话。请在 backend/.env 中配置 DEEPSEEK_API_KEY。"
+
+        # Resolve thinking mode
+        effective_thinking = thinking if thinking is not None else settings.deepseek_thinking
+
+        request_body: dict = {
+            "model": model,
+            "messages": messages,
+            "stream": True,
+        }
+
+        # Add thinking parameter if not "none"
+        if effective_thinking and effective_thinking != "none":
+            request_body["thinking"] = {"type": "enabled", "budget_tokens": _thinking_budget(effective_thinking)}
+
         try:
-            return self._stream_chat(self._resolve_chat_endpoint(), {
-                "model": model, "messages": messages, "stream": True,
-            })
+            return self._stream_chat(self._resolve_chat_endpoint(), request_body)
         except Exception as e:
             logger.exception("DeepSeek chat failed")
             return f"对话失败，请稍后再试（错误信息：{str(e)}）。"

@@ -8,6 +8,7 @@ import { AgentProposalList } from './AgentProposalList'
 export function AgentWorkspace() {
   const [prompt, setPrompt] = useState('')
   const [scope, setScope] = useState<AgentScopeConfig>({ scope_type: 'whole_library' })
+  const [thinking, setThinking] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [run, setRun] = useState<AgentRunResponse | null>(null)
@@ -22,6 +23,7 @@ export function AgentWorkspace() {
       const result = await createAgentRun({
         prompt: prompt.trim(),
         scope,
+        thinking,
       })
       setRun(result)
     } catch (err) {
@@ -102,6 +104,21 @@ export function AgentWorkspace() {
     <div className="agent-workspace" data-testid="agent-workspace">
       <div className="agent-prompt-area">
         <AgentScopePicker scope={scope} onChange={setScope} />
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <label htmlFor="agent-thinking" style={{ fontSize: '0.85rem', opacity: 0.8 }}>思考强度</label>
+          <select
+            id="agent-thinking"
+            value={thinking}
+            onChange={(e) => setThinking(e.target.value)}
+            style={{ flex: '0 0 auto' }}
+          >
+            <option value="">系统默认 (high)</option>
+            <option value="none">关闭思考</option>
+            <option value="low">低 (快速)</option>
+            <option value="medium">中</option>
+            <option value="high">高 (深度)</option>
+          </select>
+        </div>
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}

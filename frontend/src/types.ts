@@ -284,6 +284,7 @@ export type AgentRunCreatePayload = {
   prompt: string
   scope: AgentScopeConfig
   model?: string
+  thinking?: string
   chat_session_id?: number | null
 }
 

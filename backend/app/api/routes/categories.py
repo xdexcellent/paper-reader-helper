@@ -209,33 +209,51 @@ def _classify_batch(
 
 
 def _delete_empty_categories(session: Session) -> list[str]:
-    """Delete non-system, non-pending categories that have 0 papers."""
+    """Remove categories that have 0 papers.
+    
+    - Non-system categories: delete entirely
+    - System categories: mark as is_active=False (hidden)
+    - Protected: '待确认' (pending bucket) and '其他' are never removed
+    """
+    from sqlmodel import func
+
     categories = list(session.exec(
         select(Category).where(
-            Category.is_system == False,  # noqa: E712
             Category.is_pending_bucket == False,  # noqa: E712
             Category.is_active == True,  # noqa: E712
         )
     ).all())
 
-    deleted_names: list[str] = []
-    for cat in categories:
-        paper_count = session.exec(
-            select(Paper).where(Paper.primary_category_id == cat.id)
-        ).first()
-        if paper_count is None:
-            # No papers in this category — delete it
-            deleted_names.append(cat.name)
-            # Also delete aliases
-            from app.models.category_alias import CategoryAlias
-            aliases = list(session.exec(
-                select(CategoryAlias).where(CategoryAlias.category_id == cat.id)
-            ).all())
-            for alias in aliases:
-                session.delete(alias)
-            session.delete(cat)
+    # Keep "其他" category even if empty
+    protected_slugs = {"其他", "other"}
 
-    if deleted_names:
+    removed_names: list[str] = []
+    for cat in categories:
+        if cat.slug in protected_slugs:
+            continue
+        # Count papers referencing this category
+        count = session.exec(
+            select(func.count()).select_from(Paper).where(Paper.primary_category_id == cat.id)
+        ).one()
+        if count == 0:
+            removed_names.append(cat.name)
+            if cat.is_system:
+                # System categories: just hide them (ensure_default_categories won't re-create active ones)
+                cat.is_active = False
+                session.add(cat)
+            else:
+                # Non-system categories: delete entirely
+                from app.models.category_alias import CategoryAlias
+                aliases = list(session.exec(
+                    select(CategoryAlias).where(CategoryAlias.category_id == cat.id)
+                ).all())
+                for alias in aliases:
+                    session.delete(alias)
+                session.flush()
+                session.delete(cat)
+                session.flush()
+
+    if removed_names:
         session.commit()
 
-    return deleted_names
+    return removed_names

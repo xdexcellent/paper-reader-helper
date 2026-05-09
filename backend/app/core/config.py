@@ -87,6 +87,9 @@ class Settings(BaseSettings):
     desktop_mode: bool = False
     static_dir: str = ""  # Empty = don't serve static files (dev mode)
 
+    # AI thinking mode: "none", "low", "medium", "high" (default for system calls)
+    deepseek_thinking: str = "high"
+
     @property
     def effective_database_url(self) -> str:
         """Resolve the effective database URL.

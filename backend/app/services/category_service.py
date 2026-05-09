@@ -267,7 +267,7 @@ def initialize_pending_category(session: Session, paper: Paper, *, reason: str) 
 
 
 def list_categories_with_counts(session: Session) -> list[dict]:
-    categories = list_categories(session)
+    categories = list_categories(session, active_only=True)
     papers = list(session.exec(select(Paper)).all())
 
     direct_counts: dict[int, int] = {}

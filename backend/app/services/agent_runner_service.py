@@ -70,7 +70,7 @@ class AgentRunnerService:
         session.refresh(run)
         return run
 
-    def execute_run(self, session: Session, run: AgentRun) -> list[AgentAction]:
+    def execute_run(self, session: Session, run: AgentRun, thinking: str | None = None) -> list[AgentAction]:
         """Execute an Agent run: collect library context, call model, parse proposals."""
         run.status = "running"
         run.updated_at = datetime.now(timezone.utc)
@@ -132,7 +132,7 @@ class AgentRunnerService:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": run.prompt},
             ]
-            response_text = self.client.chat(messages, model=run.model)
+            response_text = self.client.chat(messages, model=run.model, thinking=thinking)
 
             if response_text.startswith("DeepSeek API Key"):
                 raise RuntimeError(response_text)
