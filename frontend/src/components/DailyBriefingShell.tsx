@@ -108,6 +108,16 @@ function cleanMarkdownSummaryLine(line: string): string {
     .trim()
 }
 
+/** Remove the "今日概览" section from briefing markdown (stats already shown in hero area). */
+function stripOverviewSection(markdown: string): string {
+  // Match "## 今日概览" or "| 今日概览" section until the next heading of same or higher level
+  return markdown.replace(/^#{1,3}\s*今日概览[^\n]*\n[\s\S]*?(?=^#{1,3}\s|\Z)/m, '')
+    // Also remove bullet lists that are just stats (日期/订阅源/论文候选/相关项目)
+    .replace(/^[-*]\s*(?:日期|订阅源|论文候选|论文配额|相关项目)[:：].*$/gm, '')
+    // Clean up leftover empty lines
+    .replace(/\n{3,}/g, '\n\n')
+}
+
 function getBriefingHighlights(markdown: string, fallbackPapers: DailyBriefingSnapshot['top_papers']): string[] {
   const lines = markdown
     .split('\n')
@@ -757,7 +767,7 @@ export function DailyBriefingShell({
                     },
                   }}
                 >
-                  {briefing.summary_markdown}
+                  {stripOverviewSection(briefing.summary_markdown)}
                 </ReactMarkdown>
               </div>
 
