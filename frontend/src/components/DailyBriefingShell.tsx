@@ -157,10 +157,13 @@ function getBriefingKeywords(briefing: DailyBriefingSnapshot, papers: Paper[]): 
 }
 
 function getBriefingGeneratedTime(value: string): string {
-  const timePart = value.match(/T(\d{2}:\d{2})/)?.[1]
-  if (timePart) return timePart
-
-  const parsed = new Date(value)
+  // Backend stores UTC timestamps. Convert to local time for display.
+  let dateStr = value
+  // If the string has T but no timezone indicator, assume UTC
+  if (/T\d{2}:\d{2}/.test(dateStr) && !dateStr.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(dateStr)) {
+    dateStr += 'Z'
+  }
+  const parsed = new Date(dateStr)
   if (Number.isNaN(parsed.getTime())) return '--:--'
   return parsed.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
@@ -573,7 +576,11 @@ export function DailyBriefingShell({
         <div className="briefing-hero-auto-bar">
           <span>自动生成：每天 {automationStatus?.schedule_time ?? '12:00'} · {automationStatus?.timezone ?? 'Asia/Shanghai'}</span>
           {automationStatus?.today_run?.completed_at ? (
-            <span>最近完成 {new Date(automationStatus.today_run.completed_at).toLocaleString('zh-CN')}</span>
+            <span>最近完成 {(() => {
+              let s = automationStatus.today_run.completed_at
+              if (/T\d{2}:\d{2}/.test(s) && !s.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(s)) s += 'Z'
+              return new Date(s).toLocaleString('zh-CN')
+            })()}</span>
           ) : null}
           <AutomationSettingsPanel onSaved={handleSettingsSaved} buttonClassName="briefing-auto-settings-btn" buttonLabel="自动化设置" />
         </div>
