@@ -110,9 +110,9 @@ function cleanMarkdownSummaryLine(line: string): string {
 
 /** Remove the "今日概览" stats list (日期/订阅源/论文候选/相关项目) from briefing markdown. */
 function stripOverviewSection(markdown: string): string {
-  // Remove bullet items that are just stats
+  // Remove bullet items that are stats — handles **bold** markers around keywords
   return markdown
-    .replace(/^[-*]\s*(?:日期|订阅源|论文候选|论文配额|相关项目)[:：].*$/gm, '')
+    .replace(/^[-*]\s*\**(?:日期|订阅源|论文候选|论文配额|相关项目)\**[:：].*$/gm, '')
     // Clean up leftover empty lines
     .replace(/\n{3,}/g, '\n\n')
 }
