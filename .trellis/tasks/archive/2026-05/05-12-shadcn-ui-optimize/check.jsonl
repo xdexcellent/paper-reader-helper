@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend spec index for check context"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component conventions — verify migrated components follow existing patterns"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Quality bar — lint/typecheck/build must pass after migration"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Type safety — verify shadcn/ui integration maintains type safety"}
