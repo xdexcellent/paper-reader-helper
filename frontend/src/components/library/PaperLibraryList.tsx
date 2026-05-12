@@ -1,9 +1,10 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import type { Paper, ReadingStatus } from '../../types'
 import { StatusBadge } from '../StatusBadge'
 import { Icon } from '../UiIcon'
 import { collectTags, filterPapers, getPaperReadingStatus } from './libraryFilters'
 import type { FavoriteFilter, LibraryStatusFilter, ReadingStatusFilter } from './libraryTypes'
+import { cn } from '@/lib/utils'
 
 type PaperLibraryListProps = {
   papers: Paper[]
@@ -115,6 +116,7 @@ export function PaperLibraryList({
             placeholder="搜索标题、作者或关键词"
             type="search"
             value={searchQuery}
+            className="paper-search-input"
           />
         </label>
 
@@ -125,6 +127,7 @@ export function PaperLibraryList({
               id="paper-library-status"
               onChange={(event) => onStatusFilterChange(event.target.value as LibraryStatusFilter)}
               value={statusFilter}
+              className="model-select"
             >
               {statusOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -140,6 +143,7 @@ export function PaperLibraryList({
               id="paper-library-favorite"
               onChange={(event) => onFavoriteFilterChange(event.target.value as FavoriteFilter)}
               value={favoriteFilter}
+              className="model-select"
             >
               {favoriteOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -155,6 +159,7 @@ export function PaperLibraryList({
               id="paper-library-reading"
               onChange={(event) => onReadingStatusFilterChange(event.target.value as ReadingStatusFilter)}
               value={readingStatusFilter}
+              className="model-select"
             >
               {readingStatusOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -182,7 +187,7 @@ export function PaperLibraryList({
           {visibleTagsList.map((tag) => (
             <button
               aria-pressed={activeTag === tag}
-              className={`tag-filter-pill${activeTag === tag ? ' active' : ''}`}
+              className={cn('tag-filter-pill', activeTag === tag && 'active')}
               key={tag}
               onClick={() => onTagChange(activeTag === tag ? null : tag)}
               type="button"
@@ -225,7 +230,7 @@ export function PaperLibraryList({
             const extraCount = paperTags.length - 3
             return (
               <div
-                className={`paper-library-row${selectedPaperId === paper.id ? ' selected' : ''}`}
+                className={cn('paper-library-row', selectedPaperId === paper.id && 'selected')}
                 key={paper.id}
               >
                 <button

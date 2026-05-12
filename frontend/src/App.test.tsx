@@ -876,12 +876,16 @@ test('可以切换到每日速览并展示速览壳层', async () => {
   expect(screen.getByRole('button', { name: '已审阅' })).toBeInTheDocument()
   const projectButton = screen.getByRole('button', { name: /相关项目/ })
   expect(projectButton).toBeInTheDocument()
-  expect(screen.queryByText('openai/codex')).not.toBeInTheDocument()
+  // BriefingProjectsSidebar 现在预览前 3 个项目，openai/codex 已在预览中可见
   fireEvent.click(projectButton)
-  expect(await screen.findByRole('dialog', { name: '相关项目简介' })).toBeInTheDocument()
-  expect(screen.getByText('openai/codex')).toBeInTheDocument()
+  expect(await screen.findByRole('dialog', { name: /相关项目简介/ })).toBeInTheDocument()
+  // openai/codex 在预览区和弹窗中都有，用 getAllByText
+  expect(screen.getAllByText('openai/codex').length).toBeGreaterThan(0)
   expect(screen.getByText('AI coding agent')).toBeInTheDocument()
-  expect(screen.getByText('中文摘要：覆盖全部订阅论文')).toBeInTheDocument()
+  // 关闭弹窗后再检查页面级元素（base-ui Dialog 打开时页面其余部分标记为 inert）
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: /相关项目简介/ })).not.toBeInTheDocument())
+  expect(screen.getAllByRole('button', { name: /展开摘要/ }).length).toBeGreaterThan(0)
   expect(screen.getAllByText('关联主题：').length).toBeGreaterThan(0)
   expect(screen.getByText('AI coding')).toBeInTheDocument()
   expect(screen.getAllByRole('button', { name: /展开摘要/ }).length).toBeGreaterThan(0)
@@ -1181,8 +1185,8 @@ test('每日日报顶部控件区使用 command deck 并可展开历史日报', 
 
   expect(await screen.findByText(/2026-04-19/)).toBeInTheDocument()
   expect(screen.getByText(/自动生成：每天 12:00/)).toBeInTheDocument()
-  expect(screen.getByText('订阅源问题反馈')).toBeInTheDocument()
-  expect(screen.getAllByText('arXiv AI RSS').length).toBeGreaterThan(0)
+  // 旧「订阅源问题反馈」标题已重构为 RiskPanelBody，源名在折叠区，改为检测风险面板标题
+  expect(screen.getByText('风险点')).toBeInTheDocument()
 
   fireEvent.click(screen.getByRole('button', { name: '查看历史日报' }))
 
@@ -1853,12 +1857,14 @@ test('reader route loads blocks and rebuilds them without replacing markdown', a
   fireEvent.click(await screen.findByRole('tab', { name: '结构块' }))
 
   expect(await screen.findByText('Initial structured block')).toBeInTheDocument()
-  expect(screen.getAllByRole('heading', { name: 'Metadata Paper' }).length).toBeGreaterThan(0)
+  // 概览 tab 不活跃时 PaperOverviewPanel 中的 "Metadata Paper" heading 不会渲染
+  // 改为检查抽屉标题仍存在
+  expect(screen.getByRole('heading', { name: 'AI 辅助' })).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Rebuild blocks' }))
 
   await waitFor(() => expect(apiMocks.rebuildPaperBlocks).toHaveBeenCalledWith(1))
   expect(await screen.findByText('Rebuilt table block')).toBeInTheDocument()
-  expect(screen.getAllByRole('heading', { name: 'Metadata Paper' }).length).toBeGreaterThan(0)
+  expect(screen.getByRole('heading', { name: 'AI 辅助' })).toBeInTheDocument()
 })
 
 test('reader route translates blocks, shows failures, and retries', async () => {

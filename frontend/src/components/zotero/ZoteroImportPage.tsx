@@ -1,15 +1,27 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ZoteroRunResponse, ZoteroCandidateResponse } from '../../types'
 import {
   scanZotero,
   fetchZoteroCandidates,
   updateCandidateSelection,
   importZoteroCandidates,
+  fetchSourceDist,
 } from '../../lib/api'
 import { filterCandidates } from './zoteroUtils'
 import { ZoteroSourceForm } from './ZoteroSourceForm'
 import { ZoteroCandidateTable } from './ZoteroCandidateTable'
 import { ZoteroImportSummary } from './ZoteroImportSummary'
+import { ZoteroStepBar, type ZoteroStep } from './ZoteroStepBar'
+import { ZoteroEmptyState } from './ZoteroEmptyState'
+import { ZoteroHistoryPanel } from './ZoteroHistoryPanel'
+import { ZoteroMiniStats } from './ZoteroMiniStats'
+import {
+  loadZoteroHistory,
+  recordScan,
+  recordImport,
+  clearZoteroHistory,
+  type ZoteroHistoryEntry,
+} from './zoteroHistory'
 
 export function ZoteroImportPage() {
   const [loading, setLoading] = useState(false)
@@ -18,6 +30,12 @@ export function ZoteroImportPage() {
   const [candidates, setCandidates] = useState<ZoteroCandidateResponse[]>([])
   const [importing, setImporting] = useState(false)
   const [allowMetadataOnly, setAllowMetadataOnly] = useState(false)
+  const [sourcePath, setSourcePath] = useState('')
+  const [formOverride, setFormOverride] = useState<string | undefined>(undefined)
+
+  // 历史与顶部统计
+  const [history, setHistory] = useState<ZoteroHistoryEntry[]>([])
+  const [zoteroPaperCount, setZoteroPaperCount] = useState<number>(-1)
 
   // Filter state
   const [filterCollection, setFilterCollection] = useState('')
@@ -26,16 +44,38 @@ export function ZoteroImportPage() {
   const [filterDuplicateStatus, setFilterDuplicateStatus] = useState('')
   const [filterWarningStatus, setFilterWarningStatus] = useState('')
 
-  async function handleScan(sourcePath: string) {
+  useEffect(() => {
+    setHistory(loadZoteroHistory())
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchSourceDist()
+      .then((items) => {
+        if (cancelled) return
+        const zoteroItem = items.find((item) => item.source === 'zotero')
+        setZoteroPaperCount(zoteroItem?.count ?? 0)
+      })
+      .catch(() => {
+        if (!cancelled) setZoteroPaperCount(0)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [run?.imported_count])
+
+  async function handleScan(path: string) {
     setLoading(true)
     setError('')
     setRun(null)
     setCandidates([])
+    setSourcePath(path)
     try {
-      const result = await scanZotero(sourcePath)
+      const result = await scanZotero(path)
       setRun(result)
       const cands = await fetchZoteroCandidates(result.id)
       setCandidates(cands)
+      setHistory(recordScan(result, path, cands.length))
     } catch (err) {
       setError(err instanceof Error ? err.message : '扫描失败')
     } finally {
@@ -64,11 +104,23 @@ export function ZoteroImportPage() {
         allow_metadata_only: allowMetadataOnly,
       })
       setRun(result)
+      setHistory(recordImport(result))
     } catch (err) {
       setError(err instanceof Error ? err.message : '导入失败')
     } finally {
       setImporting(false)
     }
+  }
+
+  function handleReplayHistory(path: string) {
+    setFormOverride(path)
+    // 允许同一路径被多次“重新扫描”
+    handleScan(path)
+  }
+
+  function handleClearHistory() {
+    clearZoteroHistory()
+    setHistory([])
   }
 
   const filteredCandidates = filterCandidates(candidates, {
@@ -82,10 +134,40 @@ export function ZoteroImportPage() {
   const allCollections = [...new Set(candidates.flatMap((c) => c.mapped_collections))]
   const allTags = [...new Set(candidates.flatMap((c) => c.mapped_tags))]
   const selectedCount = candidates.filter((c) => c.is_selected).length
+  const hasImportResult =
+    run !== null && run.imported_count + run.skipped_count + run.failed_count > 0
+
+  // 推导当前步骤
+  let currentStep: ZoteroStep = 'source'
+  const completedSteps: ZoteroStep[] = []
+  if (candidates.length > 0) {
+    currentStep = hasImportResult ? 'confirm' : 'review'
+    completedSteps.push('source')
+    if (hasImportResult) completedSteps.push('review')
+  }
 
   return (
     <div className="zotero-import-page" data-testid="zotero-import-page">
-      <ZoteroSourceForm onScan={handleScan} loading={loading} error={error} />
+      <ZoteroMiniStats zoteroPaperCount={zoteroPaperCount} history={history} />
+
+      <ZoteroStepBar current={currentStep} completed={completedSteps} />
+
+      <ZoteroSourceForm
+        onScan={handleScan}
+        loading={loading}
+        error={error}
+        valueOverride={formOverride}
+      />
+
+      {candidates.length === 0 && !loading && !error && <ZoteroEmptyState />}
+
+      {candidates.length === 0 && !loading && (
+        <ZoteroHistoryPanel
+          entries={history}
+          onReplay={handleReplayHistory}
+          onClear={handleClearHistory}
+        />
+      )}
 
       {candidates.length > 0 && (
         <>
@@ -169,8 +251,13 @@ export function ZoteroImportPage() {
         </>
       )}
 
-      {run && run.imported_count + run.skipped_count + run.failed_count > 0 && (
-        <ZoteroImportSummary run={run} />
+      {hasImportResult && run && <ZoteroImportSummary run={run} />}
+
+      {/* 保留 sourcePath 以便 run 结束后展示「刚刚扫描了什么」 */}
+      {sourcePath && run && candidates.length > 0 && (
+        <p className="zotero-source-echo" aria-hidden="true">
+          已扫描：<code>{sourcePath}</code>
+        </p>
       )}
     </div>
   )

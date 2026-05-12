@@ -1,6 +1,6 @@
 import { useRef } from 'react'
-
 import { Icon } from './UiIcon'
+import { Button } from '@/components/ui/button'
 
 function openNativeDatePicker(input: HTMLInputElement | null) {
   if (!input) return
@@ -37,9 +37,9 @@ export function BriefingDateField({
   return (
     <div className={`briefing-date-field briefing-date-field-${variant}`}>
       <span className="briefing-date-field-label">{label}</span>
-      <button
-        type="button"
-        className="briefing-date-field-trigger"
+      <Button
+        variant="ghost"
+        size="sm"
         aria-label={ariaLabel}
         onClick={() => openNativeDatePicker(inputRef.current)}
       >
@@ -48,7 +48,7 @@ export function BriefingDateField({
           <small>{helperText}</small>
         </span>
         <Icon name="calendar" className="briefing-date-field-icon" />
-      </button>
+      </Button>
       <input
         ref={inputRef}
         className="briefing-date-field-native"

@@ -3,6 +3,7 @@ import { autoClassifyPendingPapers } from '../../lib/api'
 import type { Category, Paper } from '../../types'
 import { filterCategoriesByScope } from './libraryFilters'
 import type { CategoryScope } from './libraryTypes'
+import { Button } from '@/components/ui/button'
 
 type LibrarySidebarProps = {
   papers: Paper[]
@@ -81,15 +82,16 @@ export function LibrarySidebar({
 
       {pendingCount > 0 && (
         <div className="library-control">
-          <button
-            className="btn btn-action"
+          <Button
+            variant="ghost"
+            size="sm"
             disabled={isClassifying}
             onClick={() => void handleAutoClassify()}
             type="button"
             title="使用 AI 自动为待确认论文分配分类"
           >
             {isClassifying ? <><span className="spinner" />分类中...</> : <>AI 智能分类 ({pendingCount})</>}
-          </button>
+          </Button>
           {classifyMessage && <small style={{ marginTop: '4px', display: 'block', opacity: 0.8 }}>{classifyMessage}</small>}
         </div>
       )}

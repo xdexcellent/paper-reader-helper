@@ -10,9 +10,12 @@ import {
   fetchBriefingHistory,
   runTodayBriefing,
 } from '../lib/api'
+import { Button } from '@/components/ui/button'
 import type {
   AutomationSettings,
+  AutomationSubscriptionIssue,
   AutomationTodayStatus,
+  BriefingFailedItem,
   DailyBriefingHistoryItem,
   DailyBriefingSnapshot,
   Paper,
@@ -219,6 +222,126 @@ function getBriefingOutline(markdown: string): BriefingOutlineItem[] {
 
 function getHeadingId(label: string, level: number, outlineItems: BriefingOutlineItem[]): string | undefined {
   return outlineItems.find((item) => item.label === label && item.level === level)?.id
+}
+
+interface FriendlyIssue {
+  title: string
+  description: string
+  category: 'rate_limit' | 'network' | 'not_found' | 'parse' | 'no_results' | 'other'
+  severity: 'error' | 'warning'
+  suggestion?: string
+}
+
+function classifyIssueMessage(rawMessage: string): FriendlyIssue {
+  const message = rawMessage || ''
+  const lower = message.toLowerCase()
+
+  // 429 速率限制
+  if (message.includes('429') || lower.includes('too many requests') || lower.includes('rate limit')) {
+    return {
+      title: 'API 访问过于频繁',
+      description: '请求被源站限流，稍后将自动重试。',
+      category: 'rate_limit',
+      severity: 'warning',
+      suggestion: '可以减少订阅源数量或降低拉取频率',
+    }
+  }
+
+  // 读超时
+  if (lower.includes('read operation timed out') || lower.includes('timeout') || lower.includes('timed out')) {
+    return {
+      title: '连接超时',
+      description: '源站响应过慢，未能在 30 秒内返回数据。',
+      category: 'network',
+      severity: 'warning',
+      suggestion: '可能需要配置代理或稍后重试',
+    }
+  }
+
+  // JSON 解析失败
+  if (lower.includes('expecting value') || lower.includes('json') || lower.includes('char 0')) {
+    return {
+      title: '数据格式异常',
+      description: '源站返回了空响应或非 JSON 内容。',
+      category: 'parse',
+      severity: 'warning',
+      suggestion: '可能是源站 API 变更或临时故障',
+    }
+  }
+
+  // RSS feed 解析失败
+  if (lower.includes('rss feed parse failed') || lower.includes('xml') || lower.includes('parse')) {
+    return {
+      title: 'RSS 订阅解析失败',
+      description: '该 RSS 源返回的内容无法解析为标准 XML。',
+      category: 'parse',
+      severity: 'warning',
+      suggestion: '建议检查 RSS 地址是否仍然有效',
+    }
+  }
+
+  // 没有返回候选
+  if (message.includes('没有返回任何候选条目')) {
+    return {
+      title: '无新论文',
+      description: '本次拉取没有找到新的候选论文。',
+      category: 'no_results',
+      severity: 'warning',
+      suggestion: '可能源站暂无更新，或关键词太严格',
+    }
+  }
+
+  // 连接被拒 / 网络问题
+  if (message.includes('10061') || lower.includes('connection') || lower.includes('refused')) {
+    return {
+      title: '网络连接失败',
+      description: '无法连接到源站，可能是代理未启动或网络问题。',
+      category: 'network',
+      severity: 'error',
+      suggestion: '请在设置中检查代理配置',
+    }
+  }
+
+  // 404 / 资源不存在
+  if (message.includes('404') || lower.includes('not found')) {
+    return {
+      title: '资源不存在',
+      description: '源站返回 404，请确认订阅配置正确。',
+      category: 'not_found',
+      severity: 'error',
+    }
+  }
+
+  // 5xx 服务器错误
+  if (message.match(/\b5\d{2}\b/)) {
+    return {
+      title: '源站服务异常',
+      description: '源站暂时不可用（5xx 错误），稍后会自动重试。',
+      category: 'network',
+      severity: 'warning',
+    }
+  }
+
+  // 默认：截断长消息
+  const short = message.length > 100 ? message.slice(0, 100) + '…' : message
+  return {
+    title: '其他问题',
+    description: short || '未知错误',
+    category: 'other',
+    severity: 'warning',
+  }
+}
+
+function getIssueCategoryIcon(category: FriendlyIssue['category']): string {
+  const map: Record<FriendlyIssue['category'], string> = {
+    rate_limit: '⏱️',
+    network: '🌐',
+    not_found: '🔍',
+    parse: '📋',
+    no_results: '📭',
+    other: '⚠️',
+  }
+  return map[category]
 }
 
 export function DailyBriefingShell({
@@ -545,16 +668,16 @@ export function DailyBriefingShell({
               <Icon name="search" />
               <input aria-label="搜索论文、项目或关键词" placeholder="搜索论文、项目或关键词" />
             </label>
-            <button
-              type="button"
-              className="briefing-hero-rerun-button"
+            <Button
+              variant="default"
+              size="sm"
               aria-label="生成报告"
               disabled={runningToday}
               onClick={() => void handleRunToday()}
             >
               <Icon name="refresh" />
               {runningToday ? '生成中' : '生成报告'}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -612,22 +735,6 @@ export function DailyBriefingShell({
           </section>
         ) : null}
 
-        {subscriptionIssues.length > 0 ? (
-          <div className="briefing-subscription-issues" aria-label="订阅源问题反馈">
-            <strong>订阅源问题反馈</strong>
-            <ul>
-              {subscriptionIssues.map((issue, index) => (
-                <li
-                  key={`${issue.subscription_id ?? index}-${issue.subscription_name}`}
-                  className={issue.severity === 'error' ? 'error' : 'warning'}
-                >
-                  <span>{issue.subscription_name || issue.source_kind || '未知订阅源'}</span>
-                  <small>{issue.message}</small>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
         {(runningToday || autoPolling) && automationStatus?.today_run && isActiveRunStatus(automationStatus.today_run.status) ? (
           <div className="briefing-progress">
             <div className="briefing-progress-meta">
@@ -823,29 +930,11 @@ export function DailyBriefingShell({
               <span>{riskCount}</span>
             </div>
             {riskCount > 0 ? (
-              <ul className="briefing-risk-list">
-                {error ? (
-                  <li className="error">
-                    <strong>加载异常</strong>
-                    <p>{error}</p>
-                  </li>
-                ) : null}
-                {subscriptionIssues.map((issue, index) => (
-                  <li
-                    key={`${issue.subscription_id ?? index}-${issue.subscription_name}`}
-                    className={issue.severity === 'error' ? 'error' : 'warning'}
-                  >
-                    <strong>{issue.subscription_name || issue.source_kind || '未知订阅源'}</strong>
-                    <p>{issue.message}</p>
-                  </li>
-                ))}
-                {briefing.failed_items?.map((item, index) => (
-                  <li key={`${index}-${item.title}`} className="error">
-                    <strong>{item.title}</strong>
-                    <p>{item.reason}</p>
-                  </li>
-                ))}
-              </ul>
+              <RiskPanelBody
+                error={error}
+                subscriptionIssues={subscriptionIssues}
+                failedItems={briefing.failed_items ?? []}
+              />
             ) : (
               <p className="briefing-side-empty">暂无阻断风险，继续按关键建议阅读即可。</p>
             )}
@@ -870,13 +959,13 @@ export function DailyBriefingShell({
             </div>
             <p>{history.length > 0 ? `最近一条：${history[0].briefing_date}` : '暂无历史日报。'}</p>
             {history.length > 0 ? (
-              <button
-                type="button"
-                className="briefing-side-action"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setIsHistoryOpen(true)}
               >
                 查看历史日报
-              </button>
+              </Button>
             ) : null}
           </aside>
 
@@ -885,18 +974,161 @@ export function DailyBriefingShell({
               <h3>下一步建议</h3>
               <span>3</span>
             </div>
-            <button
-              type="button"
-              className="briefing-side-action primary"
+            <Button
+              variant="default"
+              size="sm"
               onClick={() => setIsReviewed(true)}
             >
               {isReviewed ? '已审阅' : '标记为已审阅'}
-            </button>
+            </Button>
             <a className="briefing-side-action" href="#briefing-summary-content">生成摘要</a>
-            <button type="button" className="briefing-side-action" onClick={handlePrintReport}>一键导出</button>
+            <Button variant="ghost" size="sm" onClick={handlePrintReport}>一键导出</Button>
           </aside>
         </div>
       </div>
     </section>
+  )
+}
+
+interface RiskPanelBodyProps {
+  error: string
+  subscriptionIssues: AutomationSubscriptionIssue[]
+  failedItems: BriefingFailedItem[]
+}
+
+interface GroupedIssue {
+  key: string
+  friendly: FriendlyIssue
+  sources: Array<{ name: string; sourceKind: string }>
+}
+
+function RiskPanelBody({ error, subscriptionIssues, failedItems }: RiskPanelBodyProps) {
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
+
+  // 按类别 + 严重度聚合订阅源问题
+  const groupedSubIssues = useMemo<GroupedIssue[]>(() => {
+    const groups = new Map<string, GroupedIssue>()
+    for (const issue of subscriptionIssues) {
+      const friendly = classifyIssueMessage(issue.message || '')
+      const key = `${friendly.category}-${friendly.severity}`
+      const existing = groups.get(key)
+      const source = {
+        name: issue.subscription_name || issue.source_kind || '未知订阅源',
+        sourceKind: issue.source_kind || '',
+      }
+      if (existing) {
+        existing.sources.push(source)
+      } else {
+        groups.set(key, { key, friendly, sources: [source] })
+      }
+    }
+    return [...groups.values()].sort((a, b) => {
+      // 错误级别在前
+      if (a.friendly.severity !== b.friendly.severity) {
+        return a.friendly.severity === 'error' ? -1 : 1
+      }
+      // 数量多的在前
+      return b.sources.length - a.sources.length
+    })
+  }, [subscriptionIssues])
+
+  function toggle(key: string) {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }
+
+  return (
+    <ul className="briefing-risk-list">
+      {error ? (
+        <li className="error">
+          <div className="risk-item-header">
+            <span className="risk-icon">🚨</span>
+            <strong>加载异常</strong>
+          </div>
+          <p>{error}</p>
+        </li>
+      ) : null}
+
+      {groupedSubIssues.map((group) => {
+        const isExpanded = expandedKeys.has(group.key)
+        return (
+          <li
+            key={group.key}
+            className={group.friendly.severity === 'error' ? 'error' : 'warning'}
+          >
+            <div className="risk-item-header">
+              <span className="risk-icon">{getIssueCategoryIcon(group.friendly.category)}</span>
+              <strong>{group.friendly.title}</strong>
+              {group.sources.length > 1 ? (
+                <span className="risk-count-badge">×{group.sources.length}</span>
+              ) : null}
+            </div>
+            <p className="risk-description">{group.friendly.description}</p>
+            {group.friendly.suggestion ? (
+              <p className="risk-suggestion">💡 {group.friendly.suggestion}</p>
+            ) : null}
+            <button
+              type="button"
+              className="risk-toggle-sources"
+              onClick={() => toggle(group.key)}
+            >
+              {isExpanded ? '▲ 收起' : `▼ 查看受影响的 ${group.sources.length} 个订阅源`}
+            </button>
+            {isExpanded ? (
+              <ul className="risk-source-list">
+                {group.sources.map((src, idx) => (
+                  <li key={`${src.name}-${idx}`}>
+                    <span className="risk-source-name">{src.name}</span>
+                    {src.sourceKind ? (
+                      <span className="risk-source-kind">{src.sourceKind}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </li>
+        )
+      })}
+
+      {failedItems.length > 0 ? (
+        <li className="error">
+          <div className="risk-item-header">
+            <span className="risk-icon">📄</span>
+            <strong>论文处理失败</strong>
+            {failedItems.length > 1 ? (
+              <span className="risk-count-badge">×{failedItems.length}</span>
+            ) : null}
+          </div>
+          <p className="risk-description">
+            {failedItems.length === 1
+              ? failedItems[0].title
+              : `今日有 ${failedItems.length} 篇论文下载或解析失败`}
+          </p>
+          {failedItems.length > 1 ? (
+            <details className="risk-failed-details">
+              <summary>查看详情</summary>
+              <ul className="risk-source-list">
+                {failedItems.map((item, idx) => (
+                  <li key={`${item.title}-${idx}`}>
+                    <span className="risk-source-name">{item.title}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : (
+            <p className="risk-suggestion">
+              💡 {failedItems[0].reason || '可以在论文库中重试处理'}
+            </p>
+          )}
+        </li>
+      ) : null}
+    </ul>
   )
 }

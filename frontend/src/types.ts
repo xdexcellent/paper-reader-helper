@@ -137,6 +137,8 @@ export interface AutomationSettings {
   project_sidebar_enabled: boolean
   http_proxy?: string | null
   https_proxy?: string | null
+  research_direction?: string
+  research_keywords?: string
 }
 
 export interface AutomationRunStatus {

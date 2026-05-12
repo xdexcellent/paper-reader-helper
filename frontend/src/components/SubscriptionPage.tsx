@@ -42,6 +42,10 @@ interface SubscriptionItem {
 
 const SOURCE_KIND_OPTIONS = [
   { value: 'arxiv', label: 'arXiv', description: '关键词搜索 arXiv 论文' },
+  { value: 'semantic_scholar', label: 'Semantic Scholar', description: '语义学术搜索，覆盖全学科' },
+  { value: 'pwc', label: 'Papers With Code', description: '带代码实现的最新论文' },
+  { value: 'dblp', label: 'DBLP', description: '计算机科学文献数据库' },
+  { value: 'crossref', label: 'CrossRef', description: '跨学科 DOI 论文搜索' },
   { value: 'rss', label: 'RSS', description: '通过 RSS/Atom 订阅源获取论文' },
   { value: 'openreview', label: 'OpenReview', description: '按会议/邀请获取 OpenReview 论文' },
   { value: 'hf_papers', label: 'HF Papers', description: '抓取 Hugging Face Daily Papers' },
@@ -54,6 +58,10 @@ const SOURCE_KIND_COLORS: Record<string, string> = {
   openreview: '#8c1515',
   hf_papers: '#ff9d00',
   github_trending: '#238636',
+  semantic_scholar: '#1857b6',
+  pwc: '#21cbce',
+  dblp: '#004f9f',
+  crossref: '#f36e21',
 }
 
 interface SubscriptionPreset {
@@ -95,6 +103,51 @@ const SUBSCRIPTION_PRESETS: SubscriptionPreset[] = [
     query: 'cat:cs.CL',
     fetch_limit: 10,
     description: 'arXiv 直供 PDF',
+  },
+  {
+    name: 'Semantic Scholar - LLM',
+    source_kind: 'semantic_scholar',
+    query: 'large language model',
+    config: { open_access_only: 'true' },
+    fetch_limit: 10,
+    description: '语义搜索，自动找开放获取 PDF',
+  },
+  {
+    name: 'Semantic Scholar - Diffusion',
+    source_kind: 'semantic_scholar',
+    query: 'diffusion model generation',
+    config: { open_access_only: 'true' },
+    fetch_limit: 10,
+    description: '语义搜索，自动找开放获取 PDF',
+  },
+  {
+    name: 'Papers With Code - 最新',
+    source_kind: 'pwc',
+    config: { mode: 'latest' },
+    fetch_limit: 10,
+    description: 'PwC 最新论文，带代码实现',
+  },
+  {
+    name: 'Papers With Code - 热门',
+    source_kind: 'pwc',
+    config: { mode: 'trending' },
+    fetch_limit: 10,
+    description: 'PwC 热门论文，带代码实现',
+  },
+  {
+    name: 'DBLP - Transformer',
+    source_kind: 'dblp',
+    query: 'transformer attention',
+    fetch_limit: 10,
+    description: 'CS 文献数据库，覆盖所有顶会',
+  },
+  {
+    name: 'CrossRef - Deep Learning',
+    source_kind: 'crossref',
+    query: 'deep learning',
+    config: { sort: 'published', order: 'desc' },
+    fetch_limit: 10,
+    description: '跨学科搜索，覆盖期刊和会议',
   },
   {
     name: 'arXiv RSS - cs.AI',
@@ -238,7 +291,7 @@ export function SubscriptionPage() {
 
   function isCreateValid(): boolean {
     if (!newName.trim()) return false
-    if (newSourceKind === 'arxiv' || newSourceKind === 'rss') {
+    if (newSourceKind === 'arxiv' || newSourceKind === 'rss' || newSourceKind === 'semantic_scholar' || newSourceKind === 'dblp' || newSourceKind === 'crossref') {
       return !!newQuery.trim()
     }
     if (newSourceKind === 'openreview') {
@@ -309,7 +362,7 @@ export function SubscriptionPage() {
 
   function isEditValid(): boolean {
     if (!editName.trim()) return false
-    if (editSourceKind === 'arxiv' || editSourceKind === 'rss') {
+    if (editSourceKind === 'arxiv' || editSourceKind === 'rss' || editSourceKind === 'semantic_scholar' || editSourceKind === 'dblp' || editSourceKind === 'crossref') {
       return !!editQuery.trim()
     }
     if (editSourceKind === 'openreview') {
@@ -512,6 +565,102 @@ export function SubscriptionPage() {
               </div>
             )}
 
+            {(newSourceKind === 'semantic_scholar') && (
+              <>
+                <div className="form-group">
+                  <label>搜索关键词</label>
+                  <input value={newQuery} onChange={e => setNewQuery(e.target.value)} placeholder="如: large language model, reinforcement learning" />
+                </div>
+                <div className="form-group">
+                  <label>年份过滤（可选）</label>
+                  <input value={newConfig.year || ''} onChange={e => setNewConfig(c => ({ ...c, year: e.target.value }))} placeholder="如: 2024 或 2023-2024" />
+                </div>
+                <div className="form-group">
+                  <label>学科领域（可选）</label>
+                  <input value={newConfig.fields_of_study || ''} onChange={e => setNewConfig(c => ({ ...c, fields_of_study: e.target.value }))} placeholder="如: Computer Science" />
+                </div>
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input type="checkbox" id="s2-oa" checked={newConfig.open_access_only === 'true'} onChange={e => setNewConfig(c => ({ ...c, open_access_only: e.target.checked ? 'true' : '' }))} />
+                  <label htmlFor="s2-oa" style={{ margin: 0 }}>仅开放获取（有 PDF 下载）</label>
+                </div>
+              </>
+            )}
+
+            {(newSourceKind === 'pwc') && (
+              <>
+                <div className="form-group">
+                  <label>搜索关键词（可选，留空则按模式获取）</label>
+                  <input value={newQuery} onChange={e => setNewQuery(e.target.value)} placeholder="如: object detection, image segmentation" />
+                </div>
+                <div className="form-group">
+                  <label>获取模式</label>
+                  <select
+                    value={newConfig.mode || 'latest'}
+                    onChange={e => setNewConfig(c => ({ ...c, mode: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', background: 'var(--bg-layer-1)', color: 'var(--text-primary)', fontSize: 14 }}
+                  >
+                    <option value="latest">最新论文</option>
+                    <option value="trending">热门论文</option>
+                  </select>
+                </div>
+              </>
+            )}
+
+            {(newSourceKind === 'dblp') && (
+              <>
+                <div className="form-group">
+                  <label>搜索关键词</label>
+                  <input value={newQuery} onChange={e => setNewQuery(e.target.value)} placeholder="如: transformer attention mechanism" />
+                </div>
+                <div className="form-group">
+                  <label>论文类型（可选）</label>
+                  <select
+                    value={newConfig.type || ''}
+                    onChange={e => setNewConfig(c => ({ ...c, type: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', background: 'var(--bg-layer-1)', color: 'var(--text-primary)', fontSize: 14 }}
+                  >
+                    <option value="">全部类型</option>
+                    <option value="Conference and Workshop Papers">会议论文</option>
+                    <option value="Journal Articles">期刊论文</option>
+                    <option value="Informal and Other Publications">预印本/其他</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>年份（可选）</label>
+                  <input value={newConfig.year || ''} onChange={e => setNewConfig(c => ({ ...c, year: e.target.value }))} placeholder="如: 2024" />
+                </div>
+              </>
+            )}
+
+            {(newSourceKind === 'crossref') && (
+              <>
+                <div className="form-group">
+                  <label>搜索关键词</label>
+                  <input value={newQuery} onChange={e => setNewQuery(e.target.value)} placeholder="如: deep learning medical imaging" />
+                </div>
+                <div className="form-group">
+                  <label>起始日期（可选）</label>
+                  <input value={newConfig.from_date || ''} onChange={e => setNewConfig(c => ({ ...c, from_date: e.target.value }))} placeholder="如: 2024-01-01" />
+                </div>
+                <div className="form-group">
+                  <label>排序方式</label>
+                  <select
+                    value={newConfig.sort || 'published'}
+                    onChange={e => setNewConfig(c => ({ ...c, sort: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', background: 'var(--bg-layer-1)', color: 'var(--text-primary)', fontSize: 14 }}
+                  >
+                    <option value="published">发表时间</option>
+                    <option value="relevance">相关性</option>
+                    <option value="is-referenced-by-count">引用数</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>邮箱（可选，提供后获得更高 API 速率）</label>
+                  <input value={newConfig.mailto || ''} onChange={e => setNewConfig(c => ({ ...c, mailto: e.target.value }))} placeholder="如: your@email.com" />
+                </div>
+              </>
+            )}
+
             {(newSourceKind === 'openreview') && (
               <>
                 <div className="form-group">
@@ -583,7 +732,7 @@ export function SubscriptionPage() {
               const kind = sub.source_kind || sub.type || 'arxiv'
               const kindLabel = SOURCE_KIND_OPTIONS.find(o => o.value === kind)?.label ?? kind
               const kindColor = SOURCE_KIND_COLORS[kind] || 'var(--text-muted)'
-              const queryLabel = kind === 'rss' ? 'Feed URL' : kind === 'arxiv' ? '关键词' : '配置'
+              const queryLabel = kind === 'rss' ? 'Feed URL' : kind === 'arxiv' || kind === 'semantic_scholar' || kind === 'dblp' || kind === 'crossref' || kind === 'pwc' ? '关键词' : '配置'
               let queryDisplay: string
               if (kind === 'openreview') {
                 const venueOrInv = getStringConfigValue(sub.config, 'venue') || getStringConfigValue(sub.config, 'invitation') || '—'
@@ -594,6 +743,20 @@ export function SubscriptionPage() {
                 const language = getStringConfigValue(sub.config, 'language') || '全部语言'
                 const since = getStringConfigValue(sub.config, 'since') || 'daily'
                 queryDisplay = sub.query || `${language} / ${since}`
+              } else if (kind === 'pwc') {
+                const mode = getStringConfigValue(sub.config, 'mode') || 'latest'
+                const modeLabel = mode === 'trending' ? '热门' : '最新'
+                queryDisplay = sub.query ? `${sub.query} (${modeLabel})` : modeLabel
+              } else if (kind === 'semantic_scholar') {
+                const year = getStringConfigValue(sub.config, 'year')
+                queryDisplay = sub.query + (year ? ` · 年份: ${year}` : '')
+              } else if (kind === 'dblp') {
+                const pubType = getStringConfigValue(sub.config, 'type')
+                queryDisplay = sub.query + (pubType ? ` · ${pubType}` : '')
+              } else if (kind === 'crossref') {
+                const sort = getStringConfigValue(sub.config, 'sort') || 'published'
+                const sortLabel = sort === 'relevance' ? '相关性' : sort === 'is-referenced-by-count' ? '引用数' : '发表时间'
+                queryDisplay = `${sub.query} · 排序: ${sortLabel}`
               } else {
                 queryDisplay = sub.query || '—'
               }
@@ -683,6 +846,98 @@ export function SubscriptionPage() {
                         <label>RSS / Atom Feed URL</label>
                         <input value={editQuery} onChange={e => setEditQuery(e.target.value)} placeholder="如: https://rss.arxiv.org/rss/cs.AI" />
                       </div>
+                    )}
+                    {(editSourceKind === 'semantic_scholar') && (
+                      <>
+                        <div className="form-group">
+                          <label>搜索关键词</label>
+                          <input value={editQuery} onChange={e => setEditQuery(e.target.value)} placeholder="如: large language model" />
+                        </div>
+                        <div className="form-group">
+                          <label>年份过滤（可选）</label>
+                          <input value={editConfig.year || ''} onChange={e => setEditConfig(c => ({ ...c, year: e.target.value }))} placeholder="如: 2024" />
+                        </div>
+                        <div className="form-group">
+                          <label>学科领域（可选）</label>
+                          <input value={editConfig.fields_of_study || ''} onChange={e => setEditConfig(c => ({ ...c, fields_of_study: e.target.value }))} placeholder="如: Computer Science" />
+                        </div>
+                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input type="checkbox" id="s2-oa-edit" checked={editConfig.open_access_only === 'true'} onChange={e => setEditConfig(c => ({ ...c, open_access_only: e.target.checked ? 'true' : '' }))} />
+                          <label htmlFor="s2-oa-edit" style={{ margin: 0 }}>仅开放获取</label>
+                        </div>
+                      </>
+                    )}
+                    {(editSourceKind === 'pwc') && (
+                      <>
+                        <div className="form-group">
+                          <label>搜索关键词（可选）</label>
+                          <input value={editQuery} onChange={e => setEditQuery(e.target.value)} placeholder="如: object detection" />
+                        </div>
+                        <div className="form-group">
+                          <label>获取模式</label>
+                          <select
+                            value={editConfig.mode || 'latest'}
+                            onChange={e => setEditConfig(c => ({ ...c, mode: e.target.value }))}
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', background: 'var(--bg-layer-1)', color: 'var(--text-primary)', fontSize: 14 }}
+                          >
+                            <option value="latest">最新论文</option>
+                            <option value="trending">热门论文</option>
+                          </select>
+                        </div>
+                      </>
+                    )}
+                    {(editSourceKind === 'dblp') && (
+                      <>
+                        <div className="form-group">
+                          <label>搜索关键词</label>
+                          <input value={editQuery} onChange={e => setEditQuery(e.target.value)} placeholder="如: transformer" />
+                        </div>
+                        <div className="form-group">
+                          <label>论文类型（可选）</label>
+                          <select
+                            value={editConfig.type || ''}
+                            onChange={e => setEditConfig(c => ({ ...c, type: e.target.value }))}
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', background: 'var(--bg-layer-1)', color: 'var(--text-primary)', fontSize: 14 }}
+                          >
+                            <option value="">全部类型</option>
+                            <option value="Conference and Workshop Papers">会议论文</option>
+                            <option value="Journal Articles">期刊论文</option>
+                            <option value="Informal and Other Publications">预印本/其他</option>
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label>年份（可选）</label>
+                          <input value={editConfig.year || ''} onChange={e => setEditConfig(c => ({ ...c, year: e.target.value }))} placeholder="如: 2024" />
+                        </div>
+                      </>
+                    )}
+                    {(editSourceKind === 'crossref') && (
+                      <>
+                        <div className="form-group">
+                          <label>搜索关键词</label>
+                          <input value={editQuery} onChange={e => setEditQuery(e.target.value)} placeholder="如: deep learning" />
+                        </div>
+                        <div className="form-group">
+                          <label>起始日期（可选）</label>
+                          <input value={editConfig.from_date || ''} onChange={e => setEditConfig(c => ({ ...c, from_date: e.target.value }))} placeholder="如: 2024-01-01" />
+                        </div>
+                        <div className="form-group">
+                          <label>排序方式</label>
+                          <select
+                            value={editConfig.sort || 'published'}
+                            onChange={e => setEditConfig(c => ({ ...c, sort: e.target.value }))}
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', background: 'var(--bg-layer-1)', color: 'var(--text-primary)', fontSize: 14 }}
+                          >
+                            <option value="published">发表时间</option>
+                            <option value="relevance">相关性</option>
+                            <option value="is-referenced-by-count">引用数</option>
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label>邮箱（可选）</label>
+                          <input value={editConfig.mailto || ''} onChange={e => setEditConfig(c => ({ ...c, mailto: e.target.value }))} placeholder="如: your@email.com" />
+                        </div>
+                      </>
                     )}
                     {(editSourceKind === 'openreview') && (
                       <>

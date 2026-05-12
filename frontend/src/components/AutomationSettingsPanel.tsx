@@ -123,6 +123,46 @@ export function AutomationSettingsPanel({
             />
           </label>
           <div className="automation-settings-section">
+            <h4>🎯 研究方向（用于个性化日报）</h4>
+            <p className="automation-settings-summary">
+              告诉 AI 你的研究方向，每日速览将按相关性排序、优先点评相关论文。
+            </p>
+            <label>
+              <span>研究方向描述</span>
+              <textarea
+                aria-label="研究方向描述"
+                rows={2}
+                placeholder="如: 计算机视觉、扩散模型、CS 在医学中的应用"
+                value={settings.research_direction || ''}
+                onChange={(event) => setSettings({ ...settings, research_direction: event.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-subtle)',
+                  background: 'var(--input-bg)',
+                  color: 'var(--text-primary)',
+                  fontSize: 14,
+                  fontFamily: 'inherit',
+                  resize: 'vertical',
+                }}
+              />
+            </label>
+            <label>
+              <span>关键词（逗号分隔，用于相关性打分）</span>
+              <input
+                aria-label="研究关键词"
+                type="text"
+                placeholder="如: diffusion, medical image, segmentation, CT, MRI, vision transformer"
+                value={settings.research_keywords || ''}
+                onChange={(event) => setSettings({ ...settings, research_keywords: event.target.value })}
+              />
+            </label>
+            <p className="automation-settings-summary" style={{ fontSize: 11, marginTop: 4 }}>
+              关键词支持中英文，逗号/顿号分隔。匹配到的论文每个关键词 +15 分（最多 +60）。
+            </p>
+          </div>
+          <div className="automation-settings-section">
             <h4>代理设置（用于访问 HuggingFace、GitHub 等外部服务）</h4>
             <p className="automation-settings-summary">
               如果后台出现 WinError 10061，通常表示代理地址已被使用，但本机代理程序未启动或端口不一致。

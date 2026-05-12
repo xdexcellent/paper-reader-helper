@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 
 import type { Paper } from '../../types'
 import { Icon } from '../UiIcon'
 import { findDuplicateByTitle } from './libraryFilters'
 import type { ImportConfirmPayload } from './libraryTypes'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 type ImportConfirmDialogProps = {
   isSubmitting: boolean
@@ -102,22 +104,22 @@ export function ImportConfirmDialog({
       aria-labelledby="import-confirm-title"
       className="import-confirm-dialog"
       onSubmit={handleSubmit}
-      role="dialog"
     >
       <div className="import-confirm-header">
         <div>
           <p className="panel-chip">PDF 导入</p>
           <h2 id="import-confirm-title">确认导入论文</h2>
         </div>
-        <button
-          aria-label="取消导入"
-          className="icon-button"
+        <Button
+          variant="ghost"
+          size="icon-sm"
           disabled={isSubmitting}
           onClick={onClose}
           type="button"
+          aria-label="取消导入"
         >
           <Icon name="close" />
-        </button>
+        </Button>
       </div>
 
       <div
@@ -147,14 +149,15 @@ export function ImportConfirmDialog({
           type="file"
         />
 
-        <button
-          className="btn btn-ghost"
+        <Button
+          variant="ghost"
+          size="sm"
           disabled={isSubmitting}
           onClick={() => fileInputRef.current?.click()}
           type="button"
         >
           选择 PDF
-        </button>
+        </Button>
 
         {selectedFile && (
           <div className="upload-selected-file" title={selectedFile.name}>
@@ -166,7 +169,7 @@ export function ImportConfirmDialog({
       <div className="import-confirm-fields">
         <label className="form-group" htmlFor="import-confirm-title-input">
           <span>标题</span>
-          <input
+          <Input
             ref={titleInputRef}
             disabled={isSubmitting}
             id="import-confirm-title-input"
@@ -177,7 +180,7 @@ export function ImportConfirmDialog({
 
         <label className="form-group" htmlFor="import-confirm-source-input">
           <span>来源</span>
-          <input
+          <Input
             disabled={isSubmitting}
             id="import-confirm-source-input"
             onChange={(event) => setSource(event.target.value)}
@@ -201,10 +204,10 @@ export function ImportConfirmDialog({
       )}
 
       <div className="import-confirm-actions">
-        <button className="btn btn-action" disabled={isSubmitting} onClick={onClose} type="button">
+        <Button variant="outline" size="sm" disabled={isSubmitting} onClick={onClose} type="button">
           取消
-        </button>
-        <button className="btn btn-primary" disabled={isSubmitting} type="submit">
+        </Button>
+        <Button variant="default" size="sm" disabled={isSubmitting} type="submit">
           {isSubmitting ? (
             <>
               <span className="spinner" />
@@ -213,7 +216,7 @@ export function ImportConfirmDialog({
           ) : (
             '确认导入'
           )}
-        </button>
+        </Button>
       </div>
     </form>
   )

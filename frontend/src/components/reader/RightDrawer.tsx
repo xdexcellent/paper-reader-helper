@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import type { PaperBlock, PaperDetail } from '../../types'
 import { PaperOverviewPanel } from '../library/PaperOverviewPanel'
-import { Drawer } from '../Drawer'
+import { AppDrawer } from '../Drawer'
 import type { DrawerTab } from '../Drawer'
 import { ReaderBlocksPanel } from './ReaderBlocksPanel'
 import { ReaderNotesPanel } from './ReaderNotesPanel'
@@ -86,7 +86,7 @@ export function RightDrawer({
   }
 
   return (
-    <Drawer
+    <AppDrawer
       isOpen={isOpen}
       onClose={onClose}
       title="AI 辅助"
@@ -96,6 +96,6 @@ export function RightDrawer({
       width={380}
     >
       {renderTabContent()}
-    </Drawer>
+    </AppDrawer>
   )
 }

@@ -1,5 +1,6 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { Icon } from '../UiIcon'
+import { Button } from '@/components/ui/button'
 
 type LibraryToolbarProps = {
   isLoadingLibrary: boolean
@@ -46,51 +47,43 @@ export function LibraryToolbar({
       </div>
 
       <div className="library-toolbar-actions">
-        <button aria-label="导入 PDF" className="btn btn-primary" onClick={onOpenImport} type="button">
+        <Button variant="default" size="sm" onClick={onOpenImport}>
           <Icon name="upload" />
           导入 PDF
-        </button>
-        <button
-          aria-label="新建分类"
-          className="btn btn-action"
-          onClick={onToggleCreateCategory}
-          type="button"
-        >
+        </Button>
+        <Button variant="outline" size="sm" onClick={onToggleCreateCategory}>
           <Icon name="library" />
           新建分类
-        </button>
-        <button aria-label="刷新" className="btn btn-action" onClick={onRefresh} type="button">
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => void onRefresh()}>
           <Icon name="refresh" />
           刷新
-        </button>
+        </Button>
 
         {parseFailedCount > 0 && (
           <div className="more-menu-wrapper">
-            <button
-              aria-label="更多操作"
-              className="btn btn-action"
-              onClick={() => setMoreOpen((v) => !v)}
-              type="button"
-            >
+            <Button variant="outline" size="sm" onClick={() => setMoreOpen((v) => !v)} aria-label="更多操作">
               更多操作 ▾
-            </button>
+            </Button>
             {moreOpen && (
               <div className="more-menu-dropdown">
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   disabled={isBulkBusy}
-                  onClick={() => { onRetryParseFailed(); setMoreOpen(false) }}
-                  type="button"
+                  onClick={() => { void onRetryParseFailed(); setMoreOpen(false) }}
                 >
                   {isRetryingParseFailed ? '重试中...' : '重试解析失败'}
-                </button>
-                <button
-                  className="danger"
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
                   disabled={isBulkBusy}
-                  onClick={() => { onDeleteParseFailed(); setMoreOpen(false) }}
-                  type="button"
+                  onClick={() => { void onDeleteParseFailed(); setMoreOpen(false) }}
                 >
                   {isDeletingParseFailed ? '删除中...' : '删除失败记录'}
-                </button>
+                </Button>
               </div>
             )}
           </div>

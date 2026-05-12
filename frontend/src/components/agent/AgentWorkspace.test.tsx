@@ -11,6 +11,7 @@ const apiMocks = vi.hoisted(() => ({
   rejectAgentAction: vi.fn(),
   revertAgentAction: vi.fn(),
   fetchAgentRunDetail: vi.fn(),
+  fetchAgentRuns: vi.fn(),
 }))
 
 vi.mock('../../lib/api', () => apiMocks)
@@ -27,6 +28,7 @@ beforeEach(() => {
   apiMocks.approveAgentAction.mockRejectedValue(new Error('not called'))
   apiMocks.rejectAgentAction.mockRejectedValue(new Error('not called'))
   apiMocks.revertAgentAction.mockRejectedValue(new Error('not called'))
+  apiMocks.fetchAgentRuns.mockResolvedValue([])
 })
 
 test('renders agent workspace with scope picker and prompt input', async () => {

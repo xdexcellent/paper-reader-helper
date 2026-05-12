@@ -1,12 +1,20 @@
-import { type ReactNode } from 'react'
+﻿import { type ReactNode } from 'react'
 import { Icon } from './UiIcon'
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/components/ui/drawer'
+import { Button } from '@/components/ui/button'
 
 export type DrawerTab = {
   key: string
   label: string
 }
 
-type DrawerProps = {
+type AppDrawerProps = {
   isOpen: boolean
   onClose: () => void
   width?: number
@@ -17,40 +25,27 @@ type DrawerProps = {
   children: ReactNode
 }
 
-export function Drawer({
+export function AppDrawer({
   isOpen,
   onClose,
-  width = 380,
+  width,
   title,
   tabs,
   activeTab,
   onTabChange,
   children,
-}: DrawerProps) {
+}: AppDrawerProps) {
   return (
-    <div
-      className={`drawer-overlay${isOpen ? ' open' : ''}`}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-      aria-hidden={!isOpen}
-    >
-      <div
-        className="drawer-panel"
-        style={{ width: `${width}px`, maxWidth: '100vw' }}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title ?? '抽屉面板'}
-      >
-        <header className="drawer-header">
-          <h2>{title ?? ''}</h2>
-          <button
-            className="drawer-close-btn"
-            onClick={onClose}
-            type="button"
-            aria-label="关闭抽屉"
-          >
-            <Icon name="close" />
-          </button>
-        </header>
+    <Drawer open={isOpen} onOpenChange={(open) => { if (!open) onClose() }} direction="right">
+      <DrawerContent style={width ? { maxWidth: width } : undefined}>
+        <DrawerHeader className="flex flex-row items-center justify-between">
+          <DrawerTitle>{title ?? ''}</DrawerTitle>
+          <DrawerClose asChild>
+            <Button variant="ghost" size="icon-sm" aria-label="关闭抽屉">
+              <Icon name="close" />
+            </Button>
+          </DrawerClose>
+        </DrawerHeader>
         {tabs && tabs.length > 0 && (
           <nav className="drawer-tabs" role="tablist">
             {tabs.map((tab) => (
@@ -68,7 +63,7 @@ export function Drawer({
           </nav>
         )}
         <div className="drawer-body">{children}</div>
-      </div>
-    </div>
+      </DrawerContent>
+    </Drawer>
   )
 }

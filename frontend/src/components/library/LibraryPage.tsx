@@ -281,14 +281,13 @@ export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibra
         onNotesSave={metadataActions.handleNotesSave}
       />
 
-      {isImportOpen && (
-        <LibraryImportModal
-          papers={papers}
-          isSubmitting={isSubmittingImport}
-          onClose={() => setIsImportOpen(false)}
-          onSubmit={handleImport}
-        />
-      )}
+      <LibraryImportModal
+        papers={papers}
+        isSubmitting={isSubmittingImport}
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        onSubmit={handleImport}
+      />
     </>
   )
 }

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 
 import type { DailyBriefingSnapshot, Paper } from '../types'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 
 const DEFAULT_VISIBLE_PAPERS = 3
 
@@ -139,26 +141,26 @@ export function BriefingTopPapers({
               ) : null}
               {paperId !== null ? (
                 <button
-                  type="button"
-                  className="briefing-top-paper-open"
-                  onClick={() => onOpenPaper?.(paperId)}
-                >
-                  打开论文
-                </button>
+          type="button"
+          className="briefing-top-paper-open"
+          onClick={() => onOpenPaper?.(paperId)}
+        >
+          打开论文
+        </button>
               ) : null}
             </div>
           </article>
         )
       })}
       {hasHiddenPapers ? (
-        <button
-          type="button"
-          className="briefing-top-paper-expand"
+        <Button
+          variant="outline"
+          size="sm"
           aria-expanded={showAllPapers}
           onClick={() => setShowAllPapers((current) => !current)}
         >
           {showAllPapers ? `收起至 ${visibleCount} 条建议` : `展开全部 ${briefing.top_papers.length} 条建议`}
-        </button>
+        </Button>
       ) : null}
     </div>
   )

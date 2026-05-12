@@ -9,10 +9,12 @@ import { LibraryPage } from './components/library/LibraryPage'
 import { LoginPage } from './components/LoginPage'
 import { RecommendationShell } from './components/RecommendationShell'
 import { ReaderPage } from './components/reader/ReaderPage'
+import { ResearchDirectionButton } from './components/ResearchDirectionButton'
 import { StatsShell } from './components/StatsShell'
 import { SubscriptionPage } from './components/SubscriptionPage'
 import { ZoteroImportPage } from './components/zotero/ZoteroImportPage'
 import { Icon } from './components/UiIcon'
+import { TooltipProvider } from './components/ui/tooltip'
 import { fetchCategories, fetchPapers } from './lib/api'
 import type { Category, Paper } from './types'
 
@@ -96,6 +98,8 @@ function Sidebar({ theme, setTheme }: { theme: 'dark' | 'light'; setTheme: (t: '
 
       <div style={{ flex: 1 }} />
 
+      <ResearchDirectionButton className="sidebar-research-btn" />
+
       {requiresPassword && (
         <button type="button" className="theme-toggle-btn" onClick={logout} style={{ marginBottom: 8 }}>
           <Icon name="logOut" />
@@ -160,11 +164,12 @@ export default function App() {
   }
 
   return (
-    <div className="shell-layout">
-      <Sidebar theme={theme} setTheme={setTheme} />
+    <TooltipProvider>
+      <div className="shell-layout">
+        <Sidebar theme={theme} setTheme={setTheme} />
 
-      <div className="workspace-area">
-        <Routes>
+        <div className="workspace-area">
+          <Routes>
           <Route
             path="/"
             element={
@@ -292,5 +297,6 @@ export default function App() {
         </Routes>
       </div>
     </div>
+    </TooltipProvider>
   )
 }

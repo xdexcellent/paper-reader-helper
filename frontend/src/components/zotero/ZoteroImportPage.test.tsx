@@ -9,6 +9,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchZoteroCandidates: vi.fn(),
   updateCandidateSelection: vi.fn(),
   importZoteroCandidates: vi.fn(),
+  fetchSourceDist: vi.fn(),
 }))
 
 vi.mock('../../lib/api', () => apiMocks)
@@ -25,6 +26,9 @@ beforeEach(() => {
   apiMocks.fetchZoteroCandidates.mockRejectedValue(new Error('not called'))
   apiMocks.updateCandidateSelection.mockRejectedValue(new Error('not called'))
   apiMocks.importZoteroCandidates.mockRejectedValue(new Error('not called'))
+  apiMocks.fetchSourceDist.mockResolvedValue([])
+  // 清理 localStorage，避免历史条目污染测试断言
+  window.localStorage.clear()
 })
 
 function makeCandidate(overrides = {}) {
