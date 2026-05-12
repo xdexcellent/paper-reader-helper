@@ -1,6 +1,6 @@
 # 前端组件开发规范
 
-> 项目前端采用 React 18 + TypeScript + 纯 CSS（无组件库/无 Tailwind），使用 CSS 自定义属性实现暗色/亮色主题。
+> 项目前端采用 React 18 + TypeScript + Tailwind CSS v4 + shadcn/ui，使用 CSS 自定义属性实现暗色/亮色主题。UI 组件优先使用 shadcn/ui (`@/components/ui/*`)，样式优先使用 Tailwind utility classes，关键装饰性效果（毛玻璃/渐变光晕）保留在 CSS 变量和自定义类中。
 
 ---
 
@@ -15,9 +15,16 @@
 **示例**:
 ```
 src/components/
-├── Drawer.tsx              # 通用 UI 组件
+├── Drawer.tsx              # 通用 UI 组件（基于 shadcn/ui Drawer/vaul）
 ├── UiIcon.tsx              # 通用 UI 组件
 ├── StatusBadge.tsx         # 通用 UI 组件
+├── ui/                     # shadcn/ui 基础组件
+│   ├── button.tsx
+│   ├── card.tsx
+│   ├── dialog.tsx
+│   ├── drawer.tsx
+│   ├── input.tsx
+│   └── ...
 ├── reader/                 # 阅读器功能域
 │   ├── ReaderPage.tsx
 │   ├── ReaderShell.tsx
@@ -36,37 +43,39 @@ src/components/
 
 **Location**: `src/components/Drawer.tsx`
 
+**注意**: Drawer 已从自定义实现迁移为基于 shadcn/ui Drawer (vaul) 的 `AppDrawer` 组件。旧 `Drawer` 导出已重命名为 `AppDrawer`。
+
 ```typescript
-type DrawerProps = {
+type AppDrawerProps = {
   isOpen: boolean
   onClose: () => void
-  width?: number                    // 默认 380px
+  width?: number                    // 作用于 maxWidth 样式
   title?: string
   tabs?: { key: string; label: string }[]  // 可选 Tab 导航
+  activeTab?: string
+  onTabChange?: (key: string) => void
   children: ReactNode
 }
 ```
 
 **行为**:
-- `position: fixed; top: 0; right: 0; height: 100vh`
-- 收起: `transform: translateX(100%)`
-- 展开: `transform: translateX(0)`，transition: `0.3s cubic-bezier(0.4, 0, 0.2, 1)`
-- z-index: panel 801，overlay 800
+- 基于 shadcn/ui `<Drawer direction="right">` (底层用 vaul)
+- 内置 body scroll lock 和 Escape 关闭
 - 使用项目 CSS 变量: `--bg-panel`, `--border-subtle`, `--shadow-hover`
 
 **使用示例**:
 ```tsx
-import { Drawer } from '../Drawer'
+import { AppDrawer } from '../Drawer'
 
-<Drawer isOpen={open} onClose={() => setOpen(false)} title="AI 辅助" tabs={[
+<AppDrawer isOpen={open} onClose={() => setOpen(false)} title="AI 辅助" tabs={[
   { key: 'overview', label: '论文概览' },
   { key: 'blocks', label: '结构块' },
   { key: 'notes', label: '笔记' },
-]}>
-  {activeTab === 'overview' && <OverviewPanel singleColumn />}
-  {activeTab === 'blocks' && <BlocksPanel />}
-  {activeTab === 'notes' && <NotesPanel />}
-</Drawer>
+]} activeTab={tab} onTabChange={setTab}>
+  {tab === 'overview' && <OverviewPanel singleColumn />}
+  {tab === 'blocks' && <BlocksPanel />}
+  {tab === 'notes' && <NotesPanel />}
+</AppDrawer>
 ```
 
 ---
@@ -210,3 +219,35 @@ ReaderPage (状态管理 + API 调用)
 ```
 
 **Props 类型共享**: `ReaderShell` 通过 `type ReaderShellProps = { ...blockShellProps }` 消费 `useReaderBlocks` hook 的返回类型。
+
+---
+
+## 8. shadcn/ui 组件使用规范
+
+**导入路径**: 所有 shadcn/ui 组件从 `@/components/ui/*` 导入
+```tsx
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+```
+
+**样式优先级**: Tailwind utility classes > CSS 变量自定义类 > 手写 CSS
+
+**主题**: shadcn/ui CSS 变量已映射到项目现有 `:root[data-theme="dark"]` / `:root[data-theme="light"]` 体系，通过 `@custom-variant dark` 实现暗色模式。新组件应使用 shadcn/ui 提供的 `variant` 属性而非手写颜色类。
+
+**可用 shadcn/ui 组件**: Button, Card, Dialog, Drawer(vaul), Input, Popover, ScrollArea, Separator, Table, Tabs, Tooltip, Badge, Calendar
+
+**cn() 工具**: 使用 `import { cn } from '@/lib/utils'` 合并条件类名，替代模板字符串拼接
+
+---
+
+## 9. 扩展迁移注意事项
+
+**已迁移页面**: Library (论文库) 和 Briefing (工作看板) 的组件已迁移到 shadcn/ui
+
+**未迁移页面**: Stats、AI助手、Reader、Zotero导入、订阅管理、登录 等仍使用纯 CSS，后续迁移时参照 Library/Briefing 的模式
+
+**迁移原则**:
+- 逐步迁移，不强求一次性全部切换
+- 已迁移的组件中若有其他未迁移组件依赖的手写 CSS 类（如 `.status-badge`），保留 CSS 定义直至所有消费方迁移完毕
+- shadcn/ui Dialog/Drawer 内自带 scroll lock 和 Escape 关闭，迁移时移除手动的 `document.body.style.overflow` 处理
