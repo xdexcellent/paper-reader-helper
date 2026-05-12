@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 6
-- **Last Active**: 2026-05-07
+- **Total Sessions**: 7
+- **Last Active**: 2026-05-12
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~211 | Active |
+| `journal-1.md` | ~246 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 7 | 2026-05-12 | shadcn/ui 渐进式迁移 — Library + Briefing 页面 | `4c7c7fb`, `2e45f96`, `b31dd21` | `master` |
 | 6 | 2026-05-07 | fix: 结构块提取静默失败 + CORS 500根因修复 | `2fe1c3f` | `master` |
 | 5 | 2026-05-07 | 阅读器与论文管理页UI优化 | `815b58b` | `master` |
 | 4 | 2026-05-07 | 论文管理页面UI重构 | `048c5d3` | `master` |
