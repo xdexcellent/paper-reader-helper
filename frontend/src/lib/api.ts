@@ -174,6 +174,14 @@ export async function summarizePaper(id: number, model: string = 'gpt-5.4'): Pro
   return readJson(response)
 }
 
+export async function translateAbstract(id: number): Promise<{ translated_text: string; original_text: string }> {
+  const response = await fetch(`${API_BASE}/papers/${id}/translate-abstract`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  })
+  return readJson(response)
+}
+
 export interface TaskStatusResponse {
   id: string
   type: string

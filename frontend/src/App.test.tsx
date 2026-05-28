@@ -18,6 +18,7 @@ if (!('revokeObjectURL' in URL)) {
 const apiMocks = vi.hoisted(() => ({
   UNAUTHORIZED_EVENT: 'paper-reader:unauthorized',
   checkAuthStatus: vi.fn(),
+  checkHealth: vi.fn(),
   loginApi: vi.fn(),
   fetchPapers: vi.fn(),
   fetchCategories: vi.fn(),
@@ -79,6 +80,7 @@ beforeEach(() => {
     }
   })
   apiMocks.checkAuthStatus.mockResolvedValue({ requires_password: false })
+  apiMocks.checkHealth.mockResolvedValue({ status: 'ok' })
   apiMocks.fetchPapers.mockResolvedValue([])
   apiMocks.fetchCategories.mockResolvedValue([
     {
