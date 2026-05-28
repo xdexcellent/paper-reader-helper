@@ -69,13 +69,17 @@ export function PaperListItem({ paper, onOpenPaper, onPaperUpdated, onAddToProje
 
   return (
     <div
-      className="flex min-h-[104px] rounded-[18px] border border-[#E2E8F0] bg-white transition-all duration-200 hover:border-[#BFDBFE] hover:shadow-[0_4px_20px_rgba(37,99,235,0.06)]"
+      className="flex min-h-[116px] rounded-[18px] border border-[#E2E8F0] bg-white transition-all duration-200 hover:border-[#BFDBFE] hover:shadow-[0_4px_20px_rgba(37,99,235,0.06)]"
     >
       {/* Left: Thumbnail */}
-      <div className="flex items-center pl-4 py-3.5">
+      <div className="flex items-center py-3.5 pl-4">
         <PaperThumbnail
           variant={parseInt(paper.id.replace(/\D/g, ''), 10) || 1}
-          className="h-[72px] w-[112px]"
+          paperId={numericId}
+          thumbnailUrl={paper.thumbnailUrl}
+          title={paper.title}
+          abstractText={paper.abstract}
+          className="h-[88px] w-[68px]"
         />
       </div>
 

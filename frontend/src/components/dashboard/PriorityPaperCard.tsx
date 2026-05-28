@@ -15,6 +15,7 @@ export type PriorityPaperCardProps = {
   tags: string[]
   relevanceScore: number
   thumbnailUrl: string
+  abstractText?: string
   favorite?: boolean
   onRead: () => void
   onAddToProject?: (title: string) => void
@@ -38,6 +39,7 @@ export function PriorityPaperCard({
   tags,
   relevanceScore,
   thumbnailUrl,
+  abstractText,
   favorite = false,
   onRead,
   onAddToProject,
@@ -88,7 +90,7 @@ export function PriorityPaperCard({
 
   return (
     <div
-      className="flex min-h-[96px] rounded-[18px] border border-[#E2E8F0] bg-white transition-all duration-200 hover:border-[#BFDBFE] hover:shadow-[0_8px_32px_rgba(37,99,235,0.07)]"
+      className="flex min-h-[112px] rounded-[18px] border border-[#E2E8F0] bg-white transition-all duration-200 hover:border-[#BFDBFE] hover:shadow-[0_8px_32px_rgba(37,99,235,0.07)]"
       style={{ boxShadow: '0 6px 24px rgba(15,23,42,0.04)' }}
     >
       {/* Left: Gradient rank bar */}
@@ -97,8 +99,15 @@ export function PriorityPaperCard({
       </div>
 
       {/* Thumbnail */}
-      <div className="flex items-center px-3.5 py-3">
-        <PaperThumbnail variant={rank} className="h-[72px] w-[112px]" />
+      <div className="flex items-center px-4 py-3">
+        <PaperThumbnail
+          variant={rank}
+          paperId={paperId}
+          thumbnailUrl={thumbnailUrl}
+          title={title}
+          abstractText={abstractText}
+          className="h-[88px] w-[68px]"
+        />
       </div>
 
       {/* Center: Paper info */}

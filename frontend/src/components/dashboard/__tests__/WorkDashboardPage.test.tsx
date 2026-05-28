@@ -9,16 +9,7 @@ import { buildDashboardNavigationItems, buildResearchProgress } from '../dashboa
 import type { MockPaper } from '../mockData'
 import type { Paper } from '../../../types'
 
-vi.mock('recharts', () => ({
-  BarChart: ({ children }: any) => <div data-testid="bar-chart">{children}</div>,
-  Bar: () => null,
-  XAxis: () => null,
-  YAxis: () => null,
-  ResponsiveContainer: ({ children }: any) => <div>{children}</div>,
-  Cell: () => null,
-}))
-
-vi.mock('../../../lib/api', () => ({
+const apiMocks = vi.hoisted(() => ({
   fetchAutomationStatusToday: vi.fn().mockResolvedValue({
     local_today: '2026-05-11',
     enabled: true,
@@ -58,7 +49,22 @@ vi.mock('../../../lib/api', () => ({
     { date: '2026-05-11', count: 7 },
   ]),
   runTodayBriefing: vi.fn().mockResolvedValue({ run_id: 1, status: 'queued' }),
+  getPdfBlobUrl: vi.fn().mockResolvedValue('blob:dashboard-pdf'),
+  updatePaperFavorite: vi.fn().mockResolvedValue({}),
+  updatePaperReadingState: vi.fn().mockResolvedValue({}),
+  deletePaper: vi.fn().mockResolvedValue(undefined),
 }))
+
+vi.mock('recharts', () => ({
+  BarChart: ({ children }: any) => <div data-testid="bar-chart">{children}</div>,
+  Bar: () => null,
+  XAxis: () => null,
+  YAxis: () => null,
+  ResponsiveContainer: ({ children }: any) => <div>{children}</div>,
+  Cell: () => null,
+}))
+
+vi.mock('../../../lib/api', () => apiMocks)
 
 const testPapers: Paper[] = [
   makePaper(1, 'Paper Alpha', 'unread', ['NLP']),
@@ -125,7 +131,7 @@ describe('WorkDashboardPage integration', () => {
   it('KPI cards render with values from API', async () => {
     renderPage()
     await waitFor(() => {
-      expect(screen.getByText('Paper Alpha')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Paper Alpha' })).toBeInTheDocument()
     })
     expect(screen.getByText('7')).toBeInTheDocument()
     expect(screen.getByText('5')).toBeInTheDocument()
@@ -148,11 +154,11 @@ describe('WorkDashboardPage integration', () => {
     fireEvent.click(screen.getByText('已读 3'))
 
     await waitFor(() => {
-      expect(screen.getByText('Paper Gamma')).toBeInTheDocument()
-      expect(screen.getByText('Paper Epsilon')).toBeInTheDocument()
-      expect(screen.getByText('Paper Eta')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Paper Gamma' })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Paper Epsilon' })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Paper Eta' })).toBeInTheDocument()
     })
-    expect(screen.queryAllByText('Paper Alpha')).toHaveLength(0)
+    expect(screen.queryByRole('heading', { name: 'Paper Alpha' })).not.toBeInTheDocument()
   })
 
   it('displays empty state when filter yields zero results', () => {

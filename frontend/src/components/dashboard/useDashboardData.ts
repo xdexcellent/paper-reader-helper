@@ -76,7 +76,8 @@ export function briefingItemToPriorityCard(
     citations: 0,
     tags: matchedPaper?.tags ?? [],
     relevanceScore: normalizedScore,
-    thumbnailUrl: '',
+    thumbnailUrl: item.pdf_url ?? '',
+    abstractText: item.summary_text ?? item.reason ?? matchedPaper?.abstract_raw ?? '',
     favorite: matchedPaper?.favorite ?? false,
   }
 }
