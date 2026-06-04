@@ -1,3 +1,0 @@
-{"file": ".trellis/spec/backend/desktop-packaging.md", "reason": "Verify SPA fallback, path resolution, CORS, desktop mode config, error matrix"}
-{"file": ".trellis/spec/frontend/desktop-packaging.md", "reason": "Verify API_BASE resolution, env files, Vite config, health check polling"}
-{"file": ".trellis/tasks/05-09-desktop-one-click-launch/prd.md", "reason": "Check acceptance criteria coverage"}

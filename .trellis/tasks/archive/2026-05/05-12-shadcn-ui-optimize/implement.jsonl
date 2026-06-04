@@ -1,6 +1,0 @@
-{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend spec index — lists all frontend guideline files"}
-{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component patterns — must align shadcn/ui migration with existing conventions"}
-{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Directory structure — shadcn/ui components placement must follow project layout"}
-{"file": ".trellis/spec/frontend/state-management.md", "reason": "State management — ensure shadcn/ui components integrate with existing state patterns"}
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Quality guidelines — lint/typecheck standards for the migration"}
-{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Type safety — TypeScript patterns for shadcn/ui component props"}
