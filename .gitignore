@@ -36,6 +36,19 @@ vite-dev.*.log
 .playwright-mcp/
 .agent/
 
+# Trellis & IDE config (local only)
+.codex/
+.claude/
+.cursor/
+.kiro/
+.agents/
+.opencode/
+.spec-workflow/
+.superpowers/
+.trellis/
+.vite/
+skills-lock.json
+
 # Rust / Tauri build artifacts
 src-tauri/target/
 src-tauri/Cargo.lock
