@@ -392,45 +392,6 @@ def test_briefing_counts_subscriptions_not_source_kind() -> None:
     assert briefing.source_count == 2
 
 
-def test_briefing_includes_failed_paper_candidates_with_processing_note() -> None:
-    eng = _make_engine()
-    run_date = date(2026, 4, 20)
-
-    with Session(eng) as session:
-        run = DailyRun(
-            run_date=run_date,
-            scheduled_for=datetime(2026, 4, 20, 0, 30, tzinfo=timezone.utc),
-            status="completed",
-        )
-        session.add(run)
-        session.flush()
-
-        session.add(
-            IngestionItem(
-                daily_run_id=run.id,
-                source_kind="rss",
-                artifact_type="paper",
-                title="Missing PDF Candidate",
-                abstract_raw="Original abstract text",
-                status="failed",
-                error_message="No pdf_url available for candidate.",
-            )
-        )
-        session.commit()
-        session.refresh(run)
-
-        briefing = DailyBriefingService().generate_for_run(session, run, top_n=5, project_sidebar_enabled=False)
-        items = session.exec(
-            select(DailyBriefingPaperItem)
-            .where(DailyBriefingPaperItem.briefing_id == briefing.id)
-        ).all()
-
-    assert briefing.paper_count == 1
-    assert len(items) == 1
-    assert items[0].paper_id is None
-    assert "PDF" in items[0].reason or "PDF" in items[0].summary_text
-
-
 def test_project_summary_falls_back_to_chinese_when_translation_keeps_english() -> None:
     eng = _make_engine()
     run_date = date(2026, 4, 20)

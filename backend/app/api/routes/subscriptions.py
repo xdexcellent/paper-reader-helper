@@ -18,13 +18,19 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
-QUERY_REQUIRED_SOURCE_KINDS = {"arxiv", "rss"}
+QUERY_REQUIRED_SOURCE_KINDS = {"arxiv", "rss", "semantic_scholar", "dblp", "crossref", "openalex"}
 SupportedSourceKind = Literal[
     "arxiv",
     "rss",
     "openreview",
     "hf_papers",
     "github_trending",
+    "semantic_scholar",
+    "pwc",
+    "dblp",
+    "crossref",
+    "openalex",
+    "unpaywall",
 ]
 
 

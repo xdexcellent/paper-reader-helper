@@ -6,7 +6,10 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from app.core.config import settings
 
-engine = create_engine(settings.effective_database_url, connect_args={"check_same_thread": False})
+engine = create_engine(
+    settings.effective_database_url,
+    connect_args={"check_same_thread": False, "timeout": 30},
+)
 
 
 @event.listens_for(engine, "connect")
@@ -16,6 +19,8 @@ def enable_sqlite_foreign_keys(dbapi_connection, _) -> None:
 
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=30000")
     cursor.close()
 
 
@@ -104,6 +109,8 @@ def _migrate_add_columns() -> None:
         ("daily_run", "progress_message", "TEXT DEFAULT ''"),
         ("automation_settings", "http_proxy", "TEXT"),
         ("automation_settings", "https_proxy", "TEXT"),
+        ("automation_settings", "research_direction", "TEXT DEFAULT ''"),
+        ("automation_settings", "research_keywords", "TEXT DEFAULT ''"),
         ("papercontent", "block_extraction_error", "TEXT DEFAULT ''"),
     ]
     with engine.connect() as conn:

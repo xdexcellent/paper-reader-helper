@@ -105,3 +105,53 @@ def get_httpx_get_kwargs(use_db_proxy: bool = True) -> dict[str, Any]:
             kwargs["proxies"] = proxies
             logger.debug("httpx.get with proxy: %s", proxies)
     return kwargs
+
+
+def fetch_with_retry(
+    url: str,
+    *,
+    params: dict | None = None,
+    headers: dict[str, str] | None = None,
+    timeout: float = 30.0,
+    max_retries: int = 2,
+    backoff_seconds: float = 2.0,
+):
+    """Fetch a URL with automatic retry on 429/5xx errors.
+
+    Returns the httpx.Response on success; raises the last exception on failure.
+    """
+    import time
+
+    last_exc: Exception | None = None
+    for attempt in range(max_retries + 1):
+        client = get_http_client(timeout=timeout, follow_redirects=True)
+        try:
+            response = client.get(url, params=params, headers=headers or {})
+            if response.status_code == 429 or response.status_code >= 500:
+                logger.warning(
+                    "Rate limited or server error (%d) on %s, attempt %d/%d",
+                    response.status_code,
+                    url,
+                    attempt + 1,
+                    max_retries + 1,
+                )
+                if attempt < max_retries:
+                    wait = backoff_seconds * (2**attempt)
+                    time.sleep(wait)
+                    continue
+            response.raise_for_status()
+            return response
+        except Exception as exc:
+            last_exc = exc
+            if attempt < max_retries:
+                wait = backoff_seconds * (2**attempt)
+                logger.warning("Fetch error on %s: %s, retrying in %.1fs", url, exc, wait)
+                time.sleep(wait)
+            else:
+                break
+        finally:
+            client.close()
+
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError(f"fetch_with_retry exhausted retries for {url}")

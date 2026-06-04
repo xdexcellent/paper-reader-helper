@@ -33,13 +33,10 @@ def search_arxiv(query: str, max_results: int = 10, *, raise_on_error: bool = Fa
     }
 
     try:
-        client = get_http_client(timeout=30, follow_redirects=True)
-        try:
-            resp = client.get(ARXIV_API_BASE, params=params)
-            resp.raise_for_status()
-            return _parse_atom_feed(resp.text)
-        finally:
-            client.close()
+        from app.services.http_client_factory import fetch_with_retry
+
+        resp = fetch_with_retry(ARXIV_API_BASE, params=params, timeout=30, max_retries=2, backoff_seconds=3.0)
+        return _parse_atom_feed(resp.text)
     except Exception:
         logger.exception("arXiv API request failed")
         if raise_on_error:

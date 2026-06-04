@@ -226,7 +226,13 @@ def test_run_for_date_handles_mixed_paper_and_project_candidates(session_factory
     assert inactive_sub.last_error is None
 
 
-def test_run_for_date_deduplicates_existing_paper_without_redownloading(session_factory, tmp_path: Path) -> None:
+def test_run_for_date_drops_rss_candidate_without_pdf_url_even_if_title_matches_existing(
+    session_factory, tmp_path: Path
+) -> None:
+    """When a subscription returns a candidate without pdf_url, it is dropped
+    in the pre-filter — even if a title/URL match would have deduplicated it
+    against an existing paper. This matches the user-facing intent: "没有
+    pdf_url 就 pass 掉，不做后续操作"."""
     candidate = SourceCandidate(
         artifact_type="paper",
         source_kind="rss",
@@ -292,13 +298,21 @@ def test_run_for_date_deduplicates_existing_paper_without_redownloading(session_
             select(IngestionItem).where(IngestionItem.daily_run_id == run.id)
         ).all()
 
+    # Existing paper untouched, no new ingestion item for this run, candidate
+    # counted as dropped in stats.skipped_no_pdf_url.
     assert len(papers) == 1
-    assert len(items) == 1
-    assert items[0].status == "deduplicated"
-    assert items[0].paper_id == existing_paper.id
+    assert papers[0].id == existing_paper.id
+    assert items == []
+    stats = json.loads(run.stats_json)
+    assert stats["skipped_no_pdf_url"] == 1
+    assert stats["deduplicated"] == 0
+    assert stats["candidates_total"] == 0
 
 
-def test_run_for_date_marks_missing_pdf_candidate_as_failed(session_factory, tmp_path: Path) -> None:
+def test_run_for_date_drops_candidate_without_pdf_url_before_processing(
+    session_factory,
+    tmp_path: Path,
+) -> None:
     candidate = SourceCandidate(
         artifact_type="paper",
         source_kind="openreview",
@@ -320,14 +334,18 @@ def test_run_for_date_marks_missing_pdf_candidate_as_failed(session_factory, tmp
 
         run = service.run_for_date(date(2026, 4, 18))
         papers = session.exec(select(Paper)).all()
-        item = session.exec(
+        items = session.exec(
             select(IngestionItem).where(IngestionItem.daily_run_id == run.id)
-        ).one()
+        ).all()
 
+    # 没 pdf_url 的候选在过滤阶段就被丢弃：不建 Paper、也不建 IngestionItem。
+    # 过滤计数记在 stats.skipped_no_pdf_url 里，"论文处理失败" 面板完全不会看到它。
     assert papers == []
-    assert item.status == "failed"
-    assert "pdf" in (item.error_message or "").lower()
-    assert json.loads(run.stats_json)["failed_items"] == 1
+    assert items == []
+    stats = json.loads(run.stats_json)
+    assert stats["failed_items"] == 0
+    assert stats["skipped_no_pdf_url"] == 1
+    assert stats["candidates_total"] == 0
 
 
 def test_run_for_date_can_manage_default_database_session(
@@ -335,12 +353,18 @@ def test_run_for_date_can_manage_default_database_session(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # This test focuses on DailyIngestionService running without an injected
+    # Session. Use a candidate with pdf_url so it survives the pre-filter and
+    # we can assert an IngestionItem was persisted end-to-end.
     candidate = SourceCandidate(
         artifact_type="paper",
         source_kind="openreview",
         external_id="or-note-1",
-        title="No PDF Paper",
+        title="Sample Paper",
+        authors="Alice",
+        abstract_raw="With PDF",
         canonical_url="https://openreview.net/forum?id=or-note-1",
+        pdf_url="https://openreview.net/pdf?id=or-note-1",
     )
 
     with Session(session_factory) as session:
@@ -352,6 +376,7 @@ def test_run_for_date_can_manage_default_database_session(
         adapter_resolver=lambda kind: _FakeAdapter([candidate]),
         pipeline_service=_FakePipelineService(),
         storage_service=StorageService(root=str(tmp_path / "storage")),
+        pdf_downloader=lambda _url: b"%PDF-1.4\n%%EOF\n",
     )
 
     run = service.run_for_date(date(2026, 4, 18), trigger_type="manual")
@@ -365,7 +390,7 @@ def test_run_for_date_can_manage_default_database_session(
     assert persisted_run is not None
     assert persisted_run.status == "completed"
     assert persisted_run.trigger_type == "manual"
-    assert item.status == "failed"
+    assert item.status == "processed"
 
 
 def test_run_today_endpoint_triggers_manual_ingestion(client, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -477,42 +502,6 @@ def test_run_for_date_briefing_counts_active_subscription_even_without_candidate
     assert briefing.source_count == 2
 
 
-def test_run_for_date_keeps_failed_paper_candidate_in_briefing_snapshot(session_factory, tmp_path: Path) -> None:
-    candidate = SourceCandidate(
-        artifact_type="paper",
-        source_kind="openreview",
-        external_id="or-failed-1",
-        title="No PDF Paper",
-        authors="Alice",
-        abstract_raw="Missing PDF",
-        canonical_url="https://openreview.net/forum?id=or-failed-1",
-    )
-
-    with Session(session_factory) as session:
-        _configure_settings(session, schedule_time="08:30", timezone_name="Asia/Shanghai")
-        _make_subscription(session, "openreview", config={"venue": "ICLR"})
-        service = _make_service(
-            session,
-            tmp_path,
-            {"openreview": _FakeAdapter([candidate])},
-        )
-
-        run = service.run_for_date(date(2026, 4, 18))
-        session.refresh(run)
-
-        briefing = session.exec(select(DailyBriefing).where(DailyBriefing.daily_run_id == run.id)).one()
-        paper_items = session.exec(select(DailyBriefingPaperItem).where(DailyBriefingPaperItem.briefing_id == briefing.id)).all()
-
-    assert briefing.status == "completed"
-    assert briefing.paper_count == 1
-    assert briefing.project_count == 0
-    assert briefing.source_count == 1
-    assert briefing.summary_markdown
-    assert len(paper_items) == 1
-    assert paper_items[0].paper_id is None
-    assert "PDF" in paper_items[0].reason
-
-
 def test_manual_rerun_keeps_same_day_ready_papers_when_current_run_only_deduplicates(
     session_factory,
     tmp_path: Path,
@@ -620,11 +609,16 @@ def test_run_for_date_populates_stats_json_with_major_counters(session_factory, 
     stats = json.loads(run.stats_json)
     assert stats == {
         "subscriptions_total": 1,
-        "candidates_total": 4,
+        # Candidates without pdf_url (Known Title + Missing PDF) are dropped in
+        # the pre-filter, so only Fresh Paper + Demo Project reach processing.
+        "candidates_total": 2,
         "projects_found": 1,
         "papers_imported": 1,
-        "deduplicated": 1,
-        "failed_items": 1,
+        # Known Title used to dedup against an existing paper, but now that
+        # it's filtered out before dedup runs, deduplicated stays at 0.
+        "deduplicated": 0,
+        "failed_items": 0,
+        "skipped_no_pdf_url": 2,
         "processed_papers": 1,
     }
 

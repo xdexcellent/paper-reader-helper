@@ -439,6 +439,49 @@ def summarize_paper(
     return {"task_id": task_id, "message": "摘要生成任务已提交"}
 
 
+@router.post("/{paper_id}/translate-abstract")
+def translate_abstract(
+    paper_id: int,
+    model: str = Query(default="gpt-5.4"),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Translate the paper abstract to Chinese using AI."""
+    paper = session.get(Paper, paper_id)
+    if paper is None:
+        raise HTTPException(status_code=404, detail="论文不存在")
+
+    # Get the abstract content
+    content = session.exec(
+        select(PaperContent).where(PaperContent.paper_id == paper_id)
+    ).first()
+
+    abstract_text = ""
+    if content and content.abstract_md:
+        abstract_text = content.abstract_md
+    elif paper.abstract_raw:
+        abstract_text = paper.abstract_raw
+
+    if not abstract_text.strip():
+        raise HTTPException(status_code=400, detail="论文没有摘要内容可翻译")
+
+    from app.services.deepseek_client import DeepSeekClient
+
+    client = DeepSeekClient()
+    try:
+        result = client.translate_block_text(
+            text=abstract_text,
+            target_language="zh-CN",
+            model=model,
+            page_index=None,
+            block_type="abstract",
+        )
+        translated = result.get("translated_text", "")
+        return {"translated_text": translated, "original_text": abstract_text}
+    except Exception as exc:
+        logger.exception("Abstract translation failed for paper %s", paper_id)
+        raise HTTPException(status_code=500, detail=f"翻译失败: {str(exc)}") from exc
+
+
 
 @router.delete("/{paper_id}")
 def delete_paper(paper_id: int, session: Session = Depends(get_session)) -> dict:

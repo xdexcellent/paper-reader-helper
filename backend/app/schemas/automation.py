@@ -17,6 +17,8 @@ class AutomationSettingsResponse(BaseModel):
     project_sidebar_enabled: bool
     http_proxy: str | None = None
     https_proxy: str | None = None
+    research_direction: str = ""
+    research_keywords: str = ""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -67,6 +69,8 @@ class AutomationSettingsUpdate(BaseModel):
     project_sidebar_enabled: bool | None = None
     http_proxy: str | None = None
     https_proxy: str | None = None
+    research_direction: str | None = None
+    research_keywords: str | None = None
 
     @field_validator("schedule_time")
     @classmethod

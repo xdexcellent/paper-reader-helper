@@ -20,5 +20,8 @@ class AutomationSettings(SQLModel, table=True):
     # Proxy settings for external API calls
     http_proxy: str | None = None
     https_proxy: str | None = None
+    # User research direction (for briefing relevance scoring and LLM prompts)
+    research_direction: str = ""  # 例如: "计算机视觉、扩散模型、CS 在医学中的应用"
+    research_keywords: str = ""  # 逗号分隔: "diffusion, medical image, CT, MRI, segmentation"
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)

@@ -150,6 +150,16 @@ class AgentRunnerService:
 
         except Exception as exc:
             logger.exception("Agent run %s failed", run.id)
+            # Record a terminal error event so the frontend can explain what went wrong.
+            error_event = AgentToolEvent(
+                agent_run_id=run.id,
+                tool_name="agent_runner",
+                input_summary="execute_run",
+                output_summary="",
+                status="error",
+                error_message=str(exc)[:500] or exc.__class__.__name__,
+            )
+            session.add(error_event)
             run.status = "failed"
             run.updated_at = datetime.now(timezone.utc)
             session.add(run)

@@ -37,6 +37,10 @@ INITIAL_STATS = {
     "papers_imported": 0,
     "deduplicated": 0,
     "failed_items": 0,
+    # Candidates from metadata-only sources (DBLP / Crossref / many RSS feeds) that
+    # never expose a downloadable PDF URL. They are *not* ingestion failures, so
+    # they are tracked separately and excluded from the "论文处理失败" risk panel.
+    "skipped_no_pdf_url": 0,
     "processed_papers": 0,
 }
 
@@ -81,6 +85,33 @@ def _record_subscription_issue(
 
 def _normalize_title(value: str | None) -> str:
     return " ".join((value or "").split()).casefold()
+
+
+def _filter_candidates_with_pdf(
+    raw_candidates: list,
+    fetch_limit: int,
+) -> list:
+    """硬过滤：论文类候选必须有 pdf_url，否则直接丢弃不参与后续处理。
+
+    DBLP / Crossref / 部分 RSS 源只提供元数据，没有可下载 PDF 链接；之前会建立
+    IngestionItem 并进入处理流程再失败，污染"论文处理失败"面板。这里在入口处就
+    把它们过滤掉，不计入 candidates_total、不建 IngestionItem，也不做去重匹配。
+
+    项目类候选 (artifact_type == "project") 不依赖 pdf_url，原样保留。
+    """
+    projects: list = []
+    papers_with_pdf: list = []
+
+    for candidate in raw_candidates:
+        if candidate.artifact_type == "project":
+            projects.append(candidate)
+        elif candidate.pdf_url:
+            papers_with_pdf.append(candidate)
+        # 无 pdf_url 的论文候选：丢弃
+
+    # 项目不受 fetch_limit 限制（通常很少）；论文按 fetch_limit 截断
+    paper_slots = max(fetch_limit - len(projects), 0)
+    return projects[:fetch_limit] + papers_with_pdf[:paper_slots]
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -233,13 +264,27 @@ class DailyIngestionService:
 
             if settings.briefing_enabled:
                 self._update_progress(run, 85, "正在生成每日速览...")
-                DailyBriefingService().generate_for_run(
-                    self.session,
-                    run,
-                    top_n=settings.top_n,
-                    project_sidebar_enabled=settings.project_sidebar_enabled,
-                    source_count_override=len(subscriptions),
-                )
+                try:
+                    DailyBriefingService().generate_for_run(
+                        self.session,
+                        run,
+                        top_n=settings.top_n,
+                        project_sidebar_enabled=settings.project_sidebar_enabled,
+                        source_count_override=len(subscriptions),
+                        research_direction=getattr(settings, "research_direction", "") or "",
+                        research_keywords=getattr(settings, "research_keywords", "") or "",
+                    )
+                except Exception as exc:
+                    # 日报生成失败不应阻断整个 run；日志记录 + 继续完成流程
+                    logger.exception("Daily briefing generation failed for run %s", run.id)
+                    self.session.rollback()
+                    stats["briefing_error"] = str(exc)[:200]
+                    _record_subscription_issue(
+                        stats,
+                        Subscription(id=0, name="每日速览生成", source_kind="briefing"),
+                        severity="error",
+                        message=f"日报生成失败：{str(exc)[:200]}",
+                    )
 
             self._update_progress(run, 95, "即将完成...")
             status, error_message = "completed", None
@@ -280,10 +325,16 @@ class DailyIngestionService:
         try:
             source_kind = subscription.source_kind or subscription.type
             adapter = self.adapter_resolver(source_kind)
-            candidates = list(adapter.fetch_candidates(subscription))
+            # 预处理：适度超量拉取（1.5倍）以便过滤无 PDF 的条目，避免触发 API 限流
+            original_limit = subscription.fetch_limit
+            subscription.fetch_limit = max(int(original_limit * 1.5), original_limit + 2)
+            try:
+                raw_candidates = list(adapter.fetch_candidates(subscription))
+            finally:
+                subscription.fetch_limit = original_limit
             subscription.last_success_at = checked_at
             subscription.last_error = None
-            if not candidates:
+            if not raw_candidates:
                 _record_subscription_issue(
                     stats,
                     subscription,
@@ -299,12 +350,25 @@ class DailyIngestionService:
                 severity="error",
                 message=subscription.last_error,
             )
-            candidates = []
+            raw_candidates = []
         subscription.last_checked_at = checked_at
         self._save(subscription)
         if progress_run is not None and "subscription_issues" in stats:
             progress_run.stats_json = json.dumps(stats, ensure_ascii=False, sort_keys=True)
             self._save(progress_run, refresh=True)
+
+        # 预处理过滤：论文必须有 pdf_url，否则直接 drop 不进入后续流程
+        candidates = _filter_candidates_with_pdf(raw_candidates, subscription.fetch_limit)
+        dropped_no_pdf = len(raw_candidates) - len(candidates)
+        if dropped_no_pdf > 0:
+            # 仍保留一个 stats 计数便于观察过滤比例，但不再体现在 IngestionItem 上
+            stats["skipped_no_pdf_url"] = stats.get("skipped_no_pdf_url", 0) + dropped_no_pdf
+            logger.info(
+                "Subscription '%s': dropped %d candidate(s) without pdf_url, kept %d",
+                subscription.name,
+                dropped_no_pdf,
+                len(candidates),
+            )
 
         total_cands = max(len(candidates), 1)
         span = max(slice_end - slice_start, 0)
@@ -353,13 +417,44 @@ class DailyIngestionService:
             self._write_item_status(item, "deduplicated")
             return
         if not candidate.pdf_url:
-            stats["failed_items"] += 1
-            self._write_item_status(item, "failed", "No pdf_url available for candidate.")
+            # Try Unpaywall as fallback if we have a DOI
+            doi = (candidate.metadata or {}).get("doi", "")
+            if doi:
+                _emit("尝试 Unpaywall 查找 PDF")
+                pdf_from_unpaywall = self._try_unpaywall_pdf(doi)
+                if pdf_from_unpaywall:
+                    candidate.pdf_url = pdf_from_unpaywall
+                    logger.info("Unpaywall found PDF for DOI %s: %s", doi, pdf_from_unpaywall)
+
+        if not candidate.pdf_url:
+            # Metadata-only sources (DBLP / Crossref / many RSS feeds) routinely
+            # deliver candidates without a downloadable PDF URL. Treating each of
+            # those as a pipeline failure floods the 风险点 panel with noise and
+            # hides genuine download/parse errors, so we classify them as skipped
+            # instead. The candidate is still persisted for briefing visibility.
+            stats["skipped_no_pdf_url"] += 1
+            _emit("源站未提供 PDF，跳过")
+            self._write_item_status(item, "skipped_no_pdf", "No pdf_url available for candidate.")
             return
         paper: Paper | None = None
         try:
             _emit("下载 PDF")
-            paper = self._create_paper_from_candidate(candidate)
+            try:
+                paper = self._create_paper_from_candidate(candidate)
+            except Exception as download_exc:
+                # PDF download failed — try Unpaywall as fallback
+                doi = (candidate.metadata or {}).get("doi", "")
+                if doi:
+                    _emit("PDF 下载失败，尝试 Unpaywall")
+                    alt_pdf = self._try_unpaywall_pdf(doi)
+                    if alt_pdf and alt_pdf != candidate.pdf_url:
+                        candidate.pdf_url = alt_pdf
+                        paper = self._create_paper_from_candidate(candidate)
+                    else:
+                        raise download_exc
+                else:
+                    raise download_exc
+
             stats["papers_imported"] += 1
             item.paper_id = paper.id
             self._write_item_status(item, "pending")
@@ -434,7 +529,29 @@ class DailyIngestionService:
                 return paper
         return None
 
+    def _try_unpaywall_pdf(self, doi: str) -> str:
+        """Try to find a PDF URL via Unpaywall for the given DOI."""
+        import os
+        email = os.environ.get("UNPAYWALL_EMAIL") or os.environ.get("OPENALEX_EMAIL") or "user@example.com"
+        try:
+            client = get_http_client(follow_redirects=True, timeout=15.0)
+            response = client.get(f"https://api.unpaywall.org/v2/{doi}", params={"email": email})
+            response.raise_for_status()
+            data = response.json()
+            client.close()
+            best_oa = data.get("best_oa_location") or {}
+            return best_oa.get("url_for_pdf") or best_oa.get("url") or ""
+        except Exception as exc:
+            logger.debug("Unpaywall lookup failed for %s: %s", doi, exc)
+            return ""
+
     def _download_pdf_bytes(self, pdf_url: str) -> bytes:
+        # Skip known paywalled domains
+        _BLOCKED = ('dl.acm.org', 'ieeexplore.ieee.org', 'onlinelibrary.wiley.com',
+                    'www.sciencedirect.com', 'journals.sagepub.com', 'www.tandfonline.com')
+        if any(domain in pdf_url for domain in _BLOCKED):
+            raise ValueError(f"Paywalled domain, skipping: {pdf_url[:60]}")
+
         client = get_http_client(follow_redirects=True, timeout=30.0)
         try:
             response = client.get(pdf_url)

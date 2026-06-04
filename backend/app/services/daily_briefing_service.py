@@ -66,6 +66,31 @@ def _contains_chinese(text: str | None) -> bool:
     return bool(text and re.search(r"[\u4e00-\u9fff]", text))
 
 
+def _parse_research_keywords(keywords: str) -> list[str]:
+    """把用户输入的关键词字符串解析为小写 token 列表。支持逗号或中文顿号分隔。"""
+    if not keywords:
+        return []
+    # 统一分隔符：中文逗号/顿号/分号 → 英文逗号
+    normalized = re.sub(r"[，、；;]", ",", keywords)
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for raw in normalized.split(","):
+        token = raw.strip().lower()
+        if not token or token in seen:
+            continue
+        seen.add(token)
+        tokens.append(token)
+    return tokens
+
+
+def _matches_research_keywords(text: str, tokens: list[str]) -> int:
+    """返回 text 中命中多少个关键词 token（用于相关性打分）。"""
+    if not tokens or not text:
+        return 0
+    lower = text.lower()
+    return sum(1 for token in tokens if token in lower)
+
+
 class DailyBriefingService:
     def __init__(self) -> None:
         self._deepseek = DeepSeekClient()
@@ -78,7 +103,11 @@ class DailyBriefingService:
         top_n: int,
         project_sidebar_enabled: bool,
         source_count_override: int | None = None,
+        research_direction: str = "",
+        research_keywords: str = "",
     ) -> DailyBriefing:
+        # 解析用户关键词为 token 列表（逗号或空格分隔，小写）
+        keyword_tokens = _parse_research_keywords(research_keywords)
         items = self._get_items_for_briefing_date(session, run.run_date)
 
         paper_candidates: list[_BriefingPaperCandidate] = []
@@ -124,12 +153,16 @@ class DailyBriefingService:
             if paper is not None:
                 seen_paper_ids.add(paper.id)
             summary = get_summary(paper)
-            paper_candidates.append(self._build_paper_candidate(item, paper, summary))
+            paper_candidates.append(
+                self._build_paper_candidate(item, paper, summary, keyword_tokens)
+            )
 
         for paper in self._get_standalone_papers_for_date(session, run.run_date, seen_paper_ids):
             seen_paper_ids.add(paper.id)
             summary = get_summary(paper)
-            paper_candidates.append(self._build_paper_candidate(None, paper, summary))
+            paper_candidates.append(
+                self._build_paper_candidate(None, paper, summary, keyword_tokens)
+            )
 
         paper_candidates.sort(
             key=lambda candidate: (
@@ -153,6 +186,8 @@ class DailyBriefingService:
                 paper_candidates,
                 project_items,
                 source_count,
+                research_direction=research_direction,
+                keyword_tokens=keyword_tokens,
             ),
             paper_count=len(paper_candidates),
             project_count=len(project_items),
@@ -328,13 +363,14 @@ class DailyBriefingService:
         item: IngestionItem | None,
         paper: Paper | None,
         summary: PaperSummary | None,
+        keyword_tokens: list[str] | None = None,
     ) -> _BriefingPaperCandidate:
         reason = self._reason_for_candidate(item, paper, summary)
         return _BriefingPaperCandidate(
             item=item,
             paper=paper,
             summary=summary,
-            score=self._score_candidate(item, paper, summary),
+            score=self._score_candidate(item, paper, summary, keyword_tokens or []),
             reason=reason,
             summary_text=self._summary_for_candidate(item, paper, summary, reason),
             status_label=self._status_label_for_candidate(item, paper),
@@ -345,6 +381,7 @@ class DailyBriefingService:
         item: IngestionItem | None,
         paper: Paper | None,
         summary: PaperSummary | None,
+        keyword_tokens: list[str] | None = None,
     ) -> float:
         if paper is not None and paper.status == PaperStatus.READY and paper.summary_status == PipelineStatus.COMPLETED:
             score = self._score_paper(paper, summary)
@@ -358,6 +395,9 @@ class DailyBriefingService:
             score = 52.0
         elif item is not None and item.status == "deduplicated":
             score = 48.0
+        elif item is not None and item.status == "skipped_no_pdf":
+            # 仅元数据的候选（DBLP / Crossref 等），与失败回退持平
+            score = 36.0
         elif item is not None and item.status == "failed":
             score = 36.0
         else:
@@ -368,6 +408,30 @@ class DailyBriefingService:
                 score += 5.0
             elif item.status == "deduplicated":
                 score += 3.0
+
+        # 相关性加分：匹配用户研究关键词（每命中一个关键词 +15 分，最多加 60 分）
+        tokens = keyword_tokens or []
+        if tokens:
+            text_parts: list[str] = []
+            if paper is not None:
+                text_parts.extend([paper.title or "", paper.abstract_raw or ""])
+                # paper.tags 是 list[str]，需要展开
+                if paper.tags:
+                    text_parts.extend(str(tag) for tag in paper.tags)
+            if item is not None:
+                text_parts.extend([item.title or "", item.abstract_raw or ""])
+            if summary is not None:
+                text_parts.extend(
+                    [
+                        summary.one_line_summary or "",
+                        summary.relevance_note or "",
+                        summary.core_contributions or "",
+                    ]
+                )
+            haystack = " ".join(text_parts)
+            hits = _matches_research_keywords(haystack, tokens)
+            score += min(hits * 15.0, 60.0)
+
         return score
 
     def _status_label_for_candidate(self, item: IngestionItem | None, paper: Paper | None) -> str:
@@ -381,6 +445,8 @@ class DailyBriefingService:
             return "已完成解析"
         if item is not None and item.status == "deduplicated":
             return "复用已有论文"
+        if item is not None and item.status == "skipped_no_pdf":
+            return "仅元数据"
         if item is not None and item.status == "failed":
             return "处理失败"
         if item is not None and item.status == "pending":
@@ -403,6 +469,8 @@ class DailyBriefingService:
             return "论文已完成解析，但中文摘要生成失败，可稍后重试摘要。"
         if paper is not None and paper.parse_status == PipelineStatus.COMPLETED:
             return "论文已完成解析，正在等待摘要生成。"
+        if item is not None and item.status == "skipped_no_pdf":
+            return "源站未提供可下载 PDF，暂时无法进入解析流程。"
         if item is not None and item.status == "failed":
             return self._friendly_failure_reason(item.error_message)
         return "该论文已纳入今日订阅结果，供你统一查看。"
@@ -468,12 +536,16 @@ class DailyBriefingService:
         papers: list[_BriefingPaperCandidate],
         project_items: list[IngestionItem],
         source_count: int,
+        *,
+        research_direction: str = "",
+        keyword_tokens: list[str] | None = None,
     ) -> str:
         llm_markdown, llm_error = self._build_llm_report_markdown(
             briefing_date,
             papers,
             project_items,
             source_count,
+            research_direction=research_direction,
         )
         if llm_markdown:
             return llm_markdown
@@ -484,6 +556,7 @@ class DailyBriefingService:
             project_items,
             source_count,
             llm_error=llm_error,
+            keyword_tokens=keyword_tokens or [],
         )
 
     def _build_llm_report_markdown(
@@ -492,6 +565,8 @@ class DailyBriefingService:
         papers: list[_BriefingPaperCandidate],
         project_items: list[IngestionItem],
         source_count: int,
+        *,
+        research_direction: str = "",
     ) -> tuple[str | None, str | None]:
         if not papers:
             return None, "今日没有可供深度综述的论文候选。"
@@ -521,12 +596,27 @@ class DailyBriefingService:
             f"- {item.title}: {item.abstract_raw or '暂无简介'}"
             for item in project_items[:10]
         ]
+
+        # 用户研究方向描述（系统 prompt 的一部分）
+        research_context = ""
+        if research_direction.strip():
+            research_context = (
+                f"\n\n【用户研究方向】：{research_direction.strip()}\n"
+                "请根据这个研究方向评估每篇论文的相关性，"
+                "在「今日概览」中用一句话直接回答「今天值不值得读、为什么」，"
+                "在「热点方向」中优先总结与用户研究相关的趋势，"
+                "在「Top 5 深度点评」中优先点评相关论文并在点评中说明为何对用户研究有价值。"
+            )
+
         messages = [
             {
                 "role": "system",
                 "content": (
-                    "你是中文科研情报分析助手。请把当天订阅到的论文整理成结构化中文日报。"
-                    "必须输出 Markdown，且只输出 Markdown。"
+                    "你是中文科研情报分析助手，也是一位懂用户研究方向的资深读者。"
+                    "你的目标不是罗列论文，而是让用户在前 30 秒就决定「今天要不要继续读下去」。"
+                    "语言要有判断力、有重点、有节奏，像一位懂行的同事在口播当天的研究动态，"
+                    "而不是中立的摘要机器。必须输出 Markdown，且只输出 Markdown。"
+                    + research_context
                 ),
             },
             {
@@ -535,18 +625,38 @@ class DailyBriefingService:
                     f"日期：{briefing_date.isoformat()}\n"
                     f"订阅源数量：{source_count}\n"
                     f"论文候选数量：{len(papers)}\n"
-                    f"相关项目数量：{len(project_items)}\n\n"
-                    "请生成以下四个一级结构，标题必须完全一致：\n"
+                    f"相关项目数量：{len(project_items)}\n"
+                    + (f"用户研究方向：{research_direction.strip()}\n" if research_direction.strip() else "")
+                    + "\n请生成以下四个一级结构，标题必须完全一致：\n"
                     "## 今日概览\n"
                     "## 热点方向\n"
                     "## Top 5 深度点评\n"
                     "## 其余论文速览\n\n"
-                    "要求：\n"
+                    "【今日概览 撰写规范（重点）】\n"
+                    "这一节决定用户会不会继续往下读。不要再平铺「今日共筛选 N 篇论文」之类的流水账。\n"
+                    "按以下结构组织，三个小节全部使用粗体小标题起头：\n\n"
+                    "- **一句话结论**：用一句 30 字以内、带判断的话给整日定调。"
+                    "例如「今天是扩散模型大年，医学影像方向尤其值得精读」，避免「今日共筛选 N 篇论文」这种流水账。\n"
+                    "- **三条主线**：用 2-4 条编号列表概括今天的核心主题，每条开头用粗体命名主题、"
+                    "后接一句解释为什么它今天值得关注（是出现了新方法、数据集，还是多篇论文汇聚？）。\n"
+                    "- **必读清单**：挑 3-6 篇最值得今天就读的论文，用 `[论文N](链接)` 超链接形式列出，"
+                    "每条后跟一句不超过 25 字的「为什么值得读」，按相关性从高到低排序。"
+                    "如果用户研究方向明确，这一部分只放高相关论文；次相关的放到「其余论文速览」。\n"
+                    "- **一句话取舍**：最后给一句诚实判断——今天订阅整体质量如何、"
+                    "是否有必须关注的突破、还是可以快速扫完。避免空话（如「值得深入研究」），要有具体理由。\n\n"
+                    "【全局要求】\n"
                     "1. 热点方向中引用论文时必须使用超链接格式，例如 [论文1](论文1的链接)。\n"
                     "2. Top 5 深度点评也必须使用 [论文N](链接) 开头。\n"
                     "3. 不要把所有论文简单平铺，要先总结趋势，再做点评。\n"
-                    "4. 如果论文处理失败，也要说明当前状态和可读价值。\n\n"
-                    "论文候选：\n"
+                    "4. 如果论文处理失败，也要说明当前状态和可读价值。\n"
+                    "5. 语气要直给、有判断，不要使用「非常」「极具」「具有重要意义」等空洞修饰。\n"
+                    "6. 不要虚构未在候选列表中出现的论文或方法。\n"
+                    + (
+                        "7. 根据用户研究方向，突出与其研究相关的论文，不相关的放到「其余论文速览」中简短带过。\n"
+                        if research_direction.strip()
+                        else ""
+                    )
+                    + "\n论文候选：\n"
                     + "\n\n".join(paper_lines)
                     + "\n\n相关项目：\n"
                     + ("\n".join(project_lines) if project_lines else "无")
@@ -579,6 +689,7 @@ class DailyBriefingService:
         source_count: int,
         *,
         llm_error: str | None = None,
+        keyword_tokens: list[str] | None = None,
     ) -> str:
         if not papers:
             return (
@@ -587,8 +698,16 @@ class DailyBriefingService:
                 f"今日共扫描 {source_count} 个订阅源，但暂未形成可展示的论文候选。"
             )
 
-        topics = self._group_papers_by_topic(papers)
+        tokens = keyword_tokens or []
+        topics = self._group_papers_by_topic(papers, tokens)
         rank_by_candidate = {id(candidate): rank for rank, candidate in enumerate(papers, start=1)}
+        topic_overview = self._topic_overview_text(topics)
+        top_topic_name = topics[0][0] if topics else ""
+        headline = (
+            f"今天 {len(papers)} 篇候选里{top_topic_name}最密集，值得先挑几篇精读。"
+            if top_topic_name
+            else f"今天 {len(papers)} 篇候选未形成明显主线，建议按需浏览。"
+        )
         lines = [
             f"# {briefing_date.isoformat()} 每日速览",
             "",
@@ -596,9 +715,11 @@ class DailyBriefingService:
             "",
             "## 今日概览",
             "",
-            f"今日共扫描 {source_count} 个订阅源，汇总 {len(papers)} 篇论文候选，相关项目 {len(project_items)} 个。",
-            f"从标题、摘要和处理状态看，今天主要集中在 {self._topic_overview_text(topics)}。",
-            "未完成处理的论文会保留当前状态，便于后续重试或手动查看原文。",
+            f"**一句话结论**：{headline}",
+            "",
+            f"**三条主线**：从标题、摘要和处理状态看，今天主要集中在 {topic_overview}。",
+            "",
+            f"**覆盖面**：扫描 {source_count} 个订阅源、汇总 {len(papers)} 篇论文候选，并关联 {len(project_items)} 个项目。未完成处理的论文保留当前状态，便于后续重试或手动查看原文。",
             "",
             "## 热点方向",
         ]
@@ -666,14 +787,19 @@ class DailyBriefingService:
     def _group_papers_by_topic(
         self,
         papers: list[_BriefingPaperCandidate],
+        keyword_tokens: list[str] | None = None,
     ) -> list[tuple[str, list[_BriefingPaperCandidate]]]:
         grouped: dict[str, list[_BriefingPaperCandidate]] = {}
         for candidate in papers:
-            topic = self._infer_topic(candidate)
+            topic = self._infer_topic(candidate, keyword_tokens or [])
             grouped.setdefault(topic, []).append(candidate)
         return sorted(grouped.items(), key=lambda row: len(row[1]), reverse=True)
 
-    def _infer_topic(self, candidate: _BriefingPaperCandidate) -> str:
+    def _infer_topic(
+        self,
+        candidate: _BriefingPaperCandidate,
+        keyword_tokens: list[str] | None = None,
+    ) -> str:
         item = candidate.item
         paper = candidate.paper
         text = " ".join(
@@ -683,8 +809,20 @@ class DailyBriefingService:
                 candidate.summary_text,
             ]
         ).lower()
+
+        # 优先使用用户自定义研究主题匹配
+        tokens = keyword_tokens or []
+        user_matched = [tok for tok in tokens if tok in text]
+        if user_matched:
+            # 使用最长的匹配 token 作为话题标签（通常更具体）
+            best = max(user_matched, key=len)
+            return f"用户研究主题：{best}"
+
         topic_rules = [
-            ("AI 生成与多模态内容", ["diffusion", "generation", "生成", "speech", "video", "image", "multimodal", "audio"]),
+            ("医学影像与医学 AI", ["medical", "clinical", "radiology", "diagnosis", "mri", "ct scan", " ct ", "pathology", "segmentation", "医学", "医疗", "临床", "影像", "诊断"]),
+            ("计算机视觉", ["computer vision", " cv ", "cs.cv", "vision transformer", "object detection", "图像识别", "目标检测"]),
+            ("扩散模型与图像生成", ["diffusion", "generation", "image synthesis", "text-to-image", "score-based", "生成", "图像生成"]),
+            ("多模态与视频理解", ["multimodal", "video", "speech", "audio", "跨模态", "视频"]),
             ("智能体与软件工程", ["agent", "coding", "repository", "代码", "软件", "commit", "github"]),
             ("评测基准与数据集", ["benchmark", "evaluation", "评测", "基准", "dataset"]),
             ("训练方法与对齐优化", ["training", "post-training", "reward", "rl", "alignment", "tuning", "训练", "奖励"]),
@@ -706,8 +844,17 @@ class DailyBriefingService:
 
     def _topic_reason(self, topic: str, candidates: list[_BriefingPaperCandidate]) -> str:
         first = candidates[0]
-        if topic == "AI 生成与多模态内容":
-            return " 这一方向反映生成模型正在从单一内容生成转向更细粒度的控制、评测和跨模态表达。"
+        if topic.startswith("用户研究主题："):
+            keyword = topic.split("：", 1)[1] if "：" in topic else topic
+            return f" 这些论文与你关注的「{keyword}」直接相关，建议优先阅读。"
+        if topic == "医学影像与医学 AI":
+            return " 这一方向体现 AI 在医学影像、临床诊断等医疗场景的最新进展，与 CS 在医学中的应用直接相关。"
+        if topic == "计算机视觉":
+            return " 这些论文代表计算机视觉领域的最新进展，涵盖视觉 Transformer、目标检测等核心话题。"
+        if topic == "扩散模型与图像生成":
+            return " 该方向关注扩散模型及其在图像生成中的应用，是当前生成式 AI 最活跃的技术路线。"
+        if topic == "多模态与视频理解":
+            return " 这一方向反映模型正在从单一模态扩展到视频、音频等更丰富的感知能力。"
         if topic == "智能体与软件工程":
             return " 这一方向说明智能体能力正在向代码仓库理解、长期记忆和自动化协作扩展。"
         if topic == "评测基准与数据集":
