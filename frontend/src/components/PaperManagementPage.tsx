@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { FileText, AlertTriangle, Pencil, CheckCircle2, Star, type LucideIcon } from 'lucide-react'
 
 import {
+  autoClassifyPendingPapers,
   createCategory,
   deletePaper,
   embedPaper,
@@ -13,9 +15,11 @@ import {
   waitForTaskCompletion,
 } from '../lib/api'
 import type { Category, CategoryScope, Paper, PaperDetail as PaperDetailType } from '../types'
+import { paginateArray, computeTotalPages } from '../utils/pagination'
 import { EmbeddingUnavailableNotice } from './EmbeddingNotice'
 import { FeedbackBanner } from './FeedbackBanner'
 import { ImportForm } from './ImportForm'
+import { PaginationControl } from './PaginationControl'
 import { PaperActions } from './PaperActions'
 import { PaperDetail } from './PaperDetail'
 import { PaperList } from './PaperList'
@@ -64,6 +68,87 @@ function filterCategoriesByScope(categories: Category[], scope: CategoryScope): 
   return categories
 }
 
+export interface CategoryGroup {
+  name: string
+  paperCount: number
+  pendingCount: number
+  categoryIds: number[]
+  isSystem: boolean
+  isPendingBucket: boolean
+}
+
+/**
+ * Priority order for category display.
+ * Categories matching these names appear first, in this order.
+ * Categories not in this list appear after, sorted alphabetically.
+ */
+const CATEGORY_PRIORITY_ORDER: string[] = [
+  '待确认',
+  '大语言模型',
+  '强化学习',
+  '扩散与生成',
+  '多模态',
+  '计算机视觉',
+  '时间序列',
+  '科学推理',
+  '系统与边缘',
+  'Cache加速',
+  '数学理论',
+  '模型安全',
+  '联邦学习',
+  '其他',
+]
+
+/** Normalize a category name for deduplication: trim, collapse whitespace, normalize unicode */
+function normalizeCategoryName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ').normalize('NFC')
+}
+
+export function dedupeCategories(categories: Category[]): CategoryGroup[] {
+  const groupMap = new Map<string, CategoryGroup>()
+  const order: string[] = []
+
+  for (const cat of categories) {
+    const key = normalizeCategoryName(cat.name)
+    if (!key) continue // skip empty names
+    if (groupMap.has(key)) {
+      const group = groupMap.get(key)!
+      group.paperCount += cat.paper_count
+      group.pendingCount += cat.pending_count
+      group.categoryIds.push(cat.id)
+    } else {
+      const group: CategoryGroup = {
+        name: key,
+        paperCount: cat.paper_count,
+        pendingCount: cat.pending_count,
+        categoryIds: [cat.id],
+        isSystem: cat.is_system,
+        isPendingBucket: cat.is_pending_bucket,
+      }
+      groupMap.set(key, group)
+      order.push(key)
+    }
+  }
+
+  const groups = order.map(key => groupMap.get(key)!)
+
+  // Sort by priority order: prioritized categories first (in defined order), then the rest alphabetically
+  groups.sort((a, b) => {
+    const aIdx = CATEGORY_PRIORITY_ORDER.indexOf(a.name)
+    const bIdx = CATEGORY_PRIORITY_ORDER.indexOf(b.name)
+    // Both in priority list: sort by priority index
+    if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx
+    // Only a in priority list: a comes first
+    if (aIdx !== -1) return -1
+    // Only b in priority list: b comes first
+    if (bIdx !== -1) return 1
+    // Neither in priority list: sort alphabetically
+    return a.name.localeCompare(b.name, 'zh-CN')
+  })
+
+  return groups
+}
+
 export function PaperManagementPage({
   papers,
   categories,
@@ -98,10 +183,18 @@ export function PaperManagementPage({
   const [feedbackMessage, setFeedbackMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [activeTag, setActiveTag] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
   const [selectedModel, setSelectedModel] = useState('gpt-5.4')
   const [categoryScope, setCategoryScope] = useState<CategoryScope>('all')
+  const [isCategoryExpanded, setIsCategoryExpanded] = useState(false)
+  const [isBatchMode, setIsBatchMode] = useState(false)
+  const [isClassifying, setIsClassifying] = useState(false)
   const latestDetailRequestRef = useRef(0)
   const suppressedRoutePaperIdRef = useRef<number | null>(null)
+
+  const PAGE_SIZE = 10
+  const CATEGORY_COLLAPSE_LIMIT = 12
 
   function clearSelectedPaper(targetPaperId: number | null) {
     if (targetPaperId !== null) {
@@ -116,6 +209,14 @@ export function PaperManagementPage({
     () => filterCategoriesByScope(categories, categoryScope),
     [categories, categoryScope],
   )
+  const dedupedCategories = useMemo(
+    () => dedupeCategories(visibleCategories),
+    [visibleCategories],
+  )
+  const visibleGroups = isCategoryExpanded
+    ? dedupedCategories
+    : dedupedCategories.slice(0, CATEGORY_COLLAPSE_LIMIT)
+  const hiddenCount = dedupedCategories.length - CATEGORY_COLLAPSE_LIMIT
   const parseFailedPapers = useMemo(
     () => papers.filter((paper) => paper.status === 'parse_failed'),
     [papers],
@@ -124,9 +225,40 @@ export function PaperManagementPage({
     () => categories.find(category => category.id === selectedCategoryId) ?? null,
     [categories, selectedCategoryId],
   )
+  // Resolve the full set of category IDs for the selected group
+  // When a group is selected (via its first ID), we look up the group and use ALL its categoryIds for filtering
+  const selectedGroupIds = useMemo<number[] | null>(() => {
+    if (selectedCategoryId === null) return null
+    const group = dedupedCategories.find(g => g.categoryIds.includes(selectedCategoryId))
+    return group ? group.categoryIds : [selectedCategoryId]
+  }, [selectedCategoryId, dedupedCategories])
+
   const visiblePapers = useMemo(
-    () => papers.filter(paper => selectedCategoryId === null || paper.primary_category_id === selectedCategoryId),
-    [papers, selectedCategoryId],
+    () => papers.filter(paper => selectedGroupIds === null || (paper.primary_category_id != null && selectedGroupIds.includes(paper.primary_category_id))),
+    [papers, selectedGroupIds],
+  )
+
+  // Collect all unique tags from visible papers for the tag filter bar
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>()
+    visiblePapers.forEach(p => (p.tags ?? []).forEach(t => tagSet.add(t)))
+    return Array.from(tagSet).sort()
+  }, [visiblePapers])
+
+  // Apply search and tag filters to visible papers
+  const filteredPapers = useMemo(() => {
+    return visiblePapers.filter(p => {
+      const matchSearch = !searchQuery || p.title.toLowerCase().includes(searchQuery.toLowerCase())
+      const matchTag = !activeTag || (p.tags ?? []).includes(activeTag)
+      return matchSearch && matchTag
+    })
+  }, [visiblePapers, searchQuery, activeTag])
+
+  // Pagination
+  const totalPages = computeTotalPages(filteredPapers.length, PAGE_SIZE)
+  const paginatedPapers = useMemo(
+    () => paginateArray(filteredPapers, currentPage, PAGE_SIZE),
+    [filteredPapers, currentPage],
   )
   const isParseInProgress = isRunningParse || detail?.parse_status === 'processing' || detail?.status === 'parsing'
   const isSummarizeInProgress =
@@ -147,6 +279,11 @@ export function PaperManagementPage({
     if (visibleCategories.some(category => category.id === selectedCategoryId)) return
     setSelectedCategoryId(null)
   }, [visibleCategories, selectedCategoryId])
+
+  // Reset pagination to page 1 when search query or tag filter changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, activeTag])
 
   useEffect(() => {
     if (selectedPaperId === null) return
@@ -236,6 +373,23 @@ export function PaperManagementPage({
     }
   }
 
+  async function handleBatchDelete(selectedPapers: Paper[]) {
+    setErrorMessage('')
+    setFeedbackMessage(`正在批量删除 ${selectedPapers.length} 篇论文...`)
+    try {
+      const { succeeded, failed } = await runBulkPaperAction(selectedPapers, (p) => deletePaper(p.id))
+      if (selectedPaperId !== null && succeeded.some(p => p.id === selectedPaperId)) {
+        clearSelectedPaper(selectedPaperId)
+      }
+      await refreshLibrary()
+      setFeedbackMessage(succeeded.length > 0 ? `已删除 ${succeeded.length} 篇论文` : '')
+      if (failed.length > 0) setErrorMessage(formatBulkActionError('删除', failed))
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '批量删除失败')
+      setFeedbackMessage('')
+    }
+  }
+
   async function handleImport(payload: { source: string; file: File }): Promise<boolean> {
     setIsSubmittingImport(true)
     setErrorMessage('')
@@ -285,13 +439,13 @@ export function PaperManagementPage({
   async function handlePrimaryCategoryChange(categoryId: number) {
     if (!detail || detail.primary_category_id === categoryId) return
     const nextPaperId = detail.id
-    const activeCategoryId = selectedCategoryId
+    const activeGroupIds = selectedGroupIds
     setIsUpdatingCategory(true)
     setErrorMessage('')
     try {
       const updatedPaper = await updatePaperCategory(nextPaperId, categoryId)
       await refreshLibrary()
-      const staysVisible = activeCategoryId === null || updatedPaper.primary_category_id === activeCategoryId
+      const staysVisible = activeGroupIds === null || (updatedPaper.primary_category_id != null && activeGroupIds.includes(updatedPaper.primary_category_id))
       if (!staysVisible) {
         clearSelectedPaper(nextPaperId)
         setFeedbackMessage('主分类已更新，论文已移出当前目录')
@@ -445,8 +599,67 @@ export function PaperManagementPage({
   const pageSubtitle = '受控分类目录管理主分类，多标签继续保留为辅助语义。'
   const totalPending = papers.filter(paper => paper.category_status === 'pending_review').length
   const parseFailedCount = parseFailedPapers.length
-  const categoryPaperCount = selectedCategory ? selectedCategory.paper_count : visiblePapers.length
-  const categoryPendingCount = selectedCategory ? selectedCategory.pending_count : totalPending
+  const categoryPaperCount = selectedGroupIds !== null
+    ? dedupedCategories.find(g => g.categoryIds.includes(selectedCategoryId!))?.paperCount ?? visiblePapers.length
+    : visiblePapers.length
+  const categoryPendingCount = selectedGroupIds !== null
+    ? dedupedCategories.find(g => g.categoryIds.includes(selectedCategoryId!))?.pendingCount ?? totalPending
+    : totalPending
+
+  const kpiItems: { label: string; value: number; icon: LucideIcon; iconBg: string; color: string; trend: string; filter: (p: Paper) => boolean }[] = useMemo(() => [
+    {
+      label: '论文总数',
+      value: papers.length,
+      icon: FileText,
+      iconBg: 'from-blue-50 to-sky-50',
+      color: '#2563EB',
+      trend: '全部已导入论文',
+      filter: () => true,
+    },
+    {
+      label: '待纠错确认',
+      value: papers.filter(p => p.status === 'parse_failed' || p.parse_status === 'failed').length,
+      icon: AlertTriangle,
+      iconBg: 'from-amber-50 to-yellow-50',
+      color: '#D97706',
+      trend: '需要人工确认',
+      filter: (p: Paper) => p.status === 'parse_failed' || p.parse_status === 'failed',
+    },
+    {
+      label: '摘要待生成',
+      value: papers.filter(p => !p.summary_status || p.summary_status === 'pending').length,
+      icon: Pencil,
+      iconBg: 'from-orange-50 to-amber-50',
+      color: '#F97316',
+      trend: '等待 AI 处理',
+      filter: (p: Paper) => !p.summary_status || p.summary_status === 'pending',
+    },
+    {
+      label: '向量化完成',
+      value: papers.filter(p => p.embedding_status === 'done' || p.embedding_status === 'completed').length,
+      icon: CheckCircle2,
+      iconBg: 'from-emerald-50 to-teal-50',
+      color: '#10B981',
+      trend: '可用于语义搜索',
+      filter: (p: Paper) => p.embedding_status === 'done' || p.embedding_status === 'completed',
+    },
+    {
+      label: '已收藏',
+      value: papers.filter(p => p.favorite).length,
+      icon: Star,
+      iconBg: 'from-red-50 to-rose-50',
+      color: '#EF4444',
+      trend: '个人收藏夹',
+      filter: (p: Paper) => !!p.favorite,
+    },
+  ], [papers])
+
+  const [kpiModalLabel, setKpiModalLabel] = useState<string | null>(null)
+  const kpiModalPapers = useMemo(() => {
+    if (!kpiModalLabel) return []
+    const item = kpiItems.find(k => k.label === kpiModalLabel)
+    return item ? papers.filter(item.filter) : []
+  }, [kpiModalLabel, papers, kpiItems])
 
   return (
     <>
@@ -463,9 +676,32 @@ export function PaperManagementPage({
               同步中
             </span>
           )}
+          <button type="button" className={`btn btn-batch-action${isBatchMode ? ' active' : ''}`} onClick={() => setIsBatchMode(prev => !prev)}>{isBatchMode ? '退出批量' : '批量操作'}</button>
           <span className="online-indicator">在线运行</span>
         </div>
       </header>
+
+      <div className="grid grid-cols-1 gap-4 px-8 mb-6 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5">
+        {kpiItems.map(item => (
+          <div
+            className="relative flex items-center justify-between rounded-[18px] border border-[#E2E8F0] bg-white px-4 py-5 min-h-[88px] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-[#BFDBFE] cursor-pointer"
+            style={{ boxShadow: '0 8px 28px rgba(15,23,42,0.04)' }}
+            key={item.label}
+            onClick={() => setKpiModalLabel(item.label)}
+          >
+            <div className="flex flex-col">
+              <span className="text-[30px] font-bold leading-none text-[#0F172A] tracking-tight">{item.value}</span>
+              <span className="mt-1 text-[13px] font-medium text-[#334155]">{item.label}</span>
+              <span className="mt-0.5 text-[11px] text-[#94A3B8]">{item.trend}</span>
+            </div>
+            <div
+              className={`flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br ${item.iconBg} ring-1 ring-inset ring-black/[0.03]`}
+            >
+              <item.icon size={20} style={{ color: item.color }} strokeWidth={1.8} />
+            </div>
+          </div>
+        ))}
+      </div>
 
       <div className="paper-management-shell">
         <aside className="glass-card category-rail">
@@ -492,6 +728,32 @@ export function PaperManagementPage({
             </select>
           </div>
 
+          {totalPending > 0 && (
+            <button
+              type="button"
+              className="category-auto-classify-btn"
+              disabled={isClassifying}
+              onClick={async () => {
+                setIsClassifying(true)
+                setFeedbackMessage('')
+                try {
+                  const result = await autoClassifyPendingPapers()
+                  await refreshLibrary()
+                  const parts: string[] = []
+                  if (result.classified > 0) parts.push(`已分类 ${result.classified} 篇`)
+                  if (result.created_categories.length > 0) parts.push(`新建: ${result.created_categories.join(', ')}`)
+                  setFeedbackMessage(parts.length > 0 ? parts.join('；') : '没有需要分类的论文')
+                } catch {
+                  setErrorMessage('AI 自动分类失败')
+                } finally {
+                  setIsClassifying(false)
+                }
+              }}
+            >
+              {isClassifying ? '分类中...' : `AI 智能分类 (${totalPending})`}
+            </button>
+          )}
+
           <div className="category-list">
             <button
               type="button"
@@ -500,19 +762,26 @@ export function PaperManagementPage({
             >
               <span>全部论文 ({papers.length})</span>
             </button>
-            {visibleCategories.map((category) => (
+            {visibleGroups.map((group) => (
               <button
-                key={category.id}
+                key={group.categoryIds.join(',')}
                 type="button"
-                className={`category-item${selectedCategoryId === category.id ? ' active' : ''}${category.is_pending_bucket ? ' pending' : ''}`}
-                onClick={() => setSelectedCategoryId(category.id)}
+                className={`category-item${selectedCategoryId !== null && group.categoryIds.includes(selectedCategoryId) ? ' active' : ''}${group.isPendingBucket ? ' pending' : ''}`}
+                onClick={() => setSelectedCategoryId(group.categoryIds[0])}
               >
-                <span>{category.name} ({category.paper_count})</span>
-                {category.pending_count > 0 && (
-                  <small>{category.pending_count} 待确认</small>
-                )}
+                <span className="category-item-name">{group.name}</span>
+                <span className="category-count-badge">{group.paperCount}</span>
               </button>
             ))}
+            {dedupedCategories.length > CATEGORY_COLLAPSE_LIMIT && (
+              <button
+                type="button"
+                className="category-accordion-toggle"
+                onClick={() => setIsCategoryExpanded(prev => !prev)}
+              >
+                {isCategoryExpanded ? '收起 ▴' : `更多分类 (${hiddenCount}) ▾`}
+              </button>
+            )}
           </div>
         </aside>
 
@@ -520,7 +789,7 @@ export function PaperManagementPage({
           <section className="glass-card management-toolbar">
             <div className="management-toolbar-actions">
               <button type="button" className="btn btn-primary" onClick={() => setIsImportOpen(true)}>
-                导入论文
+                导入 PDF
               </button>
               <button
                 type="button"
@@ -589,40 +858,29 @@ export function PaperManagementPage({
             </form>
           )}
 
-          <section className="glass-card category-summary">
-            <div className="panel-header">
-              <div>
-                <h2>{selectedCategory?.name ?? '全部论文'}</h2>
-                <p>{selectedCategory?.description || '先按主分类目录浏览，再用标签做细粒度筛选。'}</p>
-              </div>
-            </div>
-            <div className="category-stat-grid">
-              <div className="category-stat-card">
-                <span>论文数</span>
-                <strong>{categoryPaperCount}</strong>
-              </div>
-              <div className="category-stat-card">
-                <span>待确认</span>
-                <strong>{categoryPendingCount}</strong>
-              </div>
-              <div className="category-stat-card">
-                <span>辅助标签</span>
-                <strong>{new Set(visiblePapers.flatMap(paper => paper.tags ?? [])).size}</strong>
-              </div>
-            </div>
-          </section>
-
           <div className="paper-management-grid">
             <section className="reading-list-panel glass-card management-list-panel">
               <PaperList
-                papers={visiblePapers}
+                papers={paginatedPapers}
                 selectedPaperId={selectedPaperId}
                 isLoading={isLoadingLibrary}
                 onSelect={handleSelect}
                 onDelete={handleDelete}
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
+                allTags={allTags}
+                activeTag={activeTag}
+                onTagChange={setActiveTag}
+                isBatchMode={isBatchMode}
+                onBatchDelete={handleBatchDelete}
               />
+              {filteredPapers.length > 0 && (
+                <PaginationControl
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                />
+              )}
             </section>
 
             <section className="reading-detail-panel">
@@ -646,6 +904,27 @@ export function PaperManagementPage({
                 categories={categories}
                 onCategoryChange={handlePrimaryCategoryChange}
                 isUpdatingCategory={isUpdatingCategory}
+                onGoBack={() => clearSelectedPaper(selectedPaperId)}
+                onPrevPaper={() => {
+                  const idx = visiblePapers.findIndex(p => p.id === selectedPaperId)
+                  if (idx > 0) {
+                    void handleSelect(visiblePapers[idx - 1])
+                  }
+                }}
+                onNextPaper={() => {
+                  const idx = visiblePapers.findIndex(p => p.id === selectedPaperId)
+                  if (idx >= 0 && idx < visiblePapers.length - 1) {
+                    void handleSelect(visiblePapers[idx + 1])
+                  }
+                }}
+                hasPrev={(() => {
+                  const idx = visiblePapers.findIndex(p => p.id === selectedPaperId)
+                  return idx > 0
+                })()}
+                hasNext={(() => {
+                  const idx = visiblePapers.findIndex(p => p.id === selectedPaperId)
+                  return idx >= 0 && idx < visiblePapers.length - 1
+                })()}
               />
             </section>
           </div>
@@ -656,6 +935,39 @@ export function PaperManagementPage({
         <div className="modal-overlay" onClick={() => setIsImportOpen(false)}>
           <div className="modal-card" onClick={(event) => event.stopPropagation()}>
             <ImportForm onSubmit={handleImport} isSubmitting={isSubmittingImport} />
+          </div>
+        </div>
+      )}
+
+      {/* KPI Modal */}
+      {kpiModalLabel && (
+        <div className="kpi-modal-overlay" onClick={() => setKpiModalLabel(null)}>
+          <div className="kpi-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="kpi-modal-header">
+              <h3>{kpiModalLabel}</h3>
+              <span className="kpi-modal-count">{kpiModalPapers.length} 篇</span>
+              <button type="button" className="kpi-modal-close" onClick={() => setKpiModalLabel(null)}>✕</button>
+            </div>
+            <div className="kpi-modal-list">
+              {kpiModalPapers.length === 0 ? (
+                <div className="kpi-modal-empty">暂无论文</div>
+              ) : (
+                kpiModalPapers.map(paper => (
+                  <div
+                    key={paper.id}
+                    className="kpi-modal-item"
+                    onClick={() => { setKpiModalLabel(null); handleSelect(paper) }}
+                  >
+                    <div className="kpi-modal-item-title">{paper.title}</div>
+                    <div className="kpi-modal-item-meta">
+                      {paper.source && <span>{paper.source}</span>}
+                      {paper.updated_at && <span>{new Date(paper.updated_at).toLocaleDateString()}</span>}
+                      <span className="kpi-modal-item-status">{paper.status}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}

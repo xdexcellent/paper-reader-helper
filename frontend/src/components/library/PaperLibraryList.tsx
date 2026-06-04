@@ -1,7 +1,10 @@
-﻿import { useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
+import { FileText } from 'lucide-react'
 import type { Paper, ReadingStatus } from '../../types'
 import { StatusBadge } from '../StatusBadge'
 import { Icon } from '../UiIcon'
+import { PaginationControl } from '../PaginationControl'
+import { paginateArray, computeTotalPages } from '../../utils/pagination'
 import { collectTags, filterPapers, getPaperReadingStatus } from './libraryFilters'
 import type { FavoriteFilter, LibraryStatusFilter, ReadingStatusFilter } from './libraryTypes'
 import { cn } from '@/lib/utils'
@@ -92,6 +95,8 @@ export function PaperLibraryList({
 }: PaperLibraryListProps) {
   const tags = collectTags(papers)
   const [showAllTags, setShowAllTags] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const PAGE_SIZE = 10
   const MAX_VISIBLE_TAGS = 8
   const visibleTagsList = showAllTags ? tags : tags.slice(0, MAX_VISIBLE_TAGS)
   const hasMoreTags = tags.length > MAX_VISIBLE_TAGS
@@ -104,6 +109,18 @@ export function PaperLibraryList({
     readingStatusFilter,
     activeTag,
   })
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, statusFilter, favoriteFilter, readingStatusFilter, activeTag])
+
+  // Pagination
+  const totalPages = computeTotalPages(visiblePapers.length, PAGE_SIZE)
+  const paginatedPapers = useMemo(
+    () => paginateArray(visiblePapers, currentPage, PAGE_SIZE),
+    [visiblePapers, currentPage],
+  )
 
   return (
     <section className="paper-library-list" aria-label="论文列表">
@@ -223,64 +240,88 @@ export function PaperLibraryList({
           <span>没有匹配当前筛选条件的论文。</span>
         </div>
       ) : (
-        <div className="paper-list">
-          {visiblePapers.map((paper) => {
-            const paperTags = paper.tags ?? []
-            const visibleTags = paperTags.slice(0, 3)
-            const extraCount = paperTags.length - 3
-            return (
-              <div
-                className={cn('paper-library-row', selectedPaperId === paper.id && 'selected')}
-                key={paper.id}
-              >
-                <button
-                  aria-label={paperButtonLabel(paper)}
-                  aria-pressed={selectedPaperId === paper.id}
-                  className="paper-library-item"
-                  onClick={() => onSelect(paper)}
-                  type="button"
+        <>
+          <div className="paper-list">
+            {paginatedPapers.map((paper) => {
+              const paperTags = paper.tags ?? []
+              const visibleTags = paperTags.slice(0, 3)
+              const extraCount = paperTags.length - 3
+              return (
+                <div
+                  className={cn('paper-library-row', selectedPaperId === paper.id && 'selected')}
+                  key={paper.id}
                 >
-                  <span className="paper-item-title">{paper.title}</span>
-                  <span className="paper-item-meta">
-                    <span className="paper-source">{paper.source}</span>
-                    <StatusBadge value={paper.status} />
-                  </span>
-                  <span className="paper-item-states" aria-label="论文管理状态">
-                    {paper.favorite && (
-                      <span className="paper-state-pill favorite">
-                        <Icon name="spark" />
-                        收藏
-                      </span>
-                    )}
-                    <span className={`paper-state-pill reading-state state-${getPaperReadingStatus(paper)}`}>
-                      {readingStateLabel(paper)}
+                  <button
+                    aria-label={paperButtonLabel(paper)}
+                    aria-pressed={selectedPaperId === paper.id}
+                    className="paper-library-item paper-library-item--horizontal"
+                    onClick={() => onSelect(paper)}
+                    type="button"
+                  >
+                    {/* PDF Thumbnail */}
+                    <span className="paper-library-thumbnail">
+                      <FileText size={24} strokeWidth={1.5} className="paper-library-thumbnail-icon" />
                     </span>
-                  </span>
-                  {paperTags.length > 0 && (
-                    <span className="paper-item-tags">
-                      {visibleTags.map((tag) => (
-                        <span className="paper-tag-pill" key={tag}>
-                          {tag}
+
+                    {/* Content */}
+                    <span className="paper-library-content">
+                      <span className="paper-item-title">{paper.title}</span>
+                      <span className="paper-item-meta">
+                        <span className="paper-source">{paper.source}</span>
+                        <span className="paper-meta-separator">·</span>
+                        {paper.updated_at && (
+                          <>
+                            <span className="paper-date">{new Date(paper.updated_at).toLocaleDateString()}</span>
+                            <span className="paper-meta-separator">·</span>
+                          </>
+                        )}
+                        <StatusBadge value={paper.status} />
+                      </span>
+                      <span className="paper-item-states" aria-label="论文管理状态">
+                        {paper.favorite && (
+                          <span className="paper-state-pill favorite">
+                            <Icon name="spark" />
+                            收藏
+                          </span>
+                        )}
+                        <span className={`paper-state-pill reading-state state-${getPaperReadingStatus(paper)}`}>
+                          {readingStateLabel(paper)}
                         </span>
-                      ))}
-                      {extraCount > 0 && (
-                        <span className="paper-tag-pill paper-tag-extra">+{extraCount}</span>
+                      </span>
+                      {paperTags.length > 0 && (
+                        <span className="paper-item-tags">
+                          {visibleTags.map((tag) => (
+                            <span className="paper-tag-pill" key={tag}>
+                              {tag}
+                            </span>
+                          ))}
+                          {extraCount > 0 && (
+                            <span className="paper-tag-pill paper-tag-extra">+{extraCount}</span>
+                          )}
+                        </span>
                       )}
                     </span>
-                  )}
-                </button>
-                <button
-                  aria-label={`删除 ${paper.title}`}
-                  className="paper-delete-btn"
-                  onClick={() => void onDelete(paper)}
-                  type="button"
-                >
-                  <Icon name="close" />
-                </button>
-              </div>
-            )
-          })}
-        </div>
+                  </button>
+                  <button
+                    aria-label={`删除 ${paper.title}`}
+                    className="paper-delete-btn"
+                    onClick={() => void onDelete(paper)}
+                    type="button"
+                  >
+                    <Icon name="close" />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+          {visiblePapers.length > PAGE_SIZE && (
+            <PaginationControl
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+            />
+          )}
+        </>
       )}
     </section>
   )

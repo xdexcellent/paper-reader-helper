@@ -1,5 +1,5 @@
 import type { Category, PaperDetail as PaperDetailType } from '../types'
-import { getPdfBlobUrl, updatePaperTags } from '../lib/api'
+import { getPdfBlobUrl, updatePaperTags, translateAbstract } from '../lib/api'
 import { StatusBadge } from './StatusBadge'
 import { SummaryCard } from './SummaryCard'
 import { Icon } from './UiIcon'
@@ -8,7 +8,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
-import { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 
 interface SubSection {
   title: string;
@@ -27,12 +27,22 @@ export function PaperDetail({
   categories = [],
   onCategoryChange,
   isUpdatingCategory,
+  onGoBack,
+  onPrevPaper,
+  onNextPaper,
+  hasPrev = false,
+  hasNext = false,
 }: {
   paper: PaperDetailType | null
   isLoading?: boolean
   categories?: Category[]
   onCategoryChange?: (categoryId: number) => Promise<void>
   isUpdatingCategory?: boolean
+  onGoBack?: () => void
+  onPrevPaper?: () => void
+  onNextPaper?: () => void
+  hasPrev?: boolean
+  hasNext?: boolean
 }) {
   const [activeChapter, setActiveChapter] = useState<MainSection | null>(null)
   const [activeSubIndex, setActiveSubIndex] = useState<number>(-1)
@@ -40,10 +50,24 @@ export function PaperDetail({
   const [isAddingTag, setIsAddingTag] = useState(false)
   const [newTagInput, setNewTagInput] = useState('')
   const [localTags, setLocalTags] = useState<string[]>([])
+  const [isSectionsExpanded, setIsSectionsExpanded] = useState(false)
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false)
+  const [abstractTranslation, setAbstractTranslation] = useState<string | null>(null)
+  const [isTranslating, setIsTranslating] = useState(false)
+  const [showTranslation, setShowTranslation] = useState(false)
+
+  const SECTION_COLLAPSE_LIMIT = 6
 
   useEffect(() => {
     setLocalTags(paper?.tags ?? [])
   }, [paper?.id, paper?.tags])
+
+  useEffect(() => {
+    setIsSectionsExpanded(false)
+    setIsSummaryExpanded(false)
+    setAbstractTranslation(null)
+    setShowTranslation(false)
+  }, [paper?.id])
 
   useEffect(() => {
     setActiveSubIndex(-1)
@@ -202,83 +226,219 @@ export function PaperDetail({
     )
   }
 
+  /** Helper: get status pill style based on paper status */
+  const getStatusPillStyle = (status: string) => {
+    const normalized = status?.toLowerCase() ?? ''
+    if (normalized.includes('done') || normalized.includes('completed') || normalized.includes('success')) {
+      return 'detail-status-pill--green'
+    }
+    if (normalized.includes('error') || normalized.includes('failed') || normalized.includes('fail')) {
+      return 'detail-status-pill--red'
+    }
+    if (normalized.includes('processing') || normalized.includes('running') || normalized.includes('pending')) {
+      return 'detail-status-pill--yellow'
+    }
+    return 'detail-status-pill--default'
+  }
+
   return (
     <div className="paper-detail-content">
-      {/* Title & Status */}
-      <div className="glass-card paper-title-section">
-        <h1 className="paper-title">{paper.title}</h1>
-        <div className="paper-status-row">
-          <div className="status-group">
-            <span className="status-group-label">状态</span>
+      {/* 1. Detail_Nav_Bar */}
+      <div className="detail-nav-bar">
+        <button type="button" className="detail-nav-btn" onClick={onGoBack}>
+          ← 返回列表
+        </button>
+        <div className="detail-nav-arrows">
+          <button type="button" className="detail-nav-btn" onClick={onPrevPaper} disabled={!hasPrev}>
+            ← 上一篇
+          </button>
+          <button type="button" className="detail-nav-btn" onClick={onNextPaper} disabled={!hasNext}>
+            下一篇 →
+          </button>
+        </div>
+      </div>
+
+      {/* 2. Title + Status_Pill */}
+      <div className="detail-title-section">
+        <h1 className="detail-title">{paper.title}</h1>
+        <div className="detail-title-meta">
+          <span className={`detail-status-pill ${getStatusPillStyle(paper.status)}`}>
             <StatusBadge value={paper.status} />
+          </span>
+          {paper.authors && <span className="paper-meta-item">{paper.authors}</span>}
+          {paper.year && <span className="paper-meta-item">{paper.year}</span>}
+          {paper.source && <span className="paper-meta-item">{paper.source}</span>}
+        </div>
+      </div>
+
+      {/* 3. Action Buttons Row */}
+      <div className="detail-actions-row">
+        <button
+          type="button"
+          className="detail-action-btn detail-action-btn--primary"
+          onClick={() => window.open(`/paper/${paper.id}/reader`, '_blank', 'noopener')}
+        >
+          <Icon name="pdf" />打开阅读器
+        </button>
+        <button
+          type="button"
+          className="detail-action-btn detail-action-btn--secondary"
+          onClick={() => document.getElementById('paper-sections-anchor')?.scrollIntoView({ behavior: 'smooth' })}
+        >
+          <Icon name="fileText" />内容视图
+        </button>
+        {categories.length > 0 && (
+          <label className="detail-category-select" htmlFor="paper-primary-category">
+            <span className="detail-category-label">主分类</span>
+            <select
+              id="paper-primary-category"
+              aria-label="主分类"
+              className="detail-category-dropdown"
+              value={paper.primary_category_id ?? ''}
+              onChange={(event) => {
+                const nextValue = Number(event.target.value)
+                if (Number.isNaN(nextValue) || !onCategoryChange) return
+                void onCategoryChange(nextValue)
+              }}
+              disabled={isUpdatingCategory}
+            >
+              {categories.map(category => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+
+      {/* 4. Abstract + AI Summary Grid */}
+      <div className="detail-abstract-card glass-card">
+        <div className="abstract-header">
+          <div className="abstract-badge">
+            <span className="ai-dot" />
+            摘要
           </div>
-          {paper.parse_status && (
-            <div className="status-group">
-              <span className="status-group-label">解析</span>
-              <StatusBadge value={paper.parse_status} />
+          <button
+            type="button"
+            className={`abstract-translate-btn${showTranslation ? ' active' : ''}`}
+            disabled={isTranslating}
+            onClick={async () => {
+              if (abstractTranslation) {
+                setShowTranslation(prev => !prev)
+              } else {
+                setIsTranslating(true)
+                try {
+                  const result = await translateAbstract(paper.id)
+                  setAbstractTranslation(result.translated_text)
+                  setShowTranslation(true)
+                } catch {
+                  // silently fail
+                } finally {
+                  setIsTranslating(false)
+                }
+              }
+            }}
+          >
+            {isTranslating ? '翻译中...' : showTranslation ? '显示原文' : '翻译为中文'}
+          </button>
+        </div>
+        <div className={`abstract-content summary-clamp${isSummaryExpanded ? ' expanded' : ''}`}>
+          {showTranslation && abstractTranslation
+            ? abstractTranslation
+            : (paper.abstract_md || paper.one_line_summary || '暂无摘要内容')}
+        </div>
+        {(paper.abstract_md || paper.one_line_summary) && (
+          <button
+            type="button"
+            className="summary-expand-link"
+            onClick={() => setIsSummaryExpanded(prev => !prev)}
+          >
+            {isSummaryExpanded ? '收起' : '展开全文'}
+          </button>
+        )}
+      </div>
+
+      {/* AI Summary Grid - 四格卡片 */}
+      {(paper.core_contributions || paper.method_summary || paper.limitations || paper.relevance_note) && (
+        <div className="glass-card ai-summary-grid-card">
+          <div className="summary-grid">
+            <div className="summary-item">
+              <div className="summary-item-label contributions">
+                <Icon name="target" className="label-icon" />
+                核心贡献
+              </div>
+              <div className="summary-item-content">
+                {paper.core_contributions || '暂无内容'}
+              </div>
             </div>
-          )}
-          {paper.summary_status && (
-            <div className="status-group">
-              <span className="status-group-label">摘要</span>
-              <StatusBadge value={paper.summary_status} />
+            <div className="summary-item">
+              <div className="summary-item-label method">
+                <Icon name="gear" className="label-icon" />
+                方法概述
+              </div>
+              <div className="summary-item-content">
+                {paper.method_summary || '暂无内容'}
+              </div>
             </div>
-          )}
-          <div style={{ flex: 1 }} />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              type="button"
-              className={`btn ${viewMode === 'content' ? 'btn-primary' : 'btn-action'}`}
-              onClick={() => setViewMode('content')}
-              style={{ height: 32, padding: '0 12px', fontSize: 13 }}
-            ><Icon name="fileText" />内容</button>
-            <button
-              type="button"
-              className={`btn ${viewMode === 'pdf' ? 'btn-primary' : 'btn-action'}`}
-              onClick={() => setViewMode('pdf')}
-              style={{ height: 32, padding: '0 12px', fontSize: 13 }}
-            ><Icon name="pdf" />PDF 原文</button>
+            <div className="summary-item">
+              <div className="summary-item-label limitations">
+                <Icon name="warning" className="label-icon" />
+                局限性
+              </div>
+              <div className="summary-item-content">
+                {paper.limitations || '暂无内容'}
+              </div>
+            </div>
+            <div className="summary-item">
+              <div className="summary-item-label relevance">
+                <Icon name="link" className="label-icon" />
+                相关性注记
+              </div>
+              <div className="summary-item-content">
+                {paper.relevance_note || '暂无内容'}
+              </div>
+            </div>
           </div>
         </div>
+      )}
 
-        {categories.length > 0 && (
-          <div className="paper-category-row">
-            <label className="paper-category-field" htmlFor="paper-primary-category">
-              <span>主分类</span>
-              <select
-                id="paper-primary-category"
-                aria-label="主分类"
-                className="paper-search-input paper-category-select"
-                value={paper.primary_category_id ?? ''}
-                onChange={(event) => {
-                  const nextValue = Number(event.target.value)
-                  if (Number.isNaN(nextValue) || !onCategoryChange) return
-                  void onCategoryChange(nextValue)
-                }}
-                disabled={isUpdatingCategory}
-              >
-                {categories.map(category => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="paper-category-meta">
-              <span className="status-badge">
-                {paper.category_status === 'manual_locked' ? '手动锁定' : paper.category_status === 'pending_review' ? '待确认' : '已自动分类'}
-              </span>
-              <span className="paper-category-confidence">
-                置信度 {Math.round((paper.category_confidence ?? 0) * 100)}%
-              </span>
-            </div>
-          </div>
-        )}
-        {paper.category_reason && (
-          <div className="paper-category-reason">{paper.category_reason}</div>
-        )}
+      {/* 5. Processing_Timeline */}
+      <div className="processing-timeline-section">
+        <h3 className="section-label">处理流程</h3>
+        <div className="processing-timeline">
+          {(() => {
+            const steps = [
+              { label: '导入', completed: true, time: paper.updated_at },
+              { label: '解析', completed: paper.parse_status === 'done' || paper.parse_status === 'completed', time: paper.updated_at },
+              { label: '摘要生成', completed: paper.summary_status === 'done' || paper.summary_status === 'completed', time: paper.updated_at },
+              { label: '向量化', completed: paper.embedding_status === 'done' || paper.embedding_status === 'completed', time: paper.updated_at },
+            ]
+            return steps.map((step, i) => (
+              <React.Fragment key={step.label}>
+                <div className={`timeline-card ${step.completed ? 'completed' : ''}`}>
+                  <div className="timeline-card-header">
+                    <span className="timeline-card-label">{step.label}</span>
+                    {step.completed && (
+                      <svg className="timeline-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="16 9 10.5 15 8 12.5" />
+                      </svg>
+                    )}
+                  </div>
+                  {step.completed && step.time && (
+                    <div className="timeline-card-time">{new Date(step.time).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
+                  )}
+                </div>
+                {i < steps.length - 1 && <div className="timeline-connector">→</div>}
+              </React.Fragment>
+            ))
+          })()}
+        </div>
+      </div>
 
-        {/* Tag Editor */}
+      {/* 6. Tag Editor */}
+      <div className="detail-tag-editor-section">
         <div className="tag-editor">
           {localTags.map(tag => (
             <span key={tag} className="tag-editor-pill">
@@ -325,7 +485,8 @@ export function PaperDetail({
         </div>
       </div>
 
-      {viewMode === 'pdf' ? (
+      {/* PDF View Mode */}
+      {viewMode === 'pdf' && (
         <div className="glass-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 24, position: 'relative' }}>
           {isPdfLoading && (
             <div style={{ padding: '80px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -340,100 +501,120 @@ export function PaperDetail({
             />
           )}
         </div>
-      ) : (
+      )}
+
+      {/* Content View Mode - Hierarchical TOC Grid */}
+      {viewMode === 'content' && (
         <>
-
-      {/* AI Summary */}
-      <SummaryCard
-        oneLineSummary={paper.one_line_summary}
-        coreContributions={paper.core_contributions}
-        methodSummary={paper.method_summary}
-        limitations={paper.limitations}
-        relevanceNote={paper.relevance_note}
-      />
-
-      {/* Hierarchical TOC Grid */}
-      <div className="glass-card paper-body-section">
-        <div className="section-header">
-          <h3 className="section-title">论文核心章节</h3>
-          <div className="section-divider" />
-        </div>
-        {sections.length > 0 ? (
-          <div className="toc-grid">
-            {sections.map((sec, idx) => (
-              <div key={idx} className="toc-card" onClick={() => setActiveChapter(sec)}>
-                <div className="toc-index">{idx + 1}</div>
-                <div className="toc-info">
-                  <h4 className="toc-title">{sec.title}</h4>
-                  {sec.subSections.length > 0 && (
-                    <span className="toc-subtitle">{sec.subSections.length} 个子话题</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-desc" style={{ textAlign: 'center', padding: '32px 0' }}>暂无正文结构</div>
-        )}
-      </div>
-
-      {/* Multi-level Reading Modal */}
-      {activeChapter && (
-        <div className="chapter-modal-overlay" onClick={() => setActiveChapter(null)}>
-          <div className="chapter-modal-content glass-card wide" onClick={e => e.stopPropagation()}>
-            <div className="chapter-modal-header">
-              <div className="header-labels">
-                <span className="modal-label">深度阅读</span>
-                <h3 className="chapter-modal-title">{activeChapter.title}</h3>
-              </div>
-              <button 
-                type="button" 
-                className="chapter-modal-close" 
-                onClick={() => setActiveChapter(null)}
-                aria-label="关闭章节阅读"
-              ><Icon name="close" /></button>
+          <div className="glass-card paper-body-section" id="paper-sections-anchor">
+            <div className="section-header">
+              <h3 className="section-title">论文核心章节</h3>
+              <div className="section-divider" />
             </div>
-            
-            <div className="chapter-modal-split-layout">
-              {activeChapter.subSections.length > 0 && (
-                <aside className="chapter-modal-sidebar">
-                  <div 
-                    className={`sub-nav-item ${activeSubIndex === -1 ? 'active' : ''}`}
-                    onClick={() => setActiveSubIndex(-1)}
-                  >
-                    主要阐述 / 导读
-                  </div>
-                  {activeChapter.subSections.map((sub, i) => (
-                    <div 
-                      key={i} 
-                      className={`sub-nav-item ${activeSubIndex === i ? 'active' : ''}`}
-                      onClick={() => setActiveSubIndex(i)}
-                    >
-                      {sub.title}
+            {sections.length > 0 ? (
+              <>
+                <div className="toc-grid" style={{ transition: 'max-height 250ms ease-in-out, opacity 250ms ease-in-out' }}>
+                  {(isSectionsExpanded ? sections : sections.slice(0, SECTION_COLLAPSE_LIMIT)).map((sec, idx) => (
+                    <div key={idx} className="toc-card" onClick={() => setActiveChapter(sec)}>
+                      <div className="toc-index">{idx + 1}</div>
+                      <div className="toc-info">
+                        <h4 className="toc-title">{sec.title}</h4>
+                        {sec.subSections.length > 0 && (
+                          <span className="toc-subtitle">{sec.subSections.length} 个子话题</span>
+                        )}
+                      </div>
                     </div>
                   ))}
-                </aside>
-              )}
-
-              <div className="chapter-modal-body prose">
-                <ReactMarkdown 
-                  remarkPlugins={[remarkGfm, remarkMath]} 
-                  rehypePlugins={[rehypeKatex]}
-                >
-                  {activeSubIndex === -1 || activeChapter.subSections.length === 0
-                    ? activeChapter.intro 
-                    : activeChapter.subSections[activeSubIndex].content}
-                </ReactMarkdown>
-                
-                {(activeSubIndex === -1 && !activeChapter.intro && activeChapter.subSections.length > 0) && (
-                   <div className="empty-sub-tip">请从左侧选择子章节开始阅读</div>
+                </div>
+                {sections.length > SECTION_COLLAPSE_LIMIT && (
+                  <button
+                    type="button"
+                    className="section-toggle-btn"
+                    onClick={() => setIsSectionsExpanded(prev => !prev)}
+                  >
+                    {isSectionsExpanded ? '收起章节' : '展开全部章节'}
+                  </button>
                 )}
+              </>
+            ) : (
+              <div className="empty-desc" style={{ textAlign: 'center', padding: '32px 0' }}>暂无正文结构</div>
+            )}
+          </div>
+
+          {/* Multi-level Reading Modal */}
+          {activeChapter && (
+            <div className="chapter-modal-overlay" onClick={() => setActiveChapter(null)}>
+              <div className="chapter-modal-content glass-card wide" onClick={e => e.stopPropagation()}>
+                <div className="chapter-modal-header">
+                  <div className="header-labels">
+                    <span className="modal-label">深度阅读</span>
+                    <h3 className="chapter-modal-title">{activeChapter.title}</h3>
+                  </div>
+                  <button 
+                    type="button" 
+                    className="chapter-modal-close" 
+                    onClick={() => setActiveChapter(null)}
+                    aria-label="关闭章节阅读"
+                  ><Icon name="close" /></button>
+                </div>
+                
+                <div className="chapter-modal-split-layout">
+                  {activeChapter.subSections.length > 0 && (
+                    <aside className="chapter-modal-sidebar">
+                      <div 
+                        className={`sub-nav-item ${activeSubIndex === -1 ? 'active' : ''}`}
+                        onClick={() => setActiveSubIndex(-1)}
+                      >
+                        主要阐述 / 导读
+                      </div>
+                      {activeChapter.subSections.map((sub, i) => (
+                        <div 
+                          key={i} 
+                          className={`sub-nav-item ${activeSubIndex === i ? 'active' : ''}`}
+                          onClick={() => setActiveSubIndex(i)}
+                        >
+                          {sub.title}
+                        </div>
+                      ))}
+                    </aside>
+                  )}
+
+                  <div className="chapter-modal-body prose">
+                    <ReactMarkdown 
+                      remarkPlugins={[remarkGfm, remarkMath]} 
+                      rehypePlugins={[rehypeKatex]}
+                    >
+                      {activeSubIndex === -1 || activeChapter.subSections.length === 0
+                        ? activeChapter.intro 
+                        : activeChapter.subSections[activeSubIndex].content}
+                    </ReactMarkdown>
+                    
+                    {(activeSubIndex === -1 && !activeChapter.intro && activeChapter.subSections.length > 0) && (
+                       <div className="empty-sub-tip">请从左侧选择子章节开始阅读</div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          )}
         </>
+      )}
+
+      {/* Category metadata (preserved from original) */}
+      {categories.length > 0 && paper.category_status && (
+        <div className="detail-category-meta-section">
+          <div className="paper-category-meta">
+            <span className="status-badge">
+              {paper.category_status === 'manual_locked' ? '手动锁定' : paper.category_status === 'pending_review' ? '待确认' : '已自动分类'}
+            </span>
+            <span className="paper-category-confidence">
+              置信度 {Math.round((paper.category_confidence ?? 0) * 100)}%
+            </span>
+          </div>
+          {paper.category_reason && (
+            <div className="paper-category-reason">{paper.category_reason}</div>
+          )}
+        </div>
       )}
     </div>
   )

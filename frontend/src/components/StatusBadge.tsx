@@ -56,9 +56,9 @@ export function StatusBadge({ value, className }: { value: string; className?: s
     <span
       className={cn(
         'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors',
-        variant === 'done' && 'border-green-500/35 bg-gradient-to-br from-green-500/22 to-green-400/14 text-green-500 dark:text-green-400',
-        variant === 'error' && 'border-red-500/40 bg-gradient-to-br from-red-500/22 to-red-400/14 text-red-500 dark:text-red-400 animate-[error-pulse_2.5s_ease-in-out_infinite]',
-        variant === 'processing' && 'border-blue-500/35 bg-gradient-to-br from-blue-500/22 to-indigo-400/14 text-blue-600 dark:text-blue-400',
+        variant === 'done' && 'border-green-500/35 bg-gradient-to-br from-green-500/22 to-green-400/14 text-green-500',
+        variant === 'error' && 'border-red-500/40 bg-gradient-to-br from-red-500/22 to-red-400/14 text-red-500 animate-[error-pulse_2.5s_ease-in-out_infinite]',
+        variant === 'processing' && 'border-blue-500/35 bg-gradient-to-br from-blue-500/22 to-indigo-400/14 text-blue-600',
         variant === 'default' && 'border-border bg-muted text-muted-foreground',
         className,
       )}

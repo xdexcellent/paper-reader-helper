@@ -42,10 +42,12 @@ interface SubscriptionItem {
 
 const SOURCE_KIND_OPTIONS = [
   { value: 'arxiv', label: 'arXiv', description: '关键词搜索 arXiv 论文' },
+  { value: 'openalex', label: 'OpenAlex', description: '开放学术图谱，覆盖 2.5 亿篇论文，无限流' },
   { value: 'semantic_scholar', label: 'Semantic Scholar', description: '语义学术搜索，覆盖全学科' },
   { value: 'pwc', label: 'Papers With Code', description: '带代码实现的最新论文' },
   { value: 'dblp', label: 'DBLP', description: '计算机科学文献数据库' },
   { value: 'crossref', label: 'CrossRef', description: '跨学科 DOI 论文搜索' },
+  { value: 'unpaywall', label: 'Unpaywall', description: '通过 DOI 查找开放获取 PDF 下载链接' },
   { value: 'rss', label: 'RSS', description: '通过 RSS/Atom 订阅源获取论文' },
   { value: 'openreview', label: 'OpenReview', description: '按会议/邀请获取 OpenReview 论文' },
   { value: 'hf_papers', label: 'HF Papers', description: '抓取 Hugging Face Daily Papers' },
@@ -54,6 +56,7 @@ const SOURCE_KIND_OPTIONS = [
 
 const SOURCE_KIND_COLORS: Record<string, string> = {
   arxiv: '#b31b1b',
+  openalex: '#e63946',
   rss: '#f26522',
   openreview: '#8c1515',
   hf_papers: '#ff9d00',
@@ -62,6 +65,7 @@ const SOURCE_KIND_COLORS: Record<string, string> = {
   pwc: '#21cbce',
   dblp: '#004f9f',
   crossref: '#f36e21',
+  unpaywall: '#2ecc71',
 }
 
 interface SubscriptionPreset {
@@ -732,7 +736,7 @@ export function SubscriptionPage() {
               const kind = sub.source_kind || sub.type || 'arxiv'
               const kindLabel = SOURCE_KIND_OPTIONS.find(o => o.value === kind)?.label ?? kind
               const kindColor = SOURCE_KIND_COLORS[kind] || 'var(--text-muted)'
-              const queryLabel = kind === 'rss' ? 'Feed URL' : kind === 'arxiv' || kind === 'semantic_scholar' || kind === 'dblp' || kind === 'crossref' || kind === 'pwc' ? '关键词' : '配置'
+              const queryLabel = kind === 'rss' ? 'Feed URL' : kind === 'unpaywall' ? 'DOI 列表' : kind === 'arxiv' || kind === 'semantic_scholar' || kind === 'dblp' || kind === 'crossref' || kind === 'pwc' || kind === 'openalex' ? '关键词' : '配置'
               let queryDisplay: string
               if (kind === 'openreview') {
                 const venueOrInv = getStringConfigValue(sub.config, 'venue') || getStringConfigValue(sub.config, 'invitation') || '—'

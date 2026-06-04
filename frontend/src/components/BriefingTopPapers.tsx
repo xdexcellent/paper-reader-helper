@@ -2,7 +2,9 @@ import { useState } from 'react'
 
 import type { DailyBriefingSnapshot, Paper } from '../types'
 import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 
 const DEFAULT_VISIBLE_PAPERS = 3
 
@@ -85,15 +87,21 @@ export function BriefingTopPapers({
         const readerFit = getReaderFit(item.source_kind, directionTag)
         const topicTags = getTopicTags(item, paper)
         return (
-          <article
+          <Card
             key={cardKey}
-            className={`briefing-top-paper-card priority-${priority.tone}${paperId === null ? ' disabled' : ''}`}
+            className={cn(
+              'briefing-top-paper-card',
+              `priority-${priority.tone}`,
+              paperId === null && 'disabled',
+            )}
           >
-            <div className="briefing-top-paper-body">
+            <CardContent className="briefing-top-paper-body">
               <div className="briefing-top-paper-heading">
                 <span className="briefing-top-paper-rank">#{item.rank}</span>
                 <div className="briefing-top-paper-title-group">
-                  <span className={`briefing-priority-label ${priority.tone}`}>{priority.text}</span>
+                  <Badge variant="outline" className={`briefing-priority-label ${priority.tone}`}>
+                    {priority.text}
+                  </Badge>
                   <h3>{title}</h3>
                 </div>
               </div>
@@ -120,8 +128,10 @@ export function BriefingTopPapers({
               {summaryText ? (
                 <div className="briefing-top-paper-summary-block">
                   <p className={`briefing-top-paper-summary${expanded ? ' expanded' : ''}`}>{summaryText}</p>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     className="briefing-top-paper-summary-toggle"
                     onClick={() => {
                       setExpandedCards((current) => {
@@ -136,20 +146,21 @@ export function BriefingTopPapers({
                     }}
                   >
                     {expanded ? '收起摘要' : '展开摘要'}
-                  </button>
+                  </Button>
                 </div>
               ) : null}
               {paperId !== null ? (
-                <button
-          type="button"
-          className="briefing-top-paper-open"
-          onClick={() => onOpenPaper?.(paperId)}
-        >
-          打开论文
-        </button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="briefing-top-paper-open"
+                  onClick={() => onOpenPaper?.(paperId)}
+                >
+                  打开论文
+                </Button>
               ) : null}
-            </div>
-          </article>
+            </CardContent>
+          </Card>
         )
       })}
       {hasHiddenPapers ? (
