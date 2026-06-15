@@ -30,7 +30,7 @@ from app.services.category_service import initialize_pending_category, update_pa
 from app.services.http_client_factory import get_http_client
 from app.services.pdf_metadata import extract_title_from_pdf
 from app.services.pipeline import PaperPipelineService
-from app.services.storage import StorageService
+from app.services.storage import StorageService, storage_file_url
 from app.services.task_queue import BackgroundTaskQueue
 
 logger = logging.getLogger(__name__)
@@ -242,6 +242,57 @@ def list_all_tags(session: Session = Depends(get_session)) -> list[str]:
     return sorted(tag_set)
 
 
+@router.post("/rebuild-representative-images")
+def rebuild_representative_images(session: Session = Depends(get_session)) -> dict:
+    """批量补救：为所有缺少代表图且已完成解析的论文重新提取代表图。"""
+    from app.services.block_extraction_service import BlockExtractionService
+
+    papers = list(
+        session.exec(
+            select(Paper).where(
+                Paper.representative_image_path == "",
+                Paper.parse_status == "completed",
+            )
+        ).all()
+    )
+
+    service = BlockExtractionService()
+    success_count = 0
+    failure_count = 0
+
+    for paper in papers:
+        content = session.exec(
+            select(PaperContent).where(PaperContent.paper_id == paper.id)
+        ).first()
+        if content is None:
+            failure_count += 1
+            continue
+
+        try:
+            result = service.rebuild_blocks(session, paper, content)
+            paper.representative_image_path = result.representative_image_path
+            session.add(paper)
+            content.block_extraction_error = ""
+            session.add(content)
+            session.commit()
+            if result.representative_image_path:
+                success_count += 1
+            else:
+                failure_count += 1
+        except Exception:
+            session.rollback()
+            logger.warning(
+                "代表图重建失败: paper_id=%s", paper.id, exc_info=True
+            )
+            failure_count += 1
+
+    return {
+        "total": len(papers),
+        "success": success_count,
+        "failure": failure_count,
+    }
+
+
 class SemanticSearchResult(BaseModel):
     paper: PaperResponse
     similarity: float
@@ -346,6 +397,7 @@ def get_paper(
         summary_status=paper.summary_status,
         embedding_status=paper.embedding_status,
         local_pdf_path=paper.local_pdf_path,
+        representative_image_url=storage_file_url(paper.representative_image_path),
         primary_category_id=paper.primary_category_id,
         category_status=paper.category_status,
         category_confidence=paper.category_confidence,
@@ -401,7 +453,7 @@ def parse_paper(paper_id: int, session: Session = Depends(get_session)) -> dict:
 @router.post("/{paper_id}/summarize", status_code=202)
 def summarize_paper(
     paper_id: int,
-    model: str = Query(default="gpt-5.4"),
+    model: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> dict:
     paper = session.get(Paper, paper_id)
@@ -442,7 +494,7 @@ def summarize_paper(
 @router.post("/{paper_id}/translate-abstract")
 def translate_abstract(
     paper_id: int,
-    model: str = Query(default="gpt-5.4"),
+    model: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> dict:
     """Translate the paper abstract to Chinese using AI."""
