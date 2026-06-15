@@ -5,7 +5,10 @@ import { WorkDashboardPage } from '../WorkDashboardPage'
 import { PaperSummarySection } from '../PaperSummarySection'
 import { DashboardTopbar } from '../DashboardTopbar'
 import { DashboardSidebar } from '../DashboardSidebar'
+import { PaperListItem } from '../PaperListItem'
+import { PriorityPaperCard } from '../PriorityPaperCard'
 import { buildDashboardNavigationItems, buildResearchProgress } from '../dashboardUtils'
+import { briefingItemToPriorityCard, paperToMockPaper } from '../useDashboardData'
 import type { MockPaper } from '../mockData'
 import type { Paper } from '../../../types'
 
@@ -178,6 +181,130 @@ describe('WorkDashboardPage integration', () => {
     render(<PaperSummarySection papers={allReadPapers} />)
     fireEvent.click(screen.getByText('未读 0'))
     expect(screen.getByText('当前筛选条件下暂无论文')).toBeInTheDocument()
+  })
+
+  it('maps paper representative images into dashboard thumbnails', () => {
+    const paper = {
+      ...makePaper(11, 'Visual Paper', 'unread', ['Vision']),
+      representative_image_url: '/files/papers/abc/representative-images/figure.jpg',
+    }
+
+    const mapped = paperToMockPaper(paper, new Map())
+
+    expect(mapped.thumbnailUrl).toBe('/files/papers/abc/representative-images/figure.jpg')
+  })
+
+  it('uses matched paper representative image before briefing PDF url', () => {
+    const paper = {
+      ...makePaper(12, 'Priority Visual Paper', 'unread', ['Vision']),
+      representative_image_url: '/files/papers/def/representative-images/figure.png',
+    }
+
+    const mapped = briefingItemToPriorityCard(
+      {
+        paper_id: paper.id,
+        rank: 1,
+        score: 1,
+        reason: 'High relevance',
+        source_kind: 'arxiv',
+        title: paper.title,
+        pdf_url: 'https://example.com/paper.pdf',
+      },
+      '2026-05-11',
+      [paper],
+      1,
+    )
+
+    expect(mapped.thumbnailUrl).toBe('/files/papers/def/representative-images/figure.png')
+  })
+
+  it('previews representative image when clicking a summary thumbnail', () => {
+    const onOpenPaper = vi.fn()
+    const paper: MockPaper = {
+      id: '42',
+      title: 'Clickable Thumbnail Paper',
+      source: 'arxiv',
+      date: '2026-05-11',
+      citations: 0,
+      tags: ['Vision'],
+      relevanceScore: 0.8,
+      abstract: 'Paper abstract',
+      project: '',
+      isRead: false,
+      thumbnailUrl: '/files/papers/abc/representative-images/figure.jpg',
+    }
+
+    render(<PaperListItem paper={paper} onOpenPaper={onOpenPaper} />)
+    fireEvent.click(screen.getByRole('button', { name: '预览代表图：Clickable Thumbnail Paper' }))
+
+    expect(screen.getByRole('img', { name: '代表图预览：Clickable Thumbnail Paper' })).toBeInTheDocument()
+    expect(onOpenPaper).not.toHaveBeenCalled()
+  })
+
+  it('opens paper detail when clicking a summary title', () => {
+    const onOpenPaper = vi.fn()
+    const paper: MockPaper = {
+      id: '42',
+      title: 'Clickable Title Paper',
+      source: 'arxiv',
+      date: '2026-05-11',
+      citations: 0,
+      tags: ['Vision'],
+      relevanceScore: 0.8,
+      abstract: 'Paper abstract',
+      project: '',
+      isRead: false,
+      thumbnailUrl: '/files/papers/abc/representative-images/figure.jpg',
+    }
+
+    render(<PaperListItem paper={paper} onOpenPaper={onOpenPaper} />)
+    fireEvent.click(screen.getByRole('heading', { name: 'Clickable Title Paper' }))
+
+    expect(onOpenPaper).toHaveBeenCalledWith(42)
+  })
+
+  it('previews representative image when clicking a priority thumbnail', () => {
+    const onRead = vi.fn()
+
+    render(
+      <PriorityPaperCard
+        rank={1}
+        paperId="77"
+        title="Priority Thumbnail Paper"
+        source="arxiv"
+        date="2026-05-11"
+        citations={0}
+        tags={['Agent']}
+        relevanceScore={0.9}
+        thumbnailUrl="/files/papers/def/representative-images/figure.png"
+        onRead={onRead}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '预览代表图：Priority Thumbnail Paper' }))
+
+    expect(screen.getByRole('img', { name: '代表图预览：Priority Thumbnail Paper' })).toBeInTheDocument()
+    expect(onRead).not.toHaveBeenCalled()
+  })
+
+  it('opens paper detail when clicking a priority title without paper id', () => {
+    const onRead = vi.fn()
+
+    render(
+      <PriorityPaperCard
+        rank={2}
+        title="Priority Thumbnail Without Id"
+        source="arxiv"
+        date="2026-05-11"
+        citations={0}
+        tags={['Agent']}
+        relevanceScore={0.9}
+        thumbnailUrl="/files/papers/def/representative-images/figure.png"
+        onRead={onRead}
+      />,
+    )
+    fireEvent.click(screen.getByRole('heading', { name: 'Priority Thumbnail Without Id' }))
+
+    expect(onRead).toHaveBeenCalledTimes(1)
   })
 
   it('notification badge shows unread count from supplied notifications', () => {

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { BookOpen, Bookmark, MoreHorizontal, CheckCircle, FolderPlus, EyeOff, Search, Trash2 } from 'lucide-react'
 import { truncateText } from './dashboardUtils'
 import { PaperThumbnail } from './PaperThumbnail'
+import { PaperThumbnailPreviewDialog } from './PaperThumbnailPreviewDialog'
 import { showToast } from './DashboardToast'
 import { updatePaperFavorite } from '../../lib/api'
 
@@ -51,7 +52,18 @@ export function PriorityPaperCard({
   const relevancePercent = Math.round(relevanceScore * 100)
   const [isFavorite, setIsFavorite] = useState(favorite)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [thumbnailPreviewOpen, setThumbnailPreviewOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  function handleOpen(e?: React.MouseEvent) {
+    e?.stopPropagation()
+    onRead()
+  }
+
+  function handlePreviewThumbnail(e?: React.MouseEvent) {
+    e?.stopPropagation()
+    setThumbnailPreviewOpen(true)
+  }
 
   // Sync with prop when parent data refreshes
   useEffect(() => { setIsFavorite(favorite) }, [favorite])
@@ -100,19 +112,29 @@ export function PriorityPaperCard({
 
       {/* Thumbnail */}
       <div className="flex items-center px-4 py-3">
-        <PaperThumbnail
-          variant={rank}
-          paperId={paperId}
-          thumbnailUrl={thumbnailUrl}
-          title={title}
-          abstractText={abstractText}
-          className="h-[88px] w-[68px]"
-        />
+        <button
+          type="button"
+          onClick={handlePreviewThumbnail}
+          className="rounded-[12px] text-left outline-none transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2"
+          aria-label={`预览代表图：${title}`}
+        >
+          <PaperThumbnail
+            variant={rank}
+            paperId={paperId}
+            thumbnailUrl={thumbnailUrl}
+            title={title}
+            abstractText={abstractText}
+            className="h-[88px] w-[68px]"
+          />
+        </button>
       </div>
 
       {/* Center: Paper info */}
       <div className="flex flex-1 flex-col justify-center py-3 pr-4 min-w-0">
-        <h3 className="text-[14px] font-bold leading-[1.4] text-[#0F172A] line-clamp-2">
+        <h3
+          className="cursor-pointer text-[14px] font-bold leading-[1.4] text-[#0F172A] line-clamp-2 transition-colors hover:text-[#2563EB]"
+          onClick={handleOpen}
+        >
           {truncateText(title, 90)}
         </h3>
         <div className="mt-1.5 flex items-center gap-1.5 text-[12px] text-[#64748B]">
@@ -146,7 +168,7 @@ export function PriorityPaperCard({
 
         {/* Actions */}
         <button
-          onClick={onRead}
+          onClick={handleOpen}
           className="flex items-center gap-1 rounded-lg bg-[#2563EB] px-2.5 py-[5px] text-[11px] font-medium text-white whitespace-nowrap transition-colors hover:bg-[#1d4ed8]"
         >
           <BookOpen size={11} />阅读
@@ -183,6 +205,15 @@ export function PriorityPaperCard({
           )}
         </div>
       </div>
+      <PaperThumbnailPreviewDialog
+        open={thumbnailPreviewOpen}
+        onOpenChange={setThumbnailPreviewOpen}
+        title={title}
+        variant={rank}
+        paperId={paperId}
+        thumbnailUrl={thumbnailUrl}
+        abstractText={abstractText}
+      />
     </div>
   )
 }

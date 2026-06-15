@@ -3,6 +3,7 @@ import { Bookmark, MoreHorizontal, BookOpen, FolderPlus, EyeOff, Trash2, Eye } f
 import type { MockPaper } from './mockData'
 import { truncateText } from './dashboardUtils'
 import { PaperThumbnail } from './PaperThumbnail'
+import { PaperThumbnailPreviewDialog } from './PaperThumbnailPreviewDialog'
 import { showToast } from './DashboardToast'
 import { updatePaperFavorite, updatePaperReadingState, deletePaper } from '../../lib/api'
 
@@ -21,6 +22,7 @@ export function PaperListItem({ paper, onOpenPaper, onPaperUpdated, onAddToProje
 
   const [isFavorite, setIsFavorite] = useState(paper.favorite ?? false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [thumbnailPreviewOpen, setThumbnailPreviewOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   // Sync with prop when parent data refreshes
@@ -37,6 +39,16 @@ export function PaperListItem({ paper, onOpenPaper, onPaperUpdated, onAddToProje
 
   const numericId = parseInt(paper.id, 10)
   const hasValidId = !isNaN(numericId)
+  const canOpenPaper = hasValidId && Boolean(onOpenPaper)
+  const thumbnailVariant = parseInt(paper.id.replace(/\D/g, ''), 10) || 1
+
+  function handleOpenPaper() {
+    if (canOpenPaper) onOpenPaper?.(numericId)
+  }
+
+  function handlePreviewThumbnail() {
+    setThumbnailPreviewOpen(true)
+  }
 
   async function handleFavorite() {
     if (!hasValidId) { setIsFavorite(!isFavorite); showToast(isFavorite ? '已取消收藏' : '已收藏', 'success'); return }
@@ -73,21 +85,28 @@ export function PaperListItem({ paper, onOpenPaper, onPaperUpdated, onAddToProje
     >
       {/* Left: Thumbnail */}
       <div className="flex items-center py-3.5 pl-4">
-        <PaperThumbnail
-          variant={parseInt(paper.id.replace(/\D/g, ''), 10) || 1}
-          paperId={numericId}
-          thumbnailUrl={paper.thumbnailUrl}
-          title={paper.title}
-          abstractText={paper.abstract}
-          className="h-[88px] w-[68px]"
-        />
+        <button
+          type="button"
+          onClick={handlePreviewThumbnail}
+          className="rounded-[12px] text-left outline-none transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2"
+          aria-label={`预览代表图：${paper.title}`}
+        >
+          <PaperThumbnail
+            variant={thumbnailVariant}
+            paperId={numericId}
+            thumbnailUrl={paper.thumbnailUrl}
+            title={paper.title}
+            abstractText={paper.abstract}
+            className="h-[88px] w-[68px]"
+          />
+        </button>
       </div>
 
       {/* Center: Content */}
       <div className="flex flex-1 flex-col justify-center py-3 px-4 min-w-0">
         <h4
           className="text-[14px] font-bold text-[#0F172A] leading-[1.4] line-clamp-2 cursor-pointer hover:text-[#2563EB] transition-colors"
-          onClick={() => { if (hasValidId && onOpenPaper) onOpenPaper(numericId) }}
+          onClick={handleOpenPaper}
         >
           {displayTitle}
         </h4>
@@ -154,6 +173,15 @@ export function PaperListItem({ paper, onOpenPaper, onPaperUpdated, onAddToProje
           )}
         </div>
       </div>
+      <PaperThumbnailPreviewDialog
+        open={thumbnailPreviewOpen}
+        onOpenChange={setThumbnailPreviewOpen}
+        title={paper.title}
+        variant={thumbnailVariant}
+        paperId={numericId}
+        thumbnailUrl={paper.thumbnailUrl}
+        abstractText={paper.abstract}
+      />
     </div>
   )
 }
