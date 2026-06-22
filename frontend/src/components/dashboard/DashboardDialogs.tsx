@@ -2,11 +2,18 @@
  * Dashboard dialogs: Automation Settings, Plan Adjustment, Add to Project.
  * Uses shadcn/ui Dialog with the dashboard's light design system.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { showToast } from './DashboardToast'
-import { fetchAutomationSettings, updateAutomationSettings } from '../../lib/api'
-import type { AutomationSettings } from '../../types'
+import {
+  fetchAiProviderModels,
+  fetchAiProviderSettings,
+  fetchAutomationSettings,
+  updateAiProviderSettings,
+  updateAutomationSettings,
+} from '../../lib/api'
+import { notifyAiProviderSettingsChanged } from '../../lib/aiModels'
+import type { AiProviderSettings, AutomationSettings } from '../../types'
 
 // ─── Automation Settings Dialog ─────────────────────────────────────
 
@@ -142,6 +149,292 @@ export function AutomationSettingsDialog({ open, onOpenChange }: AutomationDialo
           <button onClick={() => onOpenChange(false)} className="rounded-lg px-4 py-2 text-[13px] text-[#64748B] hover:bg-[#F8FAFC]">取消</button>
           <button onClick={handleSave} disabled={loading} className="rounded-lg bg-[#2563EB] px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-50">
             {loading ? '保存中...' : '保存'}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── AI Provider Settings Dialog ───────────────────────────────────
+
+type PreferencesDialogProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+const defaultAiProviderSettings: AiProviderSettings = {
+  provider_name: 'OpenAI Compatible',
+  api_base: 'https://api.deepseek.com',
+  api_key_set: false,
+  api_key_preview: '',
+  default_model: 'gpt-5.4',
+  available_models: ['gpt-5.4'],
+}
+
+export function PreferencesDialog({ open, onOpenChange }: PreferencesDialogProps) {
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [fetchingModels, setFetchingModels] = useState(false)
+  const [settings, setSettings] = useState<AiProviderSettings>(defaultAiProviderSettings)
+  const [apiKeyInput, setApiKeyInput] = useState('')
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    setLoading(true)
+    fetchAiProviderSettings()
+      .then((data) => {
+        if (cancelled) return
+        setSettings(data)
+        setApiKeyInput(data.api_key_preview || '')
+      })
+      .catch(() => showToast('加载 AI 供应商配置失败', 'error'))
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open])
+
+  async function handleFetchModels() {
+    setFetchingModels(true)
+    try {
+      const models = await fetchAiProviderModels({
+        api_base: settings.api_base,
+        api_key: apiKeyInput && apiKeyInput !== settings.api_key_preview ? apiKeyInput : undefined,
+      })
+      const nextDefault = models.includes(settings.default_model)
+        ? settings.default_model
+        : models[0] || settings.default_model
+      setSettings({ ...settings, available_models: models, default_model: nextDefault })
+      showToast('模型列表已更新', 'success')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '获取模型失败', 'error')
+    } finally {
+      setFetchingModels(false)
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      const apiKeyChanged = apiKeyInput.trim() && apiKeyInput.trim() !== settings.api_key_preview
+      const next = await updateAiProviderSettings({
+        provider_name: settings.provider_name,
+        api_base: settings.api_base,
+        api_key: apiKeyChanged ? apiKeyInput.trim() : undefined,
+        default_model: settings.default_model,
+        available_models: settings.available_models,
+      })
+      setSettings(next)
+      setApiKeyInput(next.api_key_preview || '')
+      notifyAiProviderSettingsChanged(next)
+      showToast('AI 供应商配置已保存', 'success')
+      onOpenChange(false)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '保存 AI 供应商配置失败', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const modelOptions = settings.available_models.length > 0
+    ? settings.available_models
+    : [settings.default_model].filter(Boolean)
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="!max-w-[560px] !rounded-2xl !p-0 !bg-white !text-[#0F172A] !ring-[#E2E8F0]" style={{ background: '#FFFFFF', color: '#0F172A' }}>
+        <DialogHeader className="px-6 pt-5 pb-0">
+          <DialogTitle className="!text-[16px] !font-semibold !text-[#0F172A]">AI 供应商配置</DialogTitle>
+          <DialogDescription className="!text-[13px] !text-[#64748B]">配置整个系统默认使用的 AI 供应商</DialogDescription>
+        </DialogHeader>
+        <div className="px-6 py-4 space-y-4">
+          {loading ? (
+            <div className="py-8 text-center text-[13px] text-[#94A3B8]">加载中...</div>
+          ) : (
+            <section className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
+              <div className="mb-4">
+                <h3 className="text-[14px] font-semibold text-[#0F172A]">AI 供应商</h3>
+                <p className="mt-1 text-[12px] text-[#64748B]">支持 OpenAI 兼容的 /v1/chat/completions 与 /v1/models 接口。</p>
+              </div>
+
+              <div className="space-y-3">
+                <label className="block">
+                  <span className="mb-1 block text-[12px] font-medium text-[#334155]">供应商名称</span>
+                  <input
+                    value={settings.provider_name}
+                    onChange={(event) => setSettings({ ...settings, provider_name: event.target.value })}
+                    style={{ background: '#FFFFFF', color: '#334155', borderColor: '#E2E8F0' }}
+                    className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-[13px] outline-none focus:border-[#2563EB]"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-[12px] font-medium text-[#334155]">URL</span>
+                  <input
+                    value={settings.api_base}
+                    onChange={(event) => setSettings({ ...settings, api_base: event.target.value })}
+                    placeholder="https://api.example.com/v1"
+                    style={{ background: '#FFFFFF', color: '#334155', borderColor: '#E2E8F0' }}
+                    className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-[13px] outline-none placeholder:text-[#94A3B8] focus:border-[#2563EB]"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-[12px] font-medium text-[#334155]">API Key</span>
+                  <input
+                    type="password"
+                    value={apiKeyInput}
+                    onChange={(event) => setApiKeyInput(event.target.value)}
+                    placeholder={settings.api_key_set ? '已保存 API Key，输入新值可替换' : '输入 API Key'}
+                    style={{ background: '#FFFFFF', color: '#334155', borderColor: '#E2E8F0' }}
+                    className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-[13px] outline-none placeholder:text-[#94A3B8] focus:border-[#2563EB]"
+                  />
+                </label>
+
+                <div className="grid grid-cols-[1fr_auto] gap-3">
+                  <label className="block">
+                    <span className="mb-1 block text-[12px] font-medium text-[#334155]">使用模型</span>
+                    <select
+                      aria-label="选择系统默认模型"
+                      value={settings.default_model}
+                      onChange={(event) => setSettings({ ...settings, default_model: event.target.value })}
+                      style={{ background: '#FFFFFF', color: '#334155', borderColor: '#E2E8F0' }}
+                      className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-[13px] outline-none focus:border-[#2563EB]"
+                    >
+                      {modelOptions.map((model) => (
+                        <option key={model} value={model}>{model}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleFetchModels}
+                    disabled={fetchingModels || !settings.api_base.trim()}
+                    className="self-end rounded-lg border border-[#CBD5E1] bg-white px-4 py-2 text-[13px] font-medium text-[#334155] hover:bg-[#F8FAFC] disabled:opacity-50"
+                  >
+                    {fetchingModels ? '获取中...' : '获取模型'}
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+        </div>
+        <div className="border-t border-[#F1F5F9] px-6 py-3 flex justify-end gap-2">
+          <button onClick={() => onOpenChange(false)} className="rounded-lg px-4 py-2 text-[13px] text-[#64748B] hover:bg-[#F8FAFC]">取消</button>
+          <button onClick={handleSave} disabled={loading || saving} className="rounded-lg bg-[#2563EB] px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-50">
+            {saving ? '保存中...' : '保存'}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── User Preferences Dialog ────────────────────────────────────────
+
+type UserPreferencesDialogProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+export function UserPreferencesDialog({ open, onOpenChange }: UserPreferencesDialogProps) {
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [researchDirection, setResearchDirection] = useState('')
+  const [researchKeywords, setResearchKeywords] = useState('')
+  const [baseSettings, setBaseSettings] = useState<AutomationSettings | null>(null)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    if (!open || loaded) return
+    let cancelled = false
+    setLoading(true)
+    fetchAutomationSettings()
+      .then((data) => {
+        if (cancelled) return
+        setBaseSettings(data)
+        setResearchDirection(data.research_direction ?? '')
+        setResearchKeywords(data.research_keywords ?? '')
+        setLoaded(true)
+      })
+      .catch(() => showToast('加载偏好设置失败', 'error'))
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, loaded])
+
+  async function handleSave() {
+    if (!baseSettings) return
+    setSaving(true)
+    try {
+      await updateAutomationSettings({
+        ...baseSettings,
+        research_direction: researchDirection,
+        research_keywords: researchKeywords,
+      })
+      showToast('偏好设置已保存', 'success')
+      onOpenChange(false)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '保存偏好设置失败', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="!max-w-[480px] !rounded-2xl !p-0 !bg-white !text-[#0F172A] !ring-[#E2E8F0]" style={{ background: '#FFFFFF', color: '#0F172A' }}>
+        <DialogHeader className="px-6 pt-5 pb-0">
+          <DialogTitle className="!text-[16px] !font-semibold !text-[#0F172A]">偏好设置</DialogTitle>
+          <DialogDescription className="!text-[13px] !text-[#64748B]">配置研究方向，用于每日简报相关性打分与 AI 提示</DialogDescription>
+        </DialogHeader>
+        <div className="px-6 py-4 space-y-4">
+          {loading && !loaded ? (
+            <div className="py-8 text-center text-[13px] text-[#94A3B8]">加载中...</div>
+          ) : (
+            <section className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 space-y-3">
+              <label className="block">
+                <span className="mb-1 block text-[12px] font-medium text-[#334155]">研究方向</span>
+                <textarea
+                  value={researchDirection}
+                  onChange={(event) => setResearchDirection(event.target.value)}
+                  placeholder="例如：计算机视觉、扩散模型、CS 在医学中的应用"
+                  rows={3}
+                  style={{ background: '#FFFFFF', color: '#334155', borderColor: '#E2E8F0' }}
+                  className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-[13px] outline-none placeholder:text-[#94A3B8] focus:border-[#2563EB] resize-none"
+                />
+                <span className="mt-1 block text-[11px] text-[#64748B]">
+                  用于每日简报的关键词命中打分（每命中一个 +15，上限 +60）与 AI 生成摘要时的研究方向提示。
+                </span>
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[12px] font-medium text-[#334155]">研究关键词</span>
+                <input
+                  value={researchKeywords}
+                  onChange={(event) => setResearchKeywords(event.target.value)}
+                  placeholder="例如：multimodal, RLHF, retrieval-augmented"
+                  style={{ background: '#FFFFFF', color: '#334155', borderColor: '#E2E8F0' }}
+                  className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-[13px] outline-none placeholder:text-[#94A3B8] focus:border-[#2563EB]"
+                />
+                <span className="mt-1 block text-[11px] text-[#64748B]">
+                  以英文逗号分隔，与研究方向一并参与相关性命中统计。
+                </span>
+              </label>
+            </section>
+          )}
+        </div>
+        <div className="border-t border-[#F1F5F9] px-6 py-3 flex justify-end gap-2">
+          <button onClick={() => onOpenChange(false)} className="rounded-lg px-4 py-2 text-[13px] text-[#64748B] hover:bg-[#F8FAFC]">取消</button>
+          <button onClick={handleSave} disabled={loading || saving} className="rounded-lg bg-[#2563EB] px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-50">
+            {saving ? '保存中...' : '保存'}
           </button>
         </div>
       </DialogContent>

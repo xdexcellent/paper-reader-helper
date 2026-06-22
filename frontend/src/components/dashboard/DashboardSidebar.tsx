@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import type { NavigationItemData } from './mockData'
 import { showToast } from './DashboardToast'
+import { PreferencesDialog, UserPreferencesDialog } from './DashboardDialogs'
 
 // --- Types ---
 
@@ -177,6 +178,8 @@ function ResearchProgressCard({
 
 function UserInfoBlock({ name, badge }: { name: string; badge: string }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [preferencesOpen, setPreferencesOpen] = useState(false)
+  const [userPreferencesOpen, setUserPreferencesOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -210,8 +213,11 @@ function UserInfoBlock({ name, badge }: { name: string; badge: string }) {
           <button onClick={() => { setMenuOpen(false); showToast('个人资料功能开发中', 'info') }} className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[#334155] hover:bg-[#F8FAFC]">
             <User size={13} />个人资料
           </button>
-          <button onClick={() => { setMenuOpen(false); showToast('偏好设置功能开发中', 'info') }} className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[#334155] hover:bg-[#F8FAFC]">
-            <Settings size={13} />偏好设置
+          <button onClick={() => { setMenuOpen(false); setPreferencesOpen(true) }} className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[#334155] hover:bg-[#F8FAFC]">
+            <Settings size={13} />AI 供应商配置
+          </button>
+          <button onClick={() => { setMenuOpen(false); setUserPreferencesOpen(true) }} className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[#334155] hover:bg-[#F8FAFC]">
+            <User size={13} />偏好设置
           </button>
           <button onClick={() => { setMenuOpen(false); showToast('主题切换功能开发中', 'info') }} className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[#334155] hover:bg-[#F8FAFC]">
             <Palette size={13} />主题设置
@@ -225,6 +231,8 @@ function UserInfoBlock({ name, badge }: { name: string; badge: string }) {
           </button>
         </div>
       )}
+      <PreferencesDialog open={preferencesOpen} onOpenChange={setPreferencesOpen} />
+      <UserPreferencesDialog open={userPreferencesOpen} onOpenChange={setUserPreferencesOpen} />
     </div>
   )
 }
