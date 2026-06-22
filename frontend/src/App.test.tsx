@@ -7,6 +7,7 @@ import { beforeEach, vi } from 'vitest'
 
 import App from './App'
 import { AuthProvider } from './components/AuthContext'
+import { resetAiProviderSettingsCacheForTests } from './lib/aiModels'
 
 if (!('revokeObjectURL' in URL)) {
   Object.defineProperty(URL, 'revokeObjectURL', {
@@ -43,6 +44,9 @@ const apiMocks = vi.hoisted(() => ({
   fetchAutomationSettings: vi.fn(),
   fetchAutomationStatusToday: vi.fn(),
   updateAutomationSettings: vi.fn(),
+  fetchAiProviderSettings: vi.fn(),
+  updateAiProviderSettings: vi.fn(),
+  fetchAiProviderModels: vi.fn(),
   runTodayBriefing: vi.fn(),
   fetchRecommendations: vi.fn(),
   getPdfBlobUrl: vi.fn(),
@@ -74,6 +78,7 @@ const apiMocks = vi.hoisted(() => ({
 vi.mock('./lib/api', () => apiMocks)
 
 beforeEach(() => {
+  resetAiProviderSettingsCacheForTests()
   Object.values(apiMocks).forEach(mock => {
     if (typeof mock === 'function' && 'mockReset' in mock) {
       mock.mockReset()
@@ -141,6 +146,23 @@ beforeEach(() => {
     briefing_enabled: true,
     project_sidebar_enabled: true,
   })
+  apiMocks.fetchAiProviderSettings.mockResolvedValue({
+    provider_name: 'OpenAI Compatible',
+    api_base: 'https://api.deepseek.com',
+    api_key_set: false,
+    api_key_preview: '',
+    default_model: 'gpt-5.4',
+    available_models: ['gpt-5.4'],
+  })
+  apiMocks.updateAiProviderSettings.mockResolvedValue({
+    provider_name: 'OpenAI Compatible',
+    api_base: 'https://api.deepseek.com',
+    api_key_set: true,
+    api_key_preview: 'sk-t••••1234',
+    default_model: 'gpt-5.4',
+    available_models: ['gpt-5.4'],
+  })
+  apiMocks.fetchAiProviderModels.mockResolvedValue(['gpt-5.4', 'gpt-5.4-mini'])
   apiMocks.runTodayBriefing.mockResolvedValue({ run_id: 1, status: 'completed' })
   apiMocks.fetchStatsOverview.mockRejectedValue(new Error('stats unavailable'))
   apiMocks.fetchDailyStats.mockResolvedValue([])
@@ -364,6 +386,107 @@ test('初始渲染时显示浅色工作台标题与空态提示', async () => {
   expect(await screen.findByRole('heading', { name: '论文管理' })).toBeInTheDocument()
   expect(await screen.findByText('没有匹配当前筛选条件的论文。')).toBeInTheDocument()
   expect(await screen.findByText('选择一篇论文查看详情和管理状态。')).toBeInTheDocument()
+})
+
+test('可以从左下角偏好设置配置系统 AI 供应商', async () => {
+  apiMocks.fetchAiProviderSettings.mockResolvedValue({
+    provider_name: 'OpenAI Compatible',
+    api_base: 'https://llm.example.com/v1',
+    api_key_set: true,
+    api_key_preview: 'sk-t••••1234',
+    default_model: 'model-a',
+    available_models: ['model-a'],
+  })
+
+  renderApp()
+
+  expect(await screen.findByRole('heading', { name: '论文管理' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /研究者/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'AI 供应商配置' }))
+
+  expect(await screen.findByRole('heading', { name: 'AI 供应商配置' })).toBeInTheDocument()
+  expect(apiMocks.fetchAiProviderSettings).toHaveBeenCalled()
+
+  fireEvent.change(screen.getByPlaceholderText('https://api.example.com/v1'), {
+    target: { value: 'https://new.example.com/v1' },
+  })
+  fireEvent.change(screen.getByPlaceholderText('已保存 API Key，输入新值可替换'), {
+    target: { value: 'sk-new-key' },
+  })
+
+  fireEvent.click(screen.getByRole('button', { name: '获取模型' }))
+  await waitFor(() => {
+    expect(apiMocks.fetchAiProviderModels).toHaveBeenCalledWith({
+      api_base: 'https://new.example.com/v1',
+      api_key: 'sk-new-key',
+    })
+  })
+
+  fireEvent.change(screen.getByLabelText('选择系统默认模型'), { target: { value: 'gpt-5.4-mini' } })
+  fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+  await waitFor(() => {
+    expect(apiMocks.updateAiProviderSettings).toHaveBeenCalledWith({
+      provider_name: 'OpenAI Compatible',
+      api_base: 'https://new.example.com/v1',
+      api_key: 'sk-new-key',
+      default_model: 'gpt-5.4-mini',
+      available_models: ['gpt-5.4', 'gpt-5.4-mini'],
+    })
+  })
+})
+
+test('其它页面模型选择会使用偏好设置中的供应商模型列表', async () => {
+  apiMocks.fetchAiProviderSettings.mockResolvedValue({
+    provider_name: 'OpenAI Compatible',
+    api_base: 'https://llm.example.com/v1',
+    api_key_set: true,
+    api_key_preview: 'sk-t••••1234',
+    default_model: 'vendor-model-a',
+    available_models: ['vendor-model-a', 'vendor-model-b'],
+  })
+  apiMocks.fetchPapers.mockResolvedValueOnce([
+    {
+      id: 1,
+      title: 'Model Select Paper',
+      source: 'manual',
+      status: 'ready',
+      parse_status: 'completed',
+      summary_status: 'completed',
+      embedding_status: 'pending',
+    },
+  ])
+  apiMocks.fetchPaperDetail.mockResolvedValueOnce({
+    id: 1,
+    title: 'Model Select Paper',
+    source: 'manual',
+    status: 'ready',
+    parse_status: 'completed',
+    summary_status: 'completed',
+    embedding_status: 'pending',
+    one_line_summary: '简要结论',
+    core_contributions: '核心贡献',
+    method_summary: '方法概述',
+    use_cases: '应用场景',
+    limitations: '局限性',
+    relevance_note: '相关说明',
+  })
+
+  renderApp()
+
+  expect(await screen.findByRole('heading', { name: '论文管理' })).toBeInTheDocument()
+
+  await waitFor(() => {
+    expect(apiMocks.fetchAiProviderSettings).toHaveBeenCalled()
+  })
+
+  fireEvent.click(await screen.findByText('Model Select Paper'))
+
+  const modelSelect = await screen.findByLabelText('选择模型')
+  expect(within(modelSelect).getByRole('option', { name: '系统默认' })).toBeInTheDocument()
+  expect(within(modelSelect).getByRole('option', { name: 'vendor-model-a' })).toBeInTheDocument()
+  expect(within(modelSelect).getByRole('option', { name: 'vendor-model-b' })).toBeInTheDocument()
+  expect(within(modelSelect).queryByRole('option', { name: 'GPT-5.4 Mini' })).not.toBeInTheDocument()
 })
 
 test('点击列表项后继续显示摘要与正文', async () => {
@@ -616,7 +739,7 @@ test('点击解析与生成摘要后调用对应 API 并刷新详情', async () 
 
   await waitFor(() => expect(apiMocks.parsePaper).toHaveBeenCalledWith(1))
   await waitFor(() => expect(apiMocks.waitForTaskCompletion).toHaveBeenCalledWith('parse-task'))
-  await waitFor(() => expect(apiMocks.summarizePaper).toHaveBeenCalledWith(1, 'gpt-5.4'))
+  await waitFor(() => expect(apiMocks.summarizePaper).toHaveBeenCalledWith(1, ''))
   await waitFor(() => expect(apiMocks.waitForTaskCompletion).toHaveBeenCalledWith('summary-task'))
   expect(await screen.findByText('一句话摘要')).toBeInTheDocument()
 })
@@ -826,9 +949,7 @@ test('可以切换到每日速览并展示速览壳层', async () => {
     },
   ])
 
-  renderApp()
-
-  fireEvent.click(await screen.findByRole('link', { name: /工作看板/ }))
+  renderApp(['/briefing'])
 
   expect(await screen.findByText('今日精选')).toBeInTheDocument()
   const heroHeading = screen.getByRole('heading', { name: '今日工作概览' })
@@ -847,7 +968,6 @@ test('可以切换到每日速览并展示速览壳层', async () => {
   expect(screen.getByRole('link', { name: '查看关键建议' })).toHaveAttribute('href', '#briefing-recommendations')
   expect(screen.getByRole('button', { name: '生成报告' })).toBeInTheDocument()
   expect(screen.getByText('聚合今日论文、项目、风险与关键信号，用于快速判断处理优先级。')).toBeInTheDocument()
-  expect(screen.getByText('当前模块')).toBeInTheDocument()
   const summaryHeading = screen.getByRole('heading', { name: '今日论文汇总' })
   expect(summaryHeading.closest('.briefing-main')).not.toBeNull()
   expect(screen.getByText('日报内容')).toBeInTheDocument()
@@ -1443,6 +1563,8 @@ test('可以从侧栏切换到 AI 研究助手壳层', async () => {
 
   expect(await screen.findByText('对话历史')).toBeInTheDocument()
   expect(screen.getByText('总结我论文库中的研究方向')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '通知' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '生成报告' })).not.toBeInTheDocument()
 })
 
 test('可以从侧栏切换到 AI 智能推荐壳层', async () => {
@@ -1481,13 +1603,113 @@ test('可以从侧栏切换到 AI 智能推荐壳层', async () => {
 
   fireEvent.click(await screen.findByRole('link', { name: /AI 智能推荐/ }))
 
-  expect(await screen.findByRole('heading', { name: '个性化论文推荐', level: 2 })).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'AI 智能推荐', level: 2 })).toBeInTheDocument()
   expect(screen.getAllByText('Recommend Me').length).toBeGreaterThan(0)
-  expect(screen.getByText('AI Reading Radar')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: /全部推荐/ })).toBeInTheDocument()
+  expect(screen.getByText('为你推荐的论文')).toBeInTheDocument()
+  expect(screen.getByRole('tab', { name: /综合推荐/ })).toBeInTheDocument()
   expect(screen.getByText('为什么推荐')).toBeInTheDocument()
   expect(screen.getAllByText('已有中文摘要').length).toBeGreaterThan(0)
   expect(screen.getByRole('button', { name: '开始阅读' })).toBeInTheDocument()
+})
+
+test('AI 智能推荐只从真实作者字段展示相关作者', async () => {
+  const paperWithAuthors = {
+    id: 1,
+    title: 'Authored Recommendation',
+    source: 'manual',
+    authors: 'Ada Lovelace, Grace Hopper',
+    venue: 'ICLR',
+    status: 'ready',
+    parse_status: 'completed',
+    summary_status: 'completed',
+    embedding_status: 'pending',
+    local_pdf_path: '/tmp/authored.pdf',
+    tags: ['agents'],
+  }
+  const paperWithoutAuthors = {
+    id: 2,
+    title: 'No Author Recommendation',
+    source: 'manual',
+    status: 'ready',
+    parse_status: 'completed',
+    summary_status: 'completed',
+    embedding_status: 'pending',
+    local_pdf_path: '/tmp/no-author.pdf',
+    tags: ['agents'],
+  }
+  apiMocks.fetchPapers.mockResolvedValueOnce([paperWithAuthors, paperWithoutAuthors])
+  apiMocks.fetchRecommendations.mockResolvedValueOnce([
+    {
+      paper: paperWithAuthors,
+      score: 188,
+      reason: '作者字段存在，应展示为相关作者。',
+      tag: 'agents',
+      category: 'read_now',
+      status_label: '已就绪',
+      action_label: '开始阅读',
+      confidence: 96,
+      signals: ['已有中文摘要', '标签：agents'],
+      score_breakdown: ['状态已就绪 +100'],
+    },
+    {
+      paper: paperWithoutAuthors,
+      score: 170,
+      reason: '没有作者字段，不应生成示例姓名。',
+      tag: 'agents',
+      category: 'read_now',
+      status_label: '已就绪',
+      action_label: '开始阅读',
+      confidence: 88,
+      signals: ['已有中文摘要', '标签：agents'],
+      score_breakdown: ['状态已就绪 +100'],
+    },
+  ])
+
+  renderApp(['/recommendation'])
+
+  expect(await screen.findByRole('heading', { name: 'AI 智能推荐', level: 2 })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '相关作者' })).toBeInTheDocument()
+  expect(screen.getByText('Ada Lovelace')).toBeInTheDocument()
+  expect(screen.getByText('Grace Hopper')).toBeInTheDocument()
+  expect(screen.queryByText('张晓明')).not.toBeInTheDocument()
+  expect(screen.queryByText('李思远')).not.toBeInTheDocument()
+  expect(screen.queryByText('当前推荐论文没有作者字段，暂不展示相关作者。')).not.toBeInTheDocument()
+})
+
+test('AI 智能推荐缺少作者字段时显示空态而不是示例学者', async () => {
+  const paper = {
+    id: 1,
+    title: 'No Author Recommendation',
+    source: 'manual',
+    status: 'ready',
+    parse_status: 'completed',
+    summary_status: 'completed',
+    embedding_status: 'pending',
+    local_pdf_path: '/tmp/no-author.pdf',
+    tags: ['LLM'],
+  }
+  apiMocks.fetchPapers.mockResolvedValueOnce([paper])
+  apiMocks.fetchRecommendations.mockResolvedValueOnce([
+    {
+      paper,
+      score: 188,
+      reason: '没有作者字段，只能展示空态。',
+      tag: 'LLM',
+      category: 'read_now',
+      status_label: '已就绪',
+      action_label: '开始阅读',
+      confidence: 96,
+      signals: ['已有中文摘要', '标签：LLM'],
+      score_breakdown: ['状态已就绪 +100'],
+    },
+  ])
+
+  renderApp(['/recommendation'])
+
+  expect(await screen.findByRole('heading', { name: 'AI 智能推荐', level: 2 })).toBeInTheDocument()
+  expect(screen.getByText('当前推荐论文没有作者字段，暂不展示相关作者。')).toBeInTheDocument()
+  expect(screen.queryByText('张晓明')).not.toBeInTheDocument()
+  expect(screen.queryByText('李思远')).not.toBeInTheDocument()
 })
 
 test('点击新订阅进入订阅管理视图', async () => {

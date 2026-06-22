@@ -9,7 +9,7 @@ import { AgentWorkspace } from './components/agent/AgentWorkspace'
 import { AiAssistantShell } from './components/AiAssistantShell'
 import { DailyBriefingShell } from './components/DailyBriefingShell'
 import { LoginPage } from './components/LoginPage'
-import { PaperManagementPage } from './components/PaperManagementPage'
+import { LibraryPage } from './components/library/LibraryPage'
 import { RecommendationShell } from './components/RecommendationShell'
 import { ReaderPage } from './components/reader/ReaderPage'
 import { AcademicTrackingPage } from './components/tracking/AcademicTrackingPage'
@@ -86,7 +86,7 @@ export default function App() {
                 <Route
                   path="/"
                   element={
-                    <PaperManagementPage
+                    <LibraryPage
                       papers={papers}
                       categories={categories}
                       isLoadingLibrary={isLoadingLibrary}
@@ -101,7 +101,7 @@ export default function App() {
                 <Route
                   path="/paper/:paperId"
                   element={
-                    <PaperManagementPage
+                    <LibraryPage
                       papers={papers}
                       categories={categories}
                       isLoadingLibrary={isLoadingLibrary}
@@ -124,20 +124,6 @@ export default function App() {
                         <h1>AI 研究助手</h1>
                         <p>智能对话、论文解读、研究分析</p>
                       </div>
-                      <div className="workspace-header-right">
-                        <div className="assistant-top-search" role="search">
-                          <span aria-hidden="true">⌕</span>
-                          <input placeholder="搜索论文、项目、订阅源或关键词" />
-                          <kbd>⌘ K</kbd>
-                        </div>
-                        <span className="assistant-zone-pill">
-                          <span aria-hidden="true" />
-                          <small>当前工作区</small>
-                          Asia/Shanghai
-                        </span>
-                        <button type="button" className="assistant-notice-btn" aria-label="通知">3</button>
-                        <button type="button" className="assistant-report-btn">生成报告</button>
-                      </div>
                     </header>
                     <div className="workspace-panel assistant-workspace-panel">
                       <AiAssistantShell papers={papers} />
@@ -145,20 +131,9 @@ export default function App() {
                   </>
                 } />
                 <Route path="/recommendation" element={
-                  <>
-                    <header className="workspace-header">
-                      <div className="workspace-title-block">
-                        <h1>AI 智能推荐</h1>
-                        <p>基于你的论文库和研究方向生成个性化推荐。</p>
-                      </div>
-                      <div className="workspace-header-right">
-                        <span className="online-indicator">在线运行</span>
-                      </div>
-                    </header>
-                    <div className="workspace-panel">
-                      <RecommendationShell papers={papers} />
-                    </div>
-                  </>
+                  <div className="workspace-panel pt-6">
+                    <RecommendationShell papers={papers} />
+                  </div>
                 } />
                 <Route path="/stats" element={
                   <AcademicTrackingPage papers={papers} refreshLibrary={refreshLibrary} />
