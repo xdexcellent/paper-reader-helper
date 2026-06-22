@@ -1,14 +1,22 @@
 import json
 import logging
 import re
+import time
 
 import httpx
 
 from app.core.config import settings
+from app.core.db import engine
+from app.services.ai_provider_settings_service import (
+    AiProviderSettingsService,
+    DEFAULT_AI_MODEL,
+)
 from app.services.http_client_factory import get_http_client
 
 logger = logging.getLogger(__name__)
 BLOCK_TRANSLATION_PROMPT_VERSION = "block-translate-v1"
+
+STREAM_TOTAL_TIMEOUT_SECONDS = 300.0
 
 
 def _thinking_budget(level: str) -> int:
@@ -77,35 +85,66 @@ _SUMMARY_SYSTEM_PROMPT = """\
 
 
 class DeepSeekClient:
-    """Client for DeepSeek Chat API to generate paper summaries."""
+    """Client for OpenAI-compatible chat APIs to generate paper summaries."""
 
     def __init__(
         self,
         api_base: str | None = None,
         api_key: str | None = None,
     ) -> None:
+        self._api_base_override = api_base
+        self._api_key_override = api_key
         self.api_base = (api_base or settings.deepseek_api_base).rstrip("/")
         self.api_key = api_key or settings.deepseek_api_key
 
-    def summarize_sections(self, sections: dict[str, str], model: str = "gpt-5.4") -> dict[str, str]:
-        """Summarize paper sections using DeepSeek Chat API.
+    def _load_effective_provider(self) -> tuple[str, str, str]:
+        api_base = self._api_base_override
+        api_key = self._api_key_override
+        default_model = DEFAULT_AI_MODEL
+        if api_base is not None and api_key is not None:
+            return api_base.rstrip("/"), api_key, default_model
+
+        try:
+            from sqlmodel import Session
+
+            with Session(engine) as session:
+                effective = AiProviderSettingsService.get_effective_settings(session)
+                api_base = api_base or effective.api_base
+                api_key = api_key if api_key is not None else effective.api_key
+                default_model = effective.default_model
+        except Exception:
+            logger.debug("Could not load AI provider settings from database", exc_info=True)
+            api_base = api_base or settings.deepseek_api_base
+            api_key = api_key if api_key is not None else settings.deepseek_api_key
+
+        self.api_base = (api_base or settings.deepseek_api_base).rstrip("/")
+        self.api_key = api_key or ""
+        return self.api_base, self.api_key, default_model
+
+    def resolve_model(self, model: str | None = None) -> str:
+        _api_base, _api_key, default_model = self._load_effective_provider()
+        return (model or default_model or DEFAULT_AI_MODEL).strip()
+
+    def summarize_sections(self, sections: dict[str, str], model: str | None = None) -> dict[str, str]:
+        """Summarize paper sections using the configured AI provider.
 
         If no API key is configured, falls back to a placeholder result.
         """
+        model_name = self.resolve_model(model)
         if not self.api_key:
-            logger.warning("DEEPSEEK_API_KEY not configured, using placeholder result")
+            logger.warning("AI provider API key not configured, using placeholder result")
             return self._fallback_result(sections)
 
         try:
-            return self._summarize_via_api(sections, model)
+            return self._summarize_via_api(sections, model_name)
         except Exception:
-            logger.exception("DeepSeek API call failed, falling back to placeholder")
+            logger.exception("AI provider API call failed, falling back to placeholder")
             return self._fallback_result(sections)
 
-    def _summarize_via_api(self, sections: dict[str, str], model: str = "gpt-5.4") -> dict[str, str]:
+    def _summarize_via_api(self, sections: dict[str, str], model: str) -> dict[str, str]:
         user_content = self._build_user_message(sections)
         logger.info(
-            "Calling DeepSeek API for summarization (%d chars input)", len(user_content)
+            "Calling AI provider for summarization (%d chars input)", len(user_content)
         )
         endpoint = self._resolve_chat_endpoint()
 
@@ -122,7 +161,7 @@ class DeepSeekClient:
         }
 
         content = self._stream_chat(endpoint, request_body)
-        logger.debug("DeepSeek streaming response collected (%d chars)", len(content))
+        logger.debug("AI provider streaming response collected (%d chars)", len(content))
 
         # Parse JSON from response — handle possible markdown code fences
         import re
@@ -154,18 +193,19 @@ class DeepSeekClient:
         # 校验核心字段：避免 LLM 返回英文/章节标签/过短占位符
         if not _is_meaningful_chinese(result["one_line_summary"]):
             logger.warning(
-                "DeepSeek output rejected (one_line_summary not valid Chinese): %r",
+                "AI provider output rejected (one_line_summary not valid Chinese): %r",
                 result["one_line_summary"][:80],
             )
-            raise RuntimeError("DeepSeek summary failed validation: one_line_summary not valid Chinese")
+            raise RuntimeError("AI provider summary failed validation: one_line_summary not valid Chinese")
 
         return result
 
-    def translate_to_chinese(self, text: str, model: str = "gpt-5.4") -> str:
-        """Translate English text to Chinese using DeepSeek API.
+    def translate_to_chinese(self, text: str, model: str | None = None) -> str:
+        """Translate English text to Chinese using the configured AI provider.
 
         Returns original text if API unavailable or translation fails.
         """
+        model_name = self.resolve_model(model)
         if not text or not self.api_key:
             return text
         try:
@@ -174,7 +214,7 @@ class DeepSeekClient:
                 {"role": "user", "content": f"请翻译以下项目描述：\n\n{text}"},
             ]
             result = self._stream_chat(self._resolve_chat_endpoint(), {
-                "model": model, "messages": messages, "stream": True,
+                "model": model_name, "messages": messages, "stream": True,
             })
             # Validate: result should be Chinese
             if _is_meaningful_chinese(result):
@@ -189,14 +229,15 @@ class DeepSeekClient:
         *,
         text: str,
         target_language: str = "zh-CN",
-        model: str = "gpt-5.4",
+        model: str | None = None,
         page_index: int | None = None,
         block_type: str = "text",
     ) -> dict[str, str]:
+        model_name = self.resolve_model(model)
         if not text.strip():
             raise ValueError("block has no translatable text")
         if not self.api_key:
-            raise RuntimeError("DEEPSEEK_API_KEY is not configured")
+            raise RuntimeError("AI provider API Key is not configured")
         system = (
             "You are an academic translation assistant. Translate the user's paper "
             "block into the target language. Preserve formulas, citations, tables, "
@@ -208,15 +249,15 @@ class DeepSeekClient:
         )
         translated = self._stream_chat(
             self._resolve_chat_endpoint(),
-            {"model": model, "messages": [
+                {"model": model_name, "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ], "stream": True},
         )
-        return {"translated_text": translated.strip(), "model_name": model, "prompt_version": BLOCK_TRANSLATION_PROMPT_VERSION}
+        return {"translated_text": translated.strip(), "model_name": model_name, "prompt_version": BLOCK_TRANSLATION_PROMPT_VERSION}
 
-    def chat(self, messages: list[dict[str, str]], model: str = "gpt-5.4", thinking: str | None = None) -> str:
-        """Send a chat message to DeepSeek API.
+    def chat(self, messages: list[dict[str, str]], model: str | None = None, thinking: str | None = None) -> str:
+        """Send a chat message to the configured AI provider.
         
         Args:
             messages: Chat messages
@@ -224,14 +265,15 @@ class DeepSeekClient:
             thinking: Thinking mode - "none", "low", "medium", "high".
                       None means use the system default from settings.
         """
+        model_name = self.resolve_model(model)
         if not self.api_key:
-            return "DeepSeek API Key 未配置，无法进行真实对话。请在 backend/.env 中配置 DEEPSEEK_API_KEY。"
+            return "AI 供应商 API Key 未配置，无法进行真实对话。请在偏好设置中配置 API Key。"
 
         # Resolve thinking mode
         effective_thinking = thinking if thinking is not None else settings.deepseek_thinking
 
         request_body: dict = {
-            "model": model,
+            "model": model_name,
             "messages": messages,
             "stream": True,
         }
@@ -243,7 +285,7 @@ class DeepSeekClient:
         try:
             return self._stream_chat(self._resolve_chat_endpoint(), request_body)
         except Exception as e:
-            logger.exception("DeepSeek chat failed")
+            logger.exception("AI provider chat failed")
             return f"对话失败，请稍后再试（错误信息：{str(e)}）。"
 
     def _stream_chat(self, endpoint: str, request_body: dict) -> str:
@@ -251,12 +293,22 @@ class DeepSeekClient:
 
         The API proxy returns null content in non-streaming mode,
         so we use streaming and manually concatenate delta chunks.
+
+        Total streaming time is capped by STREAM_TOTAL_TIMEOUT_SECONDS to prevent
+        indefinite hangs when the provider keeps sending chunks without [DONE]
+        or the connection is half-open.
         """
         collected_content: list[str] = []
 
         # LLM calls must use the same URL/API key path as paper summarization.
         # Do not reuse automation proxy settings, which are intended for source fetching.
-        client = get_http_client(timeout=180, use_db_proxy=False)
+        # Per-phase timeouts: read=30s detects half-open connections quickly;
+        # the total deadline below caps the whole streaming duration.
+        client = get_http_client(
+            timeout=httpx.Timeout(connect=10.0, read=30.0, write=30.0, pool=10.0),
+            use_db_proxy=False,
+        )
+        start = time.monotonic()
         try:
             with client.stream(
                 "POST",
@@ -269,6 +321,10 @@ class DeepSeekClient:
             ) as resp:
                 resp.raise_for_status()
                 for line in resp.iter_lines():
+                    if time.monotonic() - start > STREAM_TOTAL_TIMEOUT_SECONDS:
+                        raise TimeoutError(
+                            f"Streaming response exceeded total timeout {STREAM_TOTAL_TIMEOUT_SECONDS}s"
+                        )
                     line = line.strip()
                     if not line or not line.startswith("data: "):
                         continue
@@ -299,7 +355,7 @@ class DeepSeekClient:
             endpoint = f"{self.api_base}/chat/completions"
         else:
             endpoint = f"{self.api_base}/v1/chat/completions"
-        logger.debug("Resolved DeepSeek chat endpoint: %s", endpoint)
+        logger.debug("Resolved AI provider chat endpoint: %s", endpoint)
         return endpoint
 
     def _build_user_message(self, sections: dict[str, str]) -> str:
@@ -327,7 +383,7 @@ class DeepSeekClient:
         
         Returns Chinese-only placeholder to avoid showing English abstracts in briefing.
         """
-        placeholder = "摘要生成暂时不可用，请检查 DeepSeek API Key 配置或稍后重试。如需使用原始摘要，请在论文详情页查看。"
+        placeholder = "摘要生成暂时不可用，请检查偏好设置中的 AI 供应商 API Key，或稍后重试。如需使用原始摘要，请在论文详情页查看。"
         return {
             "one_line_summary": placeholder,
             "core_contributions": placeholder,
