@@ -21,6 +21,8 @@ import type {
   ZoteroCandidateResponse,
   ZoteroCandidateFilter,
   ZoteroImportConfirm,
+  AiProviderSettings,
+  AiProviderSettingsUpdate,
 } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000'
@@ -63,6 +65,37 @@ async function readJson<T>(response: Response, options: ReadJsonOptions = {}): P
   return response.json() as Promise<T>
 }
 
+function normalizeStorageFileUrl(url: string | undefined): string | undefined {
+  if (!url) return url
+  try {
+    const parsed = new URL(url, API_BASE)
+    if (!parsed.pathname.startsWith('/files/')) return url
+    const apiBase = new URL(API_BASE)
+    return `${apiBase.origin}${parsed.pathname}${parsed.search}${parsed.hash}`
+  } catch {
+    return url
+  }
+}
+
+function normalizePaperFileUrls<T extends Paper>(paper: T): T {
+  return {
+    ...paper,
+    representative_image_url: normalizeStorageFileUrl(paper.representative_image_url),
+  }
+}
+
+async function readPaper(response: Response): Promise<Paper> {
+  return normalizePaperFileUrls(await readJson<Paper>(response))
+}
+
+async function readPaperDetail(response: Response): Promise<PaperDetail> {
+  return normalizePaperFileUrls(await readJson<PaperDetail>(response))
+}
+
+async function readPaperList(response: Response): Promise<Paper[]> {
+  return (await readJson<Paper[]>(response)).map(normalizePaperFileUrls)
+}
+
 async function ensureOk(response: Response, fallback: string, options: ReadJsonOptions = {}): Promise<void> {
   if (response.ok) return
 
@@ -93,7 +126,7 @@ export async function loginApi(password: string): Promise<{ token: string }> {
 // ─── Papers ────────────────────────────────────────────────
 export async function fetchPapers(): Promise<Paper[]> {
   const response = await fetch(`${API_BASE}/papers`, { headers: getAuthHeaders() })
-  return readJson<Paper[]>(response)
+  return readPaperList(response)
 }
 
 export async function fetchCategories(): Promise<Category[]> {
@@ -126,7 +159,7 @@ export async function autoClassifyPendingPapers(): Promise<AutoClassifyResult> {
 
 export async function fetchPaperDetail(id: number): Promise<PaperDetail> {
   const response = await fetch(`${API_BASE}/papers/${id}`, { headers: getAuthHeaders() })
-  return readJson<PaperDetail>(response)
+  return readPaperDetail(response)
 }
 
 export async function uploadPaper(payload: { source: string; title?: string; file: File }): Promise<Paper> {
@@ -143,7 +176,7 @@ export async function uploadPaper(payload: { source: string; title?: string; fil
     headers: getAuthHeaders(),
     body: formData,
   })
-  return readJson<Paper>(response)
+  return readPaper(response)
 }
 
 export async function importPaperFromUrl(request: { title: string; source: string; source_id: string; url: string; authors?: string; abstract?: string; published_at?: string }): Promise<Paper> {
@@ -155,7 +188,7 @@ export async function importPaperFromUrl(request: { title: string; source: strin
     },
     body: JSON.stringify(request),
   })
-  return readJson<Paper>(response)
+  return readPaper(response)
 }
 
 export async function parsePaper(id: number): Promise<Record<string, unknown>> {
@@ -166,8 +199,10 @@ export async function parsePaper(id: number): Promise<Record<string, unknown>> {
   return readJson(response)
 }
 
-export async function summarizePaper(id: number, model: string = 'gpt-5.4'): Promise<Record<string, unknown>> {
-  const response = await fetch(`${API_BASE}/papers/${id}/summarize?model=${encodeURIComponent(model)}`, {
+export async function summarizePaper(id: number, model?: string): Promise<Record<string, unknown>> {
+  const modelName = model?.trim()
+  const query = modelName ? `?model=${encodeURIComponent(modelName)}` : ''
+  const response = await fetch(`${API_BASE}/papers/${id}/summarize${query}`, {
     method: 'POST',
     headers: getAuthHeaders(),
   })
@@ -230,7 +265,7 @@ export async function searchPapers(params: { q?: string; status?: string; source
   if (params.source) searchParams.append('source', params.source)
 
   const response = await fetch(`${API_BASE}/papers/search?${searchParams.toString()}`, { headers: getAuthHeaders() })
-  return readJson<Paper[]>(response)
+  return readPaperList(response)
 }
 
 export async function updatePaper(id: number, data: PaperUpdatePayload): Promise<Paper> {
@@ -239,7 +274,7 @@ export async function updatePaper(id: number, data: PaperUpdatePayload): Promise
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(data),
   })
-  return readJson<Paper>(response)
+  return readPaper(response)
 }
 
 export async function updatePaperFavorite(id: number, favorite: boolean): Promise<Paper> {
@@ -263,7 +298,7 @@ export async function updatePaperCategory(paperId: number, primaryCategoryId: nu
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ primary_category_id: primaryCategoryId }),
   })
-  return readJson<Paper>(response)
+  return readPaper(response)
 }
 
 export async function fetchPaperBlocks(
@@ -310,17 +345,20 @@ export async function translatePaperBlock(
 
 // ─── Chat (legacy quick chat) ──────────────────────────────
 export async function sendChatMessage(messages: {role: string, content: string}[], paperId?: number, model?: string): Promise<string> {
+  const payload: { messages: {role: string, content: string}[]; paper_id?: number; model?: string } = {
+    messages,
+    paper_id: paperId,
+  }
+  if (model?.trim()) {
+    payload.model = model.trim()
+  }
   const response = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...getAuthHeaders(),
     },
-    body: JSON.stringify({
-      messages,
-      paper_id: paperId,
-      model: model,
-    }),
+    body: JSON.stringify(payload),
   })
   const data = await readJson<{ reply: string }>(response)
   return data.reply
@@ -385,8 +423,8 @@ export async function sendSessionMessage(sessionId: number, content: string, pap
     // sending -1 will clear it in the backend
     payload.paper_id = paperId === null ? -1 : paperId
   }
-  if (model) {
-    payload.model = model
+  if (model !== undefined) {
+    payload.model = model.trim()
   }
   
   const response = await fetch(`${API_BASE}/chat/sessions/${sessionId}/messages`, {
@@ -448,6 +486,33 @@ export async function updateAutomationSettings(payload: AutomationSettings): Pro
     body: JSON.stringify(payload),
   })
   return readJson<AutomationSettings>(response)
+}
+
+export async function fetchAiProviderSettings(): Promise<AiProviderSettings> {
+  const response = await fetch(`${API_BASE}/settings/ai-provider`, { headers: getAuthHeaders() })
+  return readJson<AiProviderSettings>(response)
+}
+
+export async function updateAiProviderSettings(payload: AiProviderSettingsUpdate): Promise<AiProviderSettings> {
+  const response = await fetch(`${API_BASE}/settings/ai-provider`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(payload),
+  })
+  return readJson<AiProviderSettings>(response)
+}
+
+export async function fetchAiProviderModels(payload: {
+  api_base?: string
+  api_key?: string
+}): Promise<string[]> {
+  const response = await fetch(`${API_BASE}/settings/ai-provider/models`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(payload),
+  })
+  const data = await readJson<{ models: string[] }>(response)
+  return data.models
 }
 
 export async function runTodayBriefing(): Promise<{ run_id: number | null; status: string }> {
@@ -526,7 +591,7 @@ export async function updatePaperTags(paperId: number, tags: string[]): Promise<
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ tags }),
   })
-  return readJson(response)
+  return readPaper(response)
 }
 
 export async function fetchAllTags(): Promise<string[]> {

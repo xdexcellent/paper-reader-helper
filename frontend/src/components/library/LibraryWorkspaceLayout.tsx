@@ -1,6 +1,7 @@
 import type { Dispatch, FormEvent, SetStateAction } from 'react'
 
 import type { Category, Paper, PaperDetail, PaperUpdatePayload, ReadingStatus } from '../../types'
+import type { AiModelOption } from '../../lib/aiModels'
 import { countParseFailedPapers, countPendingPapers } from './libraryFilters'
 import { CategoryCreateForm } from './CategoryCreateForm'
 import { LibraryDetailStack } from './LibraryDetailStack'
@@ -34,6 +35,7 @@ type LibraryWorkspaceLayoutProps = {
   isRunningSummarize: boolean
   isRunningEmbed: boolean
   selectedModel: string
+  modelOptions: AiModelOption[]
   isRetryingParseFailed: boolean
   isDeletingParseFailed: boolean
   onCategoryScopeChange: Dispatch<SetStateAction<CategoryScope>>
@@ -92,6 +94,7 @@ export function LibraryWorkspaceLayout({
   isRunningSummarize,
   isRunningEmbed,
   selectedModel,
+  modelOptions,
   isRetryingParseFailed,
   isDeletingParseFailed,
   onCategoryScopeChange,
@@ -189,6 +192,7 @@ export function LibraryWorkspaceLayout({
             isRunningSummarize={isRunningSummarize}
             isRunningEmbed={isRunningEmbed}
             selectedModel={selectedModel}
+            modelOptions={modelOptions}
             onModelChange={onModelChange}
             onParse={onParse}
             onSummarize={onSummarize}

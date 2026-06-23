@@ -53,15 +53,16 @@ class AgentRunnerService:
         prompt: str,
         scope_type: str,
         scope_config: dict | None = None,
-        model: str = "gpt-5.4",
+        model: str | None = None,
         chat_session_id: int | None = None,
     ) -> AgentRun:
         """Create a new AgentRun record."""
+        resolved_model = self.client.resolve_model(model)
         run = AgentRun(
             prompt=prompt,
             scope_type=scope_type,
             scope_config_json=json.dumps(scope_config or {}, ensure_ascii=False),
-            model=model,
+            model=resolved_model,
             status="pending",
             chat_session_id=chat_session_id,
         )
@@ -134,7 +135,7 @@ class AgentRunnerService:
             ]
             response_text = self.client.chat(messages, model=run.model, thinking=thinking)
 
-            if response_text.startswith("DeepSeek API Key"):
+            if "API Key 未配置" in response_text:
                 raise RuntimeError(response_text)
 
             # 5. Parse response for proposals

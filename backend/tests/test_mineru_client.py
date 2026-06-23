@@ -1,3 +1,5 @@
+import zipfile
+
 import httpx
 import pytest
 
@@ -84,7 +86,11 @@ def test_parse_via_api_submits_after_public_pdf_url_preflight_passes(
 
     monkeypatch.setattr(mineru_module, "get_http_client", lambda **kwargs: FakeClient())
     monkeypatch.setattr(MineruClient, "_poll_task", lambda self, task_id: {"full_zip_url": "https://result.zip"})
-    monkeypatch.setattr(MineruClient, "_download_and_extract_markdown", lambda self, url: "# Parsed")
+    monkeypatch.setattr(
+        MineruClient,
+        "_download_and_extract_markdown",
+        lambda self, url, pdf_path=None: ("# Parsed", "local-result.zip"),
+    )
     client = MineruClient(
         api_base="https://mineru.example.com",
         api_token="token",
@@ -95,7 +101,40 @@ def test_parse_via_api_submits_after_public_pdf_url_preflight_passes(
     result = client._parse_via_api(str(pdf_path))
 
     assert result["full_markdown"] == "# Parsed"
+    assert result["full_zip_path"] == "local-result.zip"
     assert calls == [
         ("get", "https://files.example.com/files/papers/abc/paper.pdf"),
         ("post", "https://mineru.example.com/api/v4/extract/task"),
     ]
+
+
+def test_download_and_extract_markdown_persists_result_zip(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    storage_root = tmp_path / "storage"
+    pdf_path = storage_root / "papers" / "abc" / "paper.pdf"
+    pdf_path.parent.mkdir(parents=True)
+    pdf_path.write_bytes(b"%PDF-1.7")
+    zip_bytes_path = tmp_path / "result.zip"
+    with zipfile.ZipFile(zip_bytes_path, "w") as archive:
+        archive.writestr("full.md", "# Parsed")
+        archive.writestr("images/figure.png", b"image bytes")
+    zip_bytes = zip_bytes_path.read_bytes()
+
+    class FakeClient:
+        def get(self, url: str, **kwargs):
+            request = httpx.Request("GET", url)
+            return httpx.Response(200, content=zip_bytes, request=request)
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(mineru_module, "get_http_client", lambda **kwargs: FakeClient())
+    client = MineruClient(storage_root=str(storage_root))
+
+    markdown, local_zip_path = client._download_and_extract_markdown(
+        "https://result.example.com/result.zip",
+        str(pdf_path),
+    )
+
+    assert markdown == "# Parsed"
+    assert local_zip_path == str(pdf_path.parent / "mineru" / "result.zip")
+    assert (pdf_path.parent / "mineru" / "result.zip").read_bytes() == zip_bytes

@@ -24,6 +24,7 @@ class PaperBlock(SQLModel, table=True):
     block_type: str = Field(default=PaperBlockType.UNKNOWN, index=True)
     text: str = ""
     bbox_json: str = ""
+    asset_path: str = ""
     source_hash: str = Field(index=True)
     source_json: str = ""
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 import { FileText } from 'lucide-react'
-import type { Paper, ReadingStatus } from '../../types'
+import { effectiveRank, type Paper, type ReadingStatus } from '../../types'
+import { RankBadge } from '../RankBadge'
 import { StatusBadge } from '../StatusBadge'
 import { Icon } from '../UiIcon'
 import { PaginationControl } from '../PaginationControl'
@@ -246,6 +247,7 @@ export function PaperLibraryList({
               const paperTags = paper.tags ?? []
               const visibleTags = paperTags.slice(0, 3)
               const extraCount = paperTags.length - 3
+              const rank = effectiveRank(paper)
               return (
                 <div
                   className={cn('paper-library-row', selectedPaperId === paper.id && 'selected')}
@@ -266,6 +268,12 @@ export function PaperLibraryList({
                     {/* Content */}
                     <span className="paper-library-content">
                       <span className="paper-item-title">{paper.title}</span>
+                      {(paper.venue?.trim() || rank.ccf || rank.sciZone || rank.impactFactor) && (
+                        <span className="paper-item-venue-rank">
+                          {paper.venue?.trim() && <span className="paper-venue">{paper.venue}</span>}
+                          <RankBadge ccf={rank.ccf} sciZone={rank.sciZone} impactFactor={rank.impactFactor} />
+                        </span>
+                      )}
                       <span className="paper-item-meta">
                         <span className="paper-source">{paper.source}</span>
                         <span className="paper-meta-separator">·</span>

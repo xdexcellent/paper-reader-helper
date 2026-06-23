@@ -1,0 +1,26 @@
+[
+  {
+    "venue": "Nature",
+    "aliases": ["nat", "nature (london)"],
+    "issn": "0028-0836",
+    "ccf": "",
+    "sci_zone": "1区",
+    "impact_factor": "64.8"
+  },
+  {
+    "venue": "Science",
+    "aliases": ["sci", "science (new york n.y.)"],
+    "issn": "0036-8075",
+    "ccf": "",
+    "sci_zone": "1区",
+    "impact_factor": "56.9"
+  },
+  {
+    "venue": "IEEE Transactions on Pattern Analysis and Machine Intelligence",
+    "aliases": ["tpami", "ieee trans pattern anal mach intell"],
+    "issn": "0162-8828",
+    "ccf": "A",
+    "sci_zone": "1区",
+    "impact_factor": "23.6"
+  }
+]

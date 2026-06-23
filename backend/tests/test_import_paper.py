@@ -1,9 +1,11 @@
+import shutil
 from pathlib import Path
 
 import pytest
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import settings
+from app.services.storage import storage_file_url
 
 
 def test_import_paper_creates_queued_record(client, tmp_path: Path) -> None:
@@ -27,6 +29,28 @@ def test_import_paper_creates_queued_record(client, tmp_path: Path) -> None:
     assert body["summary_status"] == "pending"
     assert body["embedding_status"] == "pending"
     assert body["local_pdf_path"].endswith("sample.pdf")
+    assert body["representative_image_url"] == ""
+
+
+def test_storage_file_url_encodes_storage_relative_paths() -> None:
+    storage_root = Path("..") / "test-run-temp" / "storage-url-test"
+    shutil.rmtree(storage_root, ignore_errors=True)
+    image_path = storage_root / "papers" / "abc" / "representative-images" / "图 1 preview.png"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"image")
+
+    try:
+        assert storage_file_url(
+            str(image_path),
+            root=str(storage_root),
+            base_url="https://files.example.com/",
+        ) == (
+            "https://files.example.com/files/papers/abc/representative-images/"
+            "%E5%9B%BE%201%20preview.png"
+        )
+        assert storage_file_url(str(Path("..") / "test-run-temp" / "outside.png"), root=str(storage_root)) == ""
+    finally:
+        shutil.rmtree(storage_root, ignore_errors=True)
 
 
 def test_import_paper_keeps_same_named_pdfs_in_distinct_paths(client, tmp_path: Path) -> None:

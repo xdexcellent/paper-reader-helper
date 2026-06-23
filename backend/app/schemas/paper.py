@@ -1,6 +1,8 @@
 import json
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
+from app.services.storage import storage_file_url
+
 
 READING_STATUSES = {"unread", "reading", "read", "skipped"}
 
@@ -30,6 +32,9 @@ class PaperUpdateRequest(BaseModel):
     venue: str | None = None
     doi: str | None = None
     url: str | None = None
+    ccf_rank_override: str | None = None
+    sci_zone_override: str | None = None
+    impact_factor_override: str | None = None
     favorite: bool | None = None
     reading_status: str | None = None
     reading_progress: int | None = None
@@ -43,6 +48,9 @@ class PaperUpdateRequest(BaseModel):
         "venue",
         "doi",
         "url",
+        "ccf_rank_override",
+        "sci_zone_override",
+        "impact_factor_override",
         "reading_status",
         mode="before",
     )
@@ -99,6 +107,12 @@ class PaperResponse(BaseModel):
     venue: str = ""
     doi: str = ""
     url: str = ""
+    ccf_rank: str = ""
+    sci_zone: str = ""
+    impact_factor: str = ""
+    ccf_rank_override: str = ""
+    sci_zone_override: str = ""
+    impact_factor_override: str = ""
     favorite: bool = False
     reading_status: str = "unread"
     reading_progress: int = 0
@@ -108,6 +122,7 @@ class PaperResponse(BaseModel):
     summary_status: str
     embedding_status: str
     local_pdf_path: str
+    representative_image_url: str = ""
     primary_category_id: int | None = None
     category_status: str = "pending_review"
     category_confidence: float = 0.0
@@ -147,13 +162,21 @@ class PaperResponse(BaseModel):
                 'reading_progress', 'user_notes', 'status', 'parse_status',
                 'summary_status', 'embedding_status', 'local_pdf_path',
                 'primary_category_id', 'category_status', 'category_confidence',
-                'category_reason',
+                'category_reason', 'ccf_rank', 'sci_zone', 'impact_factor',
+                'ccf_rank_override', 'sci_zone_override', 'impact_factor_override',
             ]:
                 d[field] = getattr(data, field, '')
             d['tags'] = tags
+            d['representative_image_url'] = storage_file_url(
+                getattr(data, 'representative_image_path', ''),
+            )
             return d
         else:
             data['tags'] = tags
+            if 'representative_image_url' not in data:
+                data['representative_image_url'] = storage_file_url(
+                    data.get('representative_image_path', ''),
+                )
             return data
 
 

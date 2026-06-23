@@ -23,6 +23,7 @@ import { PaginationControl } from './PaginationControl'
 import { PaperActions } from './PaperActions'
 import { PaperDetail } from './PaperDetail'
 import { PaperList } from './PaperList'
+import { SYSTEM_DEFAULT_MODEL_VALUE, useAiModelOptions } from '../lib/aiModels'
 
 type BulkActionFailure = {
   paper: Paper
@@ -185,7 +186,8 @@ export function PaperManagementPage({
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
-  const [selectedModel, setSelectedModel] = useState('gpt-5.4')
+  const [selectedModel, setSelectedModel] = useState(SYSTEM_DEFAULT_MODEL_VALUE)
+  const { modelOptions } = useAiModelOptions(selectedModel, setSelectedModel)
   const [categoryScope, setCategoryScope] = useState<CategoryScope>('all')
   const [isCategoryExpanded, setIsCategoryExpanded] = useState(false)
   const [isBatchMode, setIsBatchMode] = useState(false)
@@ -890,6 +892,7 @@ export function PaperManagementPage({
                 isRunningSummarize={isSummarizeInProgress}
                 isRunningEmbed={isEmbedInProgress}
                 selectedModel={selectedModel}
+                modelOptions={modelOptions}
                 onModelChange={setSelectedModel}
                 onParse={handleParse}
                 onSummarize={handleSummarize}

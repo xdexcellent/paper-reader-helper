@@ -25,7 +25,7 @@ export function WorkDashboardPage({ papers = [], refreshLibrary }: WorkDashboard
 
   const dashboard = useDashboardData(papers, (paperId) => {
     navigate(`/paper/${paperId}`)
-  })
+  }, refreshLibrary)
   const notifications = useMemo(
     () => buildDashboardNotifications({
       papers,

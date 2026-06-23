@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 
-import type { Category, PaperDetail, PaperUpdatePayload, ReadingStatus } from '../../types'
+import { effectiveRank, type Category, type PaperDetail, type PaperUpdatePayload, type ReadingStatus } from '../../types'
+import type { AiModelOption } from '../../lib/aiModels'
+import { RankBadge } from '../RankBadge'
 import { StatusBadge } from '../StatusBadge'
 import { Icon } from '../UiIcon'
 import { PaperTagEditor } from './PaperTagEditor'
@@ -14,6 +16,7 @@ type PaperMetadataPanelProps = {
   isRunningSummarize: boolean
   isRunningEmbed: boolean
   selectedModel: string
+  modelOptions: AiModelOption[]
   onCategoryChange: (categoryId: number) => Promise<void> | void
   onTagsChange?: (tags: string[]) => Promise<void> | void
   onOpenReader?: (paper: PaperDetail) => void
@@ -108,6 +111,7 @@ export function PaperMetadataPanel({
   isRunningSummarize,
   isRunningEmbed,
   selectedModel,
+  modelOptions,
   onCategoryChange,
   onTagsChange,
   onOpenReader,
@@ -126,6 +130,7 @@ export function PaperMetadataPanel({
   const [readingProgress, setReadingProgress] = useState('0')
   const [notes, setNotes] = useState('')
   const [notesError, setNotesError] = useState('')
+  const [rankOverrides, setRankOverrides] = useState({ ccf: '', sciZone: '', impactFactor: '' })
 
   useEffect(() => {
     setMetadata(metadataFromPaper(paper))
@@ -133,6 +138,11 @@ export function PaperMetadataPanel({
     setReadingProgress(String(paper?.reading_progress ?? 0))
     setNotes(paper?.user_notes ?? '')
     setNotesError('')
+    setRankOverrides({
+      ccf: paper?.ccf_rank_override ?? '',
+      sciZone: paper?.sci_zone_override ?? '',
+      impactFactor: paper?.impact_factor_override ?? '',
+    })
   }, [paper?.id, paper?.tags])
 
   if (isLoading) {
@@ -154,6 +164,7 @@ export function PaperMetadataPanel({
   }
 
   const primaryCategoryName = findCategoryName(categories, paper.primary_category_id)
+  const rank = effectiveRank(paper)
 
   async function saveMetadata(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -184,6 +195,15 @@ export function PaperMetadataPanel({
     } catch {
       setNotesError('笔记保存失败')
     }
+  }
+
+  async function saveRankOverrides(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    await onMetadataSave?.({
+      ccf_rank_override: rankOverrides.ccf.trim(),
+      sci_zone_override: rankOverrides.sciZone.trim(),
+      impact_factor_override: rankOverrides.impactFactor.trim(),
+    })
   }
 
   function updateMetadata(field: keyof MetadataForm, value: string) {
@@ -244,9 +264,12 @@ export function PaperMetadataPanel({
               disabled={isRunningSummarize}
               aria-label="选择模型"
             >
-              <option value="gpt-5.4">gpt-5.4</option>
-              <option value="gpt-5.3-codex">gpt-5.3-codex</option>
-              <option value="gpt-5.2">gpt-5.2</option>
+              {modelOptions.map((model) => (
+                <option key={model.value || 'system-default'} value={model.value}>{model.label}</option>
+              ))}
+              {selectedModel && !modelOptions.some((model) => model.value === selectedModel) ? (
+                <option value={selectedModel}>{selectedModel}</option>
+              ) : null}
             </select>
           </div>
           <button
@@ -357,6 +380,89 @@ export function PaperMetadataPanel({
               </label>
             ))}
             <button className="btn btn-secondary metadata-wide-field" type="submit">保存元数据</button>
+          </form>
+        </div>
+      </details>
+
+      {/* 期刊/会议等级 section */}
+      <details className="paper-section">
+        <summary>
+          期刊/会议等级
+          <span className="paper-section-hint">仅供参考 · 可手动纠正</span>
+        </summary>
+        <div className="paper-section-body">
+          <div className="paper-rank-display">
+            <div className="paper-rank-row">
+              <span className="paper-rank-label">出处</span>
+              <span className="paper-rank-value">{paper.venue?.trim() || '未填写'}</span>
+            </div>
+            <div className="paper-rank-row">
+              <span className="paper-rank-label">等级</span>
+              {(rank.ccf || rank.sciZone || rank.impactFactor) ? (
+                <RankBadge ccf={rank.ccf} sciZone={rank.sciZone} impactFactor={rank.impactFactor} />
+              ) : (
+                <span className="paper-rank-empty">暂无等级信息（可在下方手动填写）</span>
+              )}
+            </div>
+            {(rank.ccf || rank.sciZone || rank.impactFactor) && (
+              <div className="paper-rank-sources">
+                {rank.ccf && (
+                  <span className="paper-rank-source">CCF · {paper.ccf_rank_override?.trim() ? '手动' : '系统匹配'}</span>
+                )}
+                {rank.sciZone && (
+                  <span className="paper-rank-source">SCI · {paper.sci_zone_override?.trim() ? '手动' : '系统匹配'}</span>
+                )}
+                {rank.impactFactor && (
+                  <span className="paper-rank-source">IF · {paper.impact_factor_override?.trim() ? '手动' : '系统匹配'}</span>
+                )}
+              </div>
+            )}
+          </div>
+
+          <form className="paper-rank-edit" onSubmit={saveRankOverrides}>
+            <label className="library-control" htmlFor="paper-rank-ccf">
+              <span>CCF 等级</span>
+              <input
+                id="paper-rank-ccf"
+                list="ccf-rank-options"
+                onChange={(event) => setRankOverrides((cur) => ({ ...cur, ccf: event.target.value }))}
+                placeholder="A / B / C"
+                value={rankOverrides.ccf}
+              />
+            </label>
+            <datalist id="ccf-rank-options">
+              <option value="A" />
+              <option value="B" />
+              <option value="C" />
+            </datalist>
+            <label className="library-control" htmlFor="paper-rank-sci">
+              <span>SCI 分区</span>
+              <input
+                id="paper-rank-sci"
+                list="sci-zone-options"
+                onChange={(event) => setRankOverrides((cur) => ({ ...cur, sciZone: event.target.value }))}
+                placeholder="1区 / 2区 / 3区 / 4区"
+                value={rankOverrides.sciZone}
+              />
+            </label>
+            <datalist id="sci-zone-options">
+              <option value="1区" />
+              <option value="2区" />
+              <option value="3区" />
+              <option value="4区" />
+            </datalist>
+            <label className="library-control" htmlFor="paper-rank-if">
+              <span>影响因子</span>
+              <input
+                id="paper-rank-if"
+                inputMode="decimal"
+                onChange={(event) => setRankOverrides((cur) => ({ ...cur, impactFactor: event.target.value }))}
+                placeholder="如 12.3"
+                value={rankOverrides.impactFactor}
+              />
+            </label>
+            <p className="paper-rank-hint">留空使用系统匹配值；填入则覆盖系统值。清空并保存可恢复系统匹配。</p>
+            <button className="btn btn-secondary metadata-wide-field" type="submit">保存等级纠正</button>
           </form>
         </div>
       </details>

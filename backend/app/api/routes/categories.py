@@ -176,7 +176,6 @@ def _classify_batch(
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
             ],
-            model="gpt-5.4",
         )
 
         # Parse response

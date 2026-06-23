@@ -58,6 +58,8 @@ def rebuild_paper_blocks(
 
     try:
         result = BlockExtractionService().rebuild_blocks(session, paper, content)
+        paper.representative_image_path = result.representative_image_path
+        session.add(paper)
         content.block_extraction_error = ""
         session.add(content)
         session.commit()
@@ -171,6 +173,7 @@ def _block_response(block: PaperBlock) -> PaperBlockResponse:
         block_type=block.block_type,
         text=block.text,
         bbox=_parse_bbox(block.bbox_json),
+        asset_path=block.asset_path,
         source_hash=block.source_hash,
     )
 

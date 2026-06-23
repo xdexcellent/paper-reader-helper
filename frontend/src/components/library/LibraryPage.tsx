@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { createCategory, deletePaper, embedPaper, fetchPaperDetail, parsePaper, summarizePaper, updatePaperCategory, updatePaperTags, uploadPaper, waitForTaskCompletion } from '../../lib/api'
+import { SYSTEM_DEFAULT_MODEL_VALUE, useAiModelOptions } from '../../lib/aiModels'
 import type { Category, Paper, PaperDetail } from '../../types'
 import { runBulkPaperAction } from './libraryBulkActions'
 import { createLibraryMetadataActions } from './libraryMetadataActions'
@@ -35,7 +36,8 @@ export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibra
   const [favoriteFilter, setFavoriteFilter] = useState<FavoriteFilter>('all')
   const [readingStatusFilter, setReadingStatusFilter] = useState<ReadingStatusFilter>('all')
   const [activeTag, setActiveTag] = useState<string | null>(null)
-  const [selectedModel, setSelectedModel] = useState('gpt-5.4')
+  const [selectedModel, setSelectedModel] = useState(SYSTEM_DEFAULT_MODEL_VALUE)
+  const { modelOptions } = useAiModelOptions(selectedModel, setSelectedModel)
   const [feedbackMessage, setFeedbackMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [isRunningParse, setIsRunningParse] = useState(false)
@@ -244,6 +246,7 @@ export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibra
         isRunningSummarize={isRunningSummarize}
         isRunningEmbed={isRunningEmbed}
         selectedModel={selectedModel}
+        modelOptions={modelOptions}
         isRetryingParseFailed={isRetryingParseFailed}
         isDeletingParseFailed={isDeletingParseFailed}
         onCategoryScopeChange={setCategoryScope}

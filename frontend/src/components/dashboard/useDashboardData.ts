@@ -31,12 +31,14 @@ import {
 import type { KpiCardProps } from './KpiCard'
 import type { PriorityPaperCardProps } from './PriorityPaperCard'
 import type { MockPaper, MockProgress, MockSuggestion, NavigationItemData } from './mockData'
+import { effectiveRank } from '../../types'
 
 // ─── Adapters / Mappers ─────────────────────────────────────────────
 
 /** Map a Paper (from library) to the dashboard's MockPaper shape */
 export function paperToMockPaper(paper: Paper, scoreMap: Map<number, number>): MockPaper {
   const rawScore = scoreMap.get(paper.id) ?? 0
+  const rank = effectiveRank(paper)
   return {
     id: String(paper.id),
     title: paper.title,
@@ -48,8 +50,12 @@ export function paperToMockPaper(paper: Paper, scoreMap: Map<number, number>): M
     abstract: paper.abstract_raw ?? '',
     project: '', // not directly available
     isRead: getPaperReadStatus(paper),
-    thumbnailUrl: '',
+    thumbnailUrl: paper.representative_image_url ?? '',
     favorite: paper.favorite ?? false,
+    venue: paper.venue ?? '',
+    ccfRank: rank.ccf,
+    sciZone: rank.sciZone,
+    impactFactor: rank.impactFactor,
   }
 }
 
@@ -66,6 +72,7 @@ export function briefingItemToPriorityCard(
 
   // Normalize score relative to the max score in the batch
   const normalizedScore = maxScore > 0 ? item.score / maxScore : 0
+  const rank = matchedPaper ? effectiveRank(matchedPaper) : { ccf: '', sciZone: '', impactFactor: '' }
 
   return {
     rank: item.rank,
@@ -76,9 +83,13 @@ export function briefingItemToPriorityCard(
     citations: 0,
     tags: matchedPaper?.tags ?? [],
     relevanceScore: normalizedScore,
-    thumbnailUrl: item.pdf_url ?? '',
+    thumbnailUrl: matchedPaper?.representative_image_url || item.pdf_url || '',
     abstractText: item.summary_text ?? item.reason ?? matchedPaper?.abstract_raw ?? '',
     favorite: matchedPaper?.favorite ?? false,
+    venue: matchedPaper?.venue ?? '',
+    ccfRank: rank.ccf,
+    sciZone: rank.sciZone,
+    impactFactor: rank.impactFactor,
   }
 }
 
@@ -193,6 +204,7 @@ export type DashboardData = {
 export function useDashboardData(
   papers: Paper[],
   onOpenPaper: (paperId: number) => void,
+  refreshLibrary?: () => Promise<void>,
 ): DashboardData {
   const clientToday = useMemo(() => new Date().toISOString().slice(0, 10), [])
   const [selectedDate, setSelectedDate] = useState(clientToday)
@@ -288,6 +300,7 @@ export function useDashboardData(
             fetchBriefingHistory(),
             fetchBriefing(),
           ])
+          await refreshLibrary?.()
           setHistory(historyData)
           setBriefing(briefingData)
           if (todayRun?.error_message) {
@@ -324,6 +337,7 @@ export function useDashboardData(
             fetchBriefingHistory(),
             fetchBriefing(),
           ])
+          await refreshLibrary?.()
           setHistory(historyData)
           setBriefing(briefingData)
           // Check if there were errors during the run

@@ -405,7 +405,7 @@ export function AgentWorkspace() {
                 </div>
               </div>
               <ul className="agent-run-failed-tips">
-                <li>确认 <code>DEEPSEEK_API_KEY</code> 已在 <code>backend/.env</code> 中配置。</li>
+                <li>确认偏好设置中的 AI 供应商 API Key 已配置，或后端环境变量仍可作为回退。</li>
                 <li>检查后端日志（<code>uvicorn</code> 输出）查看完整堆栈。</li>
                 <li>若是 JSON 解析错误，可重试一次或把 prompt 简化后再运行。</li>
               </ul>

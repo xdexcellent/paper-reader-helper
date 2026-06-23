@@ -12,6 +12,7 @@ const apiMocks = vi.hoisted(() => ({
   revertAgentAction: vi.fn(),
   fetchAgentRunDetail: vi.fn(),
   fetchAgentRuns: vi.fn(),
+  fetchAiProviderSettings: vi.fn(),
 }))
 
 vi.mock('../../lib/api', () => apiMocks)
@@ -29,6 +30,14 @@ beforeEach(() => {
   apiMocks.rejectAgentAction.mockRejectedValue(new Error('not called'))
   apiMocks.revertAgentAction.mockRejectedValue(new Error('not called'))
   apiMocks.fetchAgentRuns.mockResolvedValue([])
+  apiMocks.fetchAiProviderSettings.mockResolvedValue({
+    provider_name: 'OpenAI Compatible',
+    api_base: 'https://api.example.com',
+    api_key_set: false,
+    api_key_preview: '',
+    default_model: 'model-a',
+    available_models: ['model-a', 'model-b'],
+  })
 })
 
 test('renders agent workspace with scope picker and prompt input', async () => {

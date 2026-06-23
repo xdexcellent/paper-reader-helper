@@ -11,6 +11,10 @@ export type MockPaper = {
   isRead: boolean
   thumbnailUrl: string
   favorite?: boolean
+  venue?: string
+  ccfRank?: string
+  sciZone?: string
+  impactFactor?: string
 }
 
 export type MockKpiMetric = {

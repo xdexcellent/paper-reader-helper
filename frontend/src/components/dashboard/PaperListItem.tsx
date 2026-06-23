@@ -6,6 +6,7 @@ import { PaperThumbnail } from './PaperThumbnail'
 import { PaperThumbnailPreviewDialog } from './PaperThumbnailPreviewDialog'
 import { showToast } from './DashboardToast'
 import { updatePaperFavorite, updatePaperReadingState, deletePaper } from '../../lib/api'
+import { RankBadge } from '../RankBadge'
 
 export type PaperListItemProps = {
   paper: MockPaper
@@ -118,6 +119,12 @@ export function PaperListItem({ paper, onOpenPaper, onPaperUpdated, onAddToProje
           {paper.project && (<><span className="text-[#CBD5E1]">·</span><span>{paper.project}</span></>)}
           {paper.isRead && <span className="ml-1 rounded-full bg-emerald-50 px-1.5 py-[1px] text-[10px] text-emerald-600 font-medium">已读</span>}
         </div>
+        {(paper.venue?.trim() || paper.ccfRank || paper.sciZone || paper.impactFactor) && (
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            {paper.venue?.trim() && <span className="text-[12px] text-[#94A3B8] truncate max-w-[200px]">{paper.venue}</span>}
+            <RankBadge ccf={paper.ccfRank} sciZone={paper.sciZone} impactFactor={paper.impactFactor} />
+          </div>
+        )}
         {displayAbstract && (
           <p className="mt-1.5 text-[12px] leading-relaxed text-[#64748B] line-clamp-2">{displayAbstract}</p>
         )}

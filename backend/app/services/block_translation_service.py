@@ -11,11 +11,12 @@ from app.models.paper_block_translation import (
 from app.services.deepseek_client import (
     BLOCK_TRANSLATION_PROMPT_VERSION,
     DeepSeekClient,
+    DEFAULT_AI_MODEL,
 )
 
 
 DEFAULT_BLOCK_TRANSLATION_LANGUAGE = "zh-CN"
-DEFAULT_BLOCK_TRANSLATION_MODEL = "gpt-5.4"
+DEFAULT_BLOCK_TRANSLATION_MODEL = ""
 
 
 class BlockTranslatorClient(Protocol):
@@ -24,7 +25,7 @@ class BlockTranslatorClient(Protocol):
         *,
         text: str,
         target_language: str,
-        model: str,
+        model: str | None,
         page_index: int | None,
         block_type: str,
     ) -> dict[str, str]:
@@ -40,7 +41,7 @@ class BlockTranslationService:
         session: Session,
         block: PaperBlock,
         target_language: str = DEFAULT_BLOCK_TRANSLATION_LANGUAGE,
-        model: str = DEFAULT_BLOCK_TRANSLATION_MODEL,
+        model: str | None = DEFAULT_BLOCK_TRANSLATION_MODEL,
     ) -> PaperBlockTranslation | None:
         return session.exec(
             select(PaperBlockTranslation)
@@ -62,11 +63,11 @@ class BlockTranslationService:
         block: PaperBlock,
         *,
         target_language: str = DEFAULT_BLOCK_TRANSLATION_LANGUAGE,
-        model: str = DEFAULT_BLOCK_TRANSLATION_MODEL,
+        model: str | None = DEFAULT_BLOCK_TRANSLATION_MODEL,
         force_refresh: bool = False,
     ) -> PaperBlockTranslation:
         language = target_language.strip() or DEFAULT_BLOCK_TRANSLATION_LANGUAGE
-        model_name = model.strip() or DEFAULT_BLOCK_TRANSLATION_MODEL
+        model_name = self.client.resolve_model(model) if hasattr(self.client, "resolve_model") else (model or DEFAULT_AI_MODEL)
         if paper.id != block.paper_id:
             raise ValueError("block does not belong to paper")
         if not block.text.strip():

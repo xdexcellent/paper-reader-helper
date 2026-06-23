@@ -13,6 +13,7 @@ from app.models.paper import Paper, PaperStatus
 from app.models.zotero_import_candidate import ZoteroImportCandidate
 from app.models.zotero_import_run import ZoteroImportRun
 from app.services.storage import StorageService
+from app.services.venue_rank_service import apply_system_rank
 
 logger = logging.getLogger(__name__)
 
@@ -324,6 +325,7 @@ class ZoteroImportService:
             created_at=now,
             updated_at=now,
         )
+        apply_system_rank(paper)
         session.add(paper)
         session.commit()
         session.refresh(paper)

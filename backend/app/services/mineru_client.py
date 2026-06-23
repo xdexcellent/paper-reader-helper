@@ -119,12 +119,15 @@ class MineruClient:
         if not result_url:
             raise RuntimeError("MinerU task completed but no result URL returned")
 
-        full_markdown = self._download_and_extract_markdown(result_url)
+        full_markdown, local_zip_path = self._download_and_extract_markdown(
+            result_url,
+            pdf_path,
+        )
 
         return {
             "full_markdown": full_markdown,
             "content_json_path": result_data.get("content_json_url", ""),
-            "full_zip_path": result_url,
+            "full_zip_path": local_zip_path or result_url,
         }
 
     def _preflight_pdf_url(self, pdf_url: str) -> None:
@@ -212,7 +215,11 @@ class MineruClient:
         finally:
             client.close()
 
-    def _download_and_extract_markdown(self, result_url: str) -> str:
+    def _download_and_extract_markdown(
+        self,
+        result_url: str,
+        pdf_path: str | None = None,
+    ) -> tuple[str, str]:
         """Download a result ZIP and extract the markdown content."""
         client = get_http_client(timeout=120)
         try:
@@ -221,6 +228,10 @@ class MineruClient:
             content = resp.content
         finally:
             client.close()
+
+        local_zip_path = ""
+        if pdf_path:
+            local_zip_path = self._persist_result_zip(pdf_path, content)
 
         with zipfile.ZipFile(BytesIO(content)) as zf:
             # Look for markdown files in the ZIP
@@ -240,7 +251,19 @@ class MineruClient:
 
             content = zf.read(target).decode("utf-8")
             logger.info("Extracted markdown from %s (%d chars)", target, len(content))
-            return content
+            return content, local_zip_path
+
+    def _persist_result_zip(self, pdf_path: str, content: bytes) -> str:
+        try:
+            paper_dir = Path(pdf_path).resolve().parent
+            mineru_dir = paper_dir / "mineru"
+            mineru_dir.mkdir(parents=True, exist_ok=True)
+            target = mineru_dir / "result.zip"
+            target.write_bytes(content)
+            return str(target)
+        except Exception:
+            logger.warning("Failed to persist MinerU result ZIP for %s", pdf_path, exc_info=True)
+            return ""
 
     def _fallback_result(
         self, pdf_path: str, reason: str | None = None

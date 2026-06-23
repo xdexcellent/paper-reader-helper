@@ -3,6 +3,7 @@
  * Variant is determined by paper index or source type.
  * Size is controlled by the caller via className.
  */
+import { useEffect, useState } from 'react'
 
 type PaperThumbnailProps = {
   variant: number
@@ -229,13 +230,18 @@ function Variant7() {
 const variants = [Variant1, Variant2, Variant3, Variant4, Variant5, Variant6, Variant7]
 
 export function PaperThumbnail({ variant, className = '', paperId, thumbnailUrl, title, abstractText }: PaperThumbnailProps) {
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null)
   const idx = ((variant - 1) % variants.length)
   const Component = variants[idx]
   const numericPaperId = parsePaperId(paperId)
   const previewLabel = title ? `PDF thumbnail: ${title}` : 'PDF thumbnail'
   const hasPdfSource = numericPaperId !== null || Boolean(thumbnailUrl && isPdfLikeUrl(thumbnailUrl))
-  const imageThumbnailUrl = thumbnailUrl && !isPdfLikeUrl(thumbnailUrl) ? thumbnailUrl : ''
+  const imageThumbnailUrl = thumbnailUrl && thumbnailUrl !== failedImageUrl && !isPdfLikeUrl(thumbnailUrl) ? thumbnailUrl : ''
   const hasPageText = Boolean(compactText(title) || compactText(abstractText))
+
+  useEffect(() => {
+    setFailedImageUrl(null)
+  }, [thumbnailUrl])
 
   return (
     <div className={`relative overflow-hidden rounded-[12px] border border-[#E2E8F0]/70 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.06)] ${className}`}>
@@ -245,6 +251,7 @@ export function PaperThumbnail({ variant, className = '', paperId, thumbnailUrl,
           alt={previewLabel}
           loading="lazy"
           className="h-full w-full object-cover"
+          onError={() => setFailedImageUrl(imageThumbnailUrl)}
         />
       ) : hasPageText ? (
         <PdfFirstPagePreview

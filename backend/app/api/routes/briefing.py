@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
@@ -26,6 +26,18 @@ def _today_for_settings(session: Session) -> date:
     return get_local_today(timezone_name).date()
 
 
+def _isoformat_utc(value: datetime) -> str:
+    """ISO 8601 string with explicit UTC suffix.
+
+    SQLite strips tzinfo when storing datetime, so naive datetimes returned by
+    SQLModel lack the +00:00 suffix. Without it, browser `new Date()` treats the
+    value as local time, shifting displayed times by the timezone offset.
+    """
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.isoformat()
+
+
 def _to_response(
     service: DailyBriefingService,
     session: Session,
@@ -40,7 +52,7 @@ def _to_response(
     return DailyBriefingResponse(
         briefing_date=briefing.briefing_date.isoformat(),
         status=briefing.status,
-        generated_at=briefing.generated_at.isoformat(),
+        generated_at=_isoformat_utc(briefing.generated_at),
         daily_run_id=briefing.daily_run_id,
         trigger_type=run.trigger_type if run is not None else None,
         summary_markdown=briefing.summary_markdown,
@@ -90,7 +102,7 @@ def _to_history_item(session: Session, briefing) -> DailyBriefingHistoryItem:
     return DailyBriefingHistoryItem(
         briefing_date=briefing.briefing_date.isoformat(),
         status=briefing.status,
-        generated_at=briefing.generated_at.isoformat(),
+        generated_at=_isoformat_utc(briefing.generated_at),
         daily_run_id=briefing.daily_run_id,
         trigger_type=run.trigger_type if run is not None else None,
         summary_markdown=briefing.summary_markdown,

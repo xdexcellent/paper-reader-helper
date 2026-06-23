@@ -15,6 +15,7 @@ import {
   type ChatSessionResponse,
   type SemanticSearchResult,
 } from '../lib/api'
+import { SYSTEM_DEFAULT_MODEL_VALUE, getAiModelLabel, useAiModelOptions } from '../lib/aiModels'
 import type { Paper } from '../types'
 import { Icon, type IconName } from './UiIcon'
 
@@ -22,13 +23,6 @@ interface LocalMessage {
   role: 'user' | 'assistant'
   content: string
 }
-
-const MODELS = [
-  { value: 'gpt-5.4', label: 'GPT-5.4' },
-  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
-  { value: 'gpt-5.3-codex', label: 'GPT-5.3 Codex' },
-  { value: 'gpt-5.2', label: 'GPT-5.2' },
-]
 
 const WELCOME_MESSAGE: LocalMessage = {
   role: 'assistant',
@@ -117,7 +111,8 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingSessions, setIsLoadingSessions] = useState(true)
   const [selectedPaperId, setSelectedPaperId] = useState<number | null>(null)
-  const [selectedModel, setSelectedModel] = useState(MODELS[0].value)
+  const [selectedModel, setSelectedModel] = useState(SYSTEM_DEFAULT_MODEL_VALUE)
+  const { modelOptions } = useAiModelOptions(selectedModel, setSelectedModel)
   const [localUploadedPapers, setLocalUploadedPapers] = useState<Paper[]>([])
   const [isUploadingPaper, setIsUploadingPaper] = useState(false)
   const [chatMode, setChatMode] = useState<(typeof CHAT_MODES)[number]>('论文解读')
@@ -144,7 +139,7 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
   const displayPaper = selectedPaper ?? allPapers[0] ?? null
   const selectedPaperTitle = selectedPaper?.title ?? null
   const displayPaperTitle = displayPaper?.title ?? '选择或上传一篇论文开始分析'
-  const selectedModelLabel = MODELS.find(m => m.value === selectedModel)?.label ?? selectedModel
+  const selectedModelLabel = getAiModelLabel(selectedModel, modelOptions)
   const contextScope = selectedPaperId
     ? paperOnly ? '仅当前论文' : '当前论文 + 论文库'
     : '论文库 + 通用学术知识'
@@ -232,7 +227,7 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
       const newSession = await createChatSession({
         title: '新对话',
         paper_id: selectedPaperId,
-        model: selectedModel,
+        model: selectedModel || undefined,
       })
       setSessions(prev => [newSession, ...prev])
       setActiveSessionId(newSession.id)
@@ -429,7 +424,7 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
                 <span className="assistant-history-paper">{getSessionPaperTitle(session.paper_id)}</span>
                 <span className="assistant-history-meta">
                   <span>{formatDate(session.updated_at || session.created_at)}</span>
-                  <span>{MODELS.find(model => model.value === session.model)?.label ?? session.model}</span>
+                  <span>{getAiModelLabel(session.model, modelOptions)}</span>
                 </span>
               </button>
               <button
@@ -654,7 +649,10 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
               <label>
                 <span>模型</span>
                 <select value={selectedModel} onChange={event => setSelectedModel(event.target.value)}>
-                  {MODELS.map(model => <option key={model.value} value={model.value}>{model.label}</option>)}
+                  {modelOptions.map(model => <option key={model.value || 'system-default'} value={model.value}>{model.label}</option>)}
+                  {selectedModel && !modelOptions.some(model => model.value === selectedModel) ? (
+                    <option value={selectedModel}>{selectedModelLabel}</option>
+                  ) : null}
                 </select>
               </label>
               <label>

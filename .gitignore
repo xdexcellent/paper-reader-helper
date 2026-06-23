@@ -26,6 +26,12 @@ data/
 backend/data/
 test-data/
 backend/test-data/
+# 例外：backend/app/data 下的内置 CCF 等级数据与 SCI/IF 示例模板需随仓库分发
+# （data/ 规则未锚定会误伤 backend/app/data/，故先放出目录、再忽略其余内容、最后放出指定文件）
+!backend/app/data/
+backend/app/data/*
+!backend/app/data/venue_ranks_ccf.json
+!backend/app/data/venue_ranks_sci_if.example.json
 *.db
 *.sqlite
 *.sqlite3

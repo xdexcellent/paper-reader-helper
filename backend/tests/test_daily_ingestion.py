@@ -2,6 +2,7 @@ import json
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+import httpx
 import pytest
 from sqlmodel import SQLModel, Session, create_engine, select
 
@@ -12,6 +13,7 @@ from app.models.daily_run import DailyRun
 from app.models.ingestion_item import IngestionItem
 from app.models.paper import Paper
 from app.models.subscription import Subscription
+from app.services.daily_briefing_service import DailyBriefingService
 from app.services.automation_settings_service import AutomationSettingsService
 from app.services.category_service import ensure_default_categories
 from app.services.daily_ingestion import DailyIngestionService
@@ -348,6 +350,64 @@ def test_run_for_date_drops_candidate_without_pdf_url_before_processing(
     assert stats["candidates_total"] == 0
 
 
+def test_run_for_date_skips_restricted_pdf_without_failed_risk_item(
+    session_factory,
+    tmp_path: Path,
+) -> None:
+    candidate = SourceCandidate(
+        artifact_type="paper",
+        source_kind="crossref",
+        external_id="10.1234/restricted",
+        title="Restricted PDF Paper",
+        authors="Alice",
+        abstract_raw="Metadata survives.",
+        canonical_url="https://doi.org/10.1234/restricted",
+        pdf_url="https://publisher.example.com/paper.pdf",
+        published_at=datetime(2026, 4, 18, 8, 0, tzinfo=timezone.utc),
+    )
+
+    def restricted_download(url: str) -> bytes:
+        request = httpx.Request("GET", url)
+        response = httpx.Response(403, request=request)
+        response.raise_for_status()
+        return b""
+
+    with Session(session_factory) as session:
+        _configure_settings(session)
+        _make_subscription(session, "crossref", query="restricted")
+        service = _make_service(
+            session,
+            tmp_path,
+            {"crossref": _FakeAdapter([candidate])},
+            pdf_downloader=restricted_download,
+        )
+
+        run = service.run_for_date(date(2026, 4, 18))
+        items = session.exec(
+            select(IngestionItem).where(IngestionItem.daily_run_id == run.id)
+        ).all()
+        failed_items = DailyBriefingService().get_failed_items_for_run(session, run.id)
+
+    assert len(items) == 1
+    assert items[0].status == "skipped_restricted_pdf"
+    assert items[0].paper_id is None
+    assert failed_items == []
+    stats = json.loads(run.stats_json)
+    assert stats["failed_items"] == 0
+    assert stats["skipped_restricted_pdf"] == 1
+
+
+def test_briefing_formats_restricted_pdf_http_errors_as_manual_view_hint() -> None:
+    service = DailyBriefingService()
+
+    assert service.friendly_failure_reason("Client error '401 Unauthorized' for url") == (
+        "源站限制直接下载 PDF，已保留候选信息，可通过原文链接手动查看。"
+    )
+    assert service.friendly_failure_reason("源站返回 HTTP 451，限制直接下载 PDF：https://example.com/paper.pdf") == (
+        "源站限制直接下载 PDF，已保留候选信息，可通过原文链接手动查看。"
+    )
+
+
 def test_run_for_date_can_manage_default_database_session(
     session_factory,
     tmp_path: Path,
@@ -619,6 +679,7 @@ def test_run_for_date_populates_stats_json_with_major_counters(session_factory, 
         "deduplicated": 0,
         "failed_items": 0,
         "skipped_no_pdf_url": 2,
+        "skipped_restricted_pdf": 0,
         "processed_papers": 1,
     }
 

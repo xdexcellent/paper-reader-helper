@@ -1,6 +1,7 @@
 import shutil
 from pathlib import Path
 from typing import BinaryIO
+from urllib.parse import quote
 from uuid import uuid4
 
 from app.core.config import settings
@@ -48,3 +49,22 @@ class StorageService:
             raise
 
         return str(target)
+
+
+def storage_file_url(
+    path: str | None,
+    root: str | None = None,
+    base_url: str | None = None,
+) -> str:
+    if not path:
+        return ""
+
+    storage_root = Path(root or settings.effective_storage_root).resolve()
+    try:
+        local = Path(path).resolve()
+        relative = local.relative_to(storage_root)
+    except (OSError, ValueError):
+        return ""
+
+    encoded_path = "/".join(quote(part, safe="") for part in relative.parts)
+    return f"{(base_url or settings.server_base_url).rstrip('/')}/files/{encoded_path}"

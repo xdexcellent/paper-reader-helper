@@ -1,4 +1,5 @@
 import type { Category, PaperDetail, PaperUpdatePayload, ReadingStatus } from '../../types'
+import type { AiModelOption } from '../../lib/aiModels'
 import { FeedbackBanner } from '../FeedbackBanner'
 import { PaperMetadataPanel } from './PaperMetadataPanel'
 import { PaperOverviewPanel } from './PaperOverviewPanel'
@@ -14,6 +15,7 @@ type LibraryDetailStackProps = {
   isRunningSummarize: boolean
   isRunningEmbed: boolean
   selectedModel: string
+  modelOptions: AiModelOption[]
   onModelChange: (model: string) => void
   onParse: () => Promise<void>
   onSummarize: () => Promise<void>
@@ -39,6 +41,7 @@ export function LibraryDetailStack({
   isRunningSummarize,
   isRunningEmbed,
   selectedModel,
+  modelOptions,
   onModelChange,
   onParse,
   onSummarize,
@@ -64,6 +67,7 @@ export function LibraryDetailStack({
         isRunningSummarize={isRunningSummarize || detail?.summary_status === 'processing'}
         isRunningEmbed={isRunningEmbed || detail?.embedding_status === 'processing'}
         selectedModel={selectedModel}
+        modelOptions={modelOptions}
         onCategoryChange={onCategoryChange}
         onTagsChange={onTagsChange}
         onOpenReader={onOpenReader}

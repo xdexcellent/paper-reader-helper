@@ -9,6 +9,7 @@ class PaperBlockResponse(BaseModel):
     block_type: str
     text: str
     bbox: list[float] | None = None
+    asset_path: str = ""
     source_hash: str
 
 
@@ -31,7 +32,7 @@ class PaperBlockRebuildResponse(BaseModel):
 
 class BlockTranslateRequest(BaseModel):
     target_language: str = "zh-CN"
-    model: str = "gpt-5.4"
+    model: str | None = None
     force_refresh: bool = False
 
 

@@ -11,7 +11,7 @@ class AgentScopeConfig(BaseModel):
 class AgentRunCreate(BaseModel):
     prompt: str
     scope: AgentScopeConfig
-    model: str = "gpt-5.4"
+    model: str | None = None
     thinking: str = ""  # "", "none", "low", "medium", "high" — empty means use system default
     chat_session_id: int | None = None
 

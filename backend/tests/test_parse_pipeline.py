@@ -1,9 +1,11 @@
 import threading
 import time
+import zipfile
 from pathlib import Path
 
 from sqlmodel import Session, select
 
+from app.core.config import settings
 from app.core.db import engine
 from app.models.paper_embedding import PaperEmbedding
 from app.models.paper import Paper
@@ -309,6 +311,65 @@ def test_parse_paper_persists_blocks_from_structured_artifact(
     assert len(blocks) == 1
     assert blocks[0].text == "Parsed block"
     assert blocks[0].block_index == 0
+
+
+def test_parse_paper_persists_representative_image_url(
+    client, mocker, wait_for_task, tmp_path
+) -> None:
+    sample_pdf = Path(__file__).parent / "fixtures" / "sample.pdf"
+    zip_path = tmp_path / "mineru_result.zip"
+    with zipfile.ZipFile(zip_path, "w") as archive:
+        archive.writestr(
+            "paper_content_list.json",
+            (
+                '[{"type":"image","image_caption":["Figure 1. Overview."],'
+                '"img_path":"images/figure-1.jpg","bbox":[1,2,501,402],"page_idx":1}]'
+            ),
+        )
+        archive.writestr("images/figure-1.jpg", b"representative")
+
+    create_response = client.post(
+        "/papers/import",
+        json={
+            "title": "Representative Image",
+            "source": "manual",
+            "local_pdf_path": str(sample_pdf),
+        },
+    )
+    paper_id = create_response.json()["id"]
+
+    mocker.patch(
+        "app.services.mineru_client.MineruClient.parse_pdf",
+        return_value={
+            "full_markdown": "# Image\n\nParsed markdown",
+            "content_json_path": "",
+            "full_zip_path": str(zip_path),
+        },
+    )
+
+    response = client.post(f"/papers/{paper_id}/parse")
+
+    assert response.status_code == 202
+    task_body = wait_for_task(client, response.json()["task_id"])
+    assert task_body["status"] == "completed"
+
+    with Session(engine) as session:
+        paper = session.get(Paper, paper_id)
+        blocks = session.exec(
+            select(PaperBlock).where(PaperBlock.paper_id == paper_id)
+        ).all()
+
+    assert paper is not None
+    assert paper.representative_image_path
+    assert Path(paper.representative_image_path).read_bytes() == b"representative"
+    assert blocks[0].asset_path == "images/figure-1.jpg"
+
+    list_response = client.get("/papers")
+    listed = next(item for item in list_response.json() if item["id"] == paper_id)
+    assert listed["representative_image_url"].startswith(
+        f"{settings.server_base_url.rstrip('/')}/files/papers/"
+    )
+    assert listed["representative_image_url"].endswith(".jpg")
 
 
 def test_parse_paper_keeps_success_when_block_extraction_fails(

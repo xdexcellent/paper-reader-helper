@@ -81,6 +81,10 @@ function metadataProps(overrides: Record<string, unknown> = {}) {
     isRunningSummarize: false,
     isRunningEmbed: false,
     selectedModel: 'gpt-5.4',
+    modelOptions: [
+      { value: '', label: '系统默认' },
+      { value: 'gpt-5.4', label: 'gpt-5.4' },
+    ],
     onCategoryChange: noopAsync,
     onModelChange: noop,
     onParse: noopAsync,

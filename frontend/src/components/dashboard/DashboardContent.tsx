@@ -65,6 +65,14 @@ export function DashboardContent({
     const priorityPaper = priorityPapers[index]
     if (!priorityPaper) return
 
+    if (priorityPaper.paperId) {
+      const numId = parseInt(priorityPaper.paperId, 10)
+      if (!isNaN(numId) && onOpenPaper) {
+        onOpenPaper(numId)
+        return
+      }
+    }
+
     // Find the paper in the papers list by title match
     const matchedPaper = papers.find(p => p.title === priorityPaper.title)
     if (matchedPaper) {
@@ -87,6 +95,13 @@ export function DashboardContent({
         // Find and open the corresponding paper
         const topPaper = priorityPapers[index]
         if (topPaper) {
+          if (topPaper.paperId) {
+            const numId = parseInt(topPaper.paperId, 10)
+            if (!isNaN(numId) && onOpenPaper) {
+              onOpenPaper(numId)
+              return
+            }
+          }
           const matched = papers.find(p => p.title === topPaper.title)
           if (matched) {
             const numId = parseInt(matched.id, 10)

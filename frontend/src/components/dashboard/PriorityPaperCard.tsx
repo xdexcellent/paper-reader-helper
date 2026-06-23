@@ -5,6 +5,7 @@ import { PaperThumbnail } from './PaperThumbnail'
 import { PaperThumbnailPreviewDialog } from './PaperThumbnailPreviewDialog'
 import { showToast } from './DashboardToast'
 import { updatePaperFavorite } from '../../lib/api'
+import { RankBadge } from '../RankBadge'
 
 export type PriorityPaperCardProps = {
   rank: number
@@ -18,6 +19,10 @@ export type PriorityPaperCardProps = {
   thumbnailUrl: string
   abstractText?: string
   favorite?: boolean
+  venue?: string
+  ccfRank?: string
+  sciZone?: string
+  impactFactor?: string
   onRead: () => void
   onAddToProject?: (title: string) => void
   onDismiss?: (rank: number) => void
@@ -42,6 +47,10 @@ export function PriorityPaperCard({
   thumbnailUrl,
   abstractText,
   favorite = false,
+  venue,
+  ccfRank,
+  sciZone,
+  impactFactor,
   onRead,
   onAddToProject,
   onDismiss,
@@ -143,6 +152,12 @@ export function PriorityPaperCard({
           <span>{date}</span>
           {citations > 0 && (<><span className="text-[#CBD5E1]">·</span><span>引用 {citations}</span></>)}
         </div>
+        {(venue?.trim() || ccfRank || sciZone || impactFactor) && (
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            {venue?.trim() && <span className="text-[12px] text-[#94A3B8] truncate max-w-[200px]">{venue}</span>}
+            <RankBadge ccf={ccfRank} sciZone={sciZone} impactFactor={impactFactor} />
+          </div>
+        )}
         {displayTags.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-[6px]">
             {displayTags.map((tag) => (

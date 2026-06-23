@@ -7,6 +7,8 @@ import {
   checkAuthStatus,
   createCategory,
   deletePaper,
+  fetchAiProviderModels,
+  fetchAiProviderSettings,
   fetchAutomationSettings,
   fetchAutomationStatusToday,
   fetchBriefing,
@@ -14,9 +16,14 @@ import {
   fetchCategories,
   fetchPaperBlocks,
   fetchPapers,
+  fetchRecommendations,
   rebuildPaperBlocks,
   runTodayBriefing,
+  sendChatMessage,
+  sendSessionMessage,
+  summarizePaper,
   translatePaperBlock,
+  updateAiProviderSettings,
   updateAutomationSettings,
   updatePaper,
   updatePaperCategory,
@@ -101,6 +108,80 @@ test('fetchPapers dispatches unauthorized event when backend returns 401', async
   expect(event).toBeInstanceOf(CustomEvent)
   expect(event.type).toBe(UNAUTHORIZED_EVENT)
   expect((event as CustomEvent<{ message: string }>).detail.message).toBe('登录已过期，请重新登录')
+})
+
+test('fetchPapers rewrites backend file URLs to the configured API origin', async () => {
+  vi.mocked(fetch).mockResolvedValueOnce(
+    new Response(JSON.stringify([
+      paperResponse({
+        representative_image_url: 'https://mineru.753939.xyz/files/papers/abc/representative-images/figure.jpg',
+      }),
+    ]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  )
+
+  const papers = await fetchPapers()
+
+  expect(papers[0].representative_image_url).toBe(
+    'http://localhost:8000/files/papers/abc/representative-images/figure.jpg',
+  )
+})
+
+test('AI model helpers omit model when system default is selected', async () => {
+  vi.mocked(fetch)
+    .mockResolvedValueOnce(new Response(JSON.stringify({ task_id: 'summary-task' }), {
+      status: 202,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ task_id: 'summary-task-2' }), {
+      status: 202,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ reply: 'ok' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ reply: 'ok' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    .mockResolvedValueOnce(new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+  await summarizePaper(1)
+  await summarizePaper(2, 'model-a')
+  await sendChatMessage([{ role: 'user', content: 'hello' }], 1, '')
+  await sendSessionMessage(7, 'hello', null, '')
+  await fetchRecommendations({ force: true, model: '' })
+
+  expect(fetch).toHaveBeenNthCalledWith(1, 'http://localhost:8000/papers/1/summarize', {
+    method: 'POST',
+    headers: {},
+  })
+  expect(fetch).toHaveBeenNthCalledWith(2, 'http://localhost:8000/papers/2/summarize?model=model-a', {
+    method: 'POST',
+    headers: {},
+  })
+  expect(fetch).toHaveBeenNthCalledWith(3, 'http://localhost:8000/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages: [{ role: 'user', content: 'hello' }],
+      paper_id: 1,
+    }),
+  })
+  expect(fetch).toHaveBeenNthCalledWith(4, 'http://localhost:8000/chat/sessions/7/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content: 'hello', paper_id: -1, model: '' }),
+  })
+  expect(fetch).toHaveBeenNthCalledWith(5, 'http://localhost:8000/recommendations?force=true', {
+    headers: {},
+  })
 })
 
 test('deletePaper also dispatches unauthorized event for manual non-JSON checks', async () => {
@@ -488,6 +569,70 @@ test('automation settings api reads and updates schedule settings', async () => 
     body: JSON.stringify({ ...current, schedule_time: '13:00' }),
   })
   expect(updated.schedule_time).toBe('13:00')
+})
+
+test('AI provider settings api reads, updates, and fetches models', async () => {
+  vi.mocked(fetch)
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        provider_name: 'OpenAI Compatible',
+        api_base: 'https://llm.example.com/v1',
+        api_key_set: true,
+        api_key_preview: 'sk-t••••1234',
+        default_model: 'model-a',
+        available_models: ['model-a'],
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        provider_name: 'OpenAI Compatible',
+        api_base: 'https://llm.example.com/v1',
+        api_key_set: true,
+        api_key_preview: 'sk-t••••1234',
+        default_model: 'model-b',
+        available_models: ['model-a', 'model-b'],
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ models: ['model-a', 'model-b'] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+  const current = await fetchAiProviderSettings()
+  const updated = await updateAiProviderSettings({
+    ...current,
+    api_key: 'sk-test',
+    default_model: 'model-b',
+    available_models: ['model-a', 'model-b'],
+  })
+  const models = await fetchAiProviderModels({ api_base: current.api_base, api_key: 'sk-test' })
+
+  expect(fetch).toHaveBeenNthCalledWith(1, 'http://localhost:8000/settings/ai-provider', { headers: {} })
+  expect(fetch).toHaveBeenNthCalledWith(2, 'http://localhost:8000/settings/ai-provider', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...current,
+      api_key: 'sk-test',
+      default_model: 'model-b',
+      available_models: ['model-a', 'model-b'],
+    }),
+  })
+  expect(fetch).toHaveBeenNthCalledWith(3, 'http://localhost:8000/settings/ai-provider/models', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ api_base: current.api_base, api_key: 'sk-test' }),
+  })
+  expect(updated.default_model).toBe('model-b')
+  expect(models).toEqual(['model-a', 'model-b'])
 })
 
 test('runTodayBriefing dispatches manual daily run', async () => {

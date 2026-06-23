@@ -98,7 +98,7 @@ def test_create_agent_run_model_failure(mocker, client):
     # Mock chat to raise an error
     mocker.patch(
         "app.services.agent_runner_service.DeepSeekClient.chat",
-        return_value="DeepSeek API Key 未配置，无法进行真实对话。",
+        return_value="AI 供应商 API Key 未配置，无法进行真实对话。请在偏好设置中配置 API Key。",
     )
 
     with Session(engine) as session:

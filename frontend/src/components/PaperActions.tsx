@@ -1,10 +1,5 @@
 import { Icon } from './UiIcon'
-
-const AVAILABLE_MODELS = [
-  'gpt-5.4',
-  'gpt-5.3-codex',
-  'gpt-5.2',
-] as const
+import type { AiModelOption } from '../lib/aiModels'
 
 export function PaperActions({
   disabled,
@@ -17,6 +12,7 @@ export function PaperActions({
   onSummarize,
   onEmbed,
   onRefresh,
+  modelOptions,
 }: {
   disabled: boolean
   isRunningParse: boolean
@@ -28,6 +24,7 @@ export function PaperActions({
   onSummarize: () => Promise<void>
   onEmbed: () => Promise<void>
   onRefresh: () => Promise<void>
+  modelOptions: AiModelOption[]
 }) {
   return (
     <div className="paper-actions-bar">
@@ -57,9 +54,12 @@ export function PaperActions({
           disabled={disabled || isRunningSummarize}
           aria-label="选择模型"
         >
-          {AVAILABLE_MODELS.map((m) => (
-            <option key={m} value={m}>{m}</option>
+          {modelOptions.map((model) => (
+            <option key={model.value || 'system-default'} value={model.value}>{model.label}</option>
           ))}
+          {selectedModel && !modelOptions.some((model) => model.value === selectedModel) ? (
+            <option value={selectedModel}>{selectedModel}</option>
+          ) : null}
         </select>
       </div>
 

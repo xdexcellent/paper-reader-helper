@@ -82,12 +82,15 @@ class PaperPipelineService:
         paper.parse_status = "completed"
         paper.summary_status = "pending"
         paper.embedding_status = "pending"
+        paper.representative_image_path = ""
         session.add(paper)
         session.commit()
         session.refresh(paper)
 
         try:
-            self.block_extraction_service.rebuild_blocks(session, paper, content)
+            block_result = self.block_extraction_service.rebuild_blocks(session, paper, content)
+            paper.representative_image_path = block_result.representative_image_path
+            session.add(paper)
             content.block_extraction_error = ""
             session.add(content)
             session.commit()
@@ -104,7 +107,7 @@ class PaperPipelineService:
         session.refresh(paper)
         return paper
 
-    def summarize_paper(self, session: Session, paper: Paper, model: str = "gpt-5.4") -> Paper:
+    def summarize_paper(self, session: Session, paper: Paper, model: str | None = None) -> Paper:
         content = session.exec(
             select(PaperContent).where(PaperContent.paper_id == paper.id)
         ).one()

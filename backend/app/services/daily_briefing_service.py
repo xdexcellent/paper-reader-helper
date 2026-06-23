@@ -145,6 +145,11 @@ class DailyBriefingService:
             if item.artifact_type != "paper":
                 continue
 
+            # 跳过去重命中的老论文：订阅源每天都会搜到同一批已入库论文，
+            # deduplicated 状态说明今日未新增信息，不应进入今日重点候选。
+            if item.status == "deduplicated":
+                continue
+
             paper = session.get(Paper, item.paper_id) if item.paper_id is not None else None
             candidate_key = self._get_paper_candidate_key(item, paper)
             if candidate_key in seen_paper_keys:
@@ -395,7 +400,7 @@ class DailyBriefingService:
             score = 52.0
         elif item is not None and item.status == "deduplicated":
             score = 48.0
-        elif item is not None and item.status == "skipped_no_pdf":
+        elif item is not None and item.status in {"skipped_no_pdf", "skipped_restricted_pdf"}:
             # 仅元数据的候选（DBLP / Crossref 等），与失败回退持平
             score = 36.0
         elif item is not None and item.status == "failed":
@@ -447,6 +452,8 @@ class DailyBriefingService:
             return "复用已有论文"
         if item is not None and item.status == "skipped_no_pdf":
             return "仅元数据"
+        if item is not None and item.status == "skipped_restricted_pdf":
+            return "PDF 受限"
         if item is not None and item.status == "failed":
             return "处理失败"
         if item is not None and item.status == "pending":
@@ -471,6 +478,8 @@ class DailyBriefingService:
             return "论文已完成解析，正在等待摘要生成。"
         if item is not None and item.status == "skipped_no_pdf":
             return "源站未提供可下载 PDF，暂时无法进入解析流程。"
+        if item is not None and item.status == "skipped_restricted_pdf":
+            return "源站限制直接下载 PDF，已保留候选信息，可通过原文链接手动查看。"
         if item is not None and item.status == "failed":
             return self._friendly_failure_reason(item.error_message)
         return "该论文已纳入今日订阅结果，供你统一查看。"
@@ -498,6 +507,16 @@ class DailyBriefingService:
         lower = error_message.lower()
         if "no pdf_url" in lower or "no pdf url" in lower:
             return "源站未提供可下载 PDF，暂时无法进入解析流程。"
+        if (
+            "403 forbidden" in lower
+            or "401 unauthorized" in lower
+            or "451 unavailable" in lower
+            or "http 403" in lower
+            or "http 401" in lower
+            or "http 451" in lower
+            or "限制直接下载 pdf" in lower
+        ):
+            return "源站限制直接下载 PDF，已保留候选信息，可通过原文链接手动查看。"
         if "mineru" in lower or "failed to read file" in lower:
             return "PDF 已抓取，但解析服务返回失败，可在论文库中重试解析。"
         if "10061" in error_message or "connecterror" in lower:
@@ -664,7 +683,7 @@ class DailyBriefingService:
             },
         ]
         try:
-            markdown = self._deepseek.chat(messages, model="gpt-5.4").strip()
+            markdown = self._deepseek.chat(messages).strip()
         except Exception as exc:
             return None, str(exc)
 
@@ -970,7 +989,7 @@ class DailyBriefingService:
         """Return all failed paper-type ingestion items for a daily run, sorted by id asc."""
         if daily_run_id is None:
             return []
-        return list(
+        items = list(
             session.exec(
                 select(IngestionItem)
                 .where(IngestionItem.daily_run_id == daily_run_id)
@@ -979,7 +998,27 @@ class DailyBriefingService:
                 .order_by(IngestionItem.id.asc())
             ).all()
         )
+        return [
+            item
+            for item in items
+            if not _is_restricted_pdf_error(item.error_message)
+        ]
 
     def friendly_failure_reason(self, error_message: str | None) -> str:
         """Public wrapper for _friendly_failure_reason so route handlers can format reasons."""
         return self._friendly_failure_reason(error_message)
+
+
+def _is_restricted_pdf_error(error_message: str | None) -> bool:
+    if not error_message:
+        return False
+    lower = error_message.lower()
+    return (
+        "403 forbidden" in lower
+        or "401 unauthorized" in lower
+        or "451 unavailable" in lower
+        or "http 403" in lower
+        or "http 401" in lower
+        or "http 451" in lower
+        or "限制直接下载 pdf" in lower
+    )

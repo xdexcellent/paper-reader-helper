@@ -45,16 +45,31 @@ class RecommendationItem(BaseModel):
 def get_recommendations(
     db: Session = Depends(get_session),
     force: bool = Query(default=False, description="跳过缓存，强制重新生成"),
-    model: str = Query(default="gpt-5.4", description="生成推荐理由使用的模型"),
+    model: str | None = Query(default=None, description="生成推荐理由使用的模型"),
 ) -> list[RecommendationItem]:
     papers = list(db.exec(select(Paper)).all())
     if not papers:
         return []
     paper_hash = tuple(
-        (p.id, p.status, p.parse_status, p.summary_status, p.updated_at.isoformat())
+        (
+            p.id,
+            p.title,
+            p.source,
+            p.authors,
+            p.venue,
+            p.year,
+            tuple(p.tags),
+            p.status,
+            p.parse_status,
+            p.summary_status,
+            p.embedding_status,
+            p.category_status,
+            p.updated_at.isoformat(),
+        )
         for p in papers
     )
-    cache_key = (date.today(), paper_hash, model)
+    effective_model = DeepSeekClient().resolve_model(model)
+    cache_key = (date.today(), paper_hash, effective_model)
     if not force and cache_key in _recommendation_cache:
         return _recommendation_cache[cache_key]
     # Drop stale entries from prior days to avoid unbounded growth.
@@ -223,7 +238,7 @@ def get_recommendations(
         )
         reply = client.chat(
             [{"role": "user", "content": prompt}],
-            model=model,
+            model=effective_model,
         )
         
         # Clean potential markdown fences from JSON reply

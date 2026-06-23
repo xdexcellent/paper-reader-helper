@@ -27,9 +27,19 @@ from app.services.pipeline import PaperPipelineService
 from app.services.source_adapters.base import SourceCandidate
 from app.services.source_adapters.registry import get_adapter
 from app.services.storage import StorageService
+from app.services.venue_rank_service import apply_system_rank
 
 logger = logging.getLogger(__name__)
 PENDING_REASON = "Waiting for summary and automatic classification."
+PDF_DOWNLOAD_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/125.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/pdf,application/octet-stream;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7",
+}
 INITIAL_STATS = {
     "subscriptions_total": 0,
     "candidates_total": 0,
@@ -41,8 +51,30 @@ INITIAL_STATS = {
     # never expose a downloadable PDF URL. They are *not* ingestion failures, so
     # they are tracked separately and excluded from the "论文处理失败" risk panel.
     "skipped_no_pdf_url": 0,
+    "skipped_restricted_pdf": 0,
     "processed_papers": 0,
 }
+
+
+class RestrictedPdfError(RuntimeError):
+    """Raised when the source advertises a PDF URL but blocks direct download."""
+
+
+def _is_restricted_pdf_exception(exc: Exception) -> bool:
+    if isinstance(exc, RestrictedPdfError):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError) and exc.response is not None:
+        return exc.response.status_code in {401, 403, 451}
+    lower = str(exc).lower()
+    return (
+        "403 forbidden" in lower
+        or "401 unauthorized" in lower
+        or "451 unavailable" in lower
+        or "http 403" in lower
+        or "http 401" in lower
+        or "http 451" in lower
+        or "限制直接下载 pdf" in lower
+    )
 
 
 def _utcnow() -> datetime:
@@ -439,19 +471,41 @@ class DailyIngestionService:
         paper: Paper | None = None
         try:
             _emit("下载 PDF")
+
+            def skip_restricted_pdf(exc: Exception) -> None:
+                stats["skipped_restricted_pdf"] = stats.get("skipped_restricted_pdf", 0) + 1
+                _emit("源站限制 PDF，跳过解析")
+                self._write_item_status(item, "skipped_restricted_pdf", str(exc))
+
             try:
                 paper = self._create_paper_from_candidate(candidate)
+            except RestrictedPdfError as restricted_exc:
+                skip_restricted_pdf(restricted_exc)
+                return
             except Exception as download_exc:
                 # PDF download failed — try Unpaywall as fallback
                 doi = (candidate.metadata or {}).get("doi", "")
+                original_restricted = _is_restricted_pdf_exception(download_exc)
                 if doi:
                     _emit("PDF 下载失败，尝试 Unpaywall")
                     alt_pdf = self._try_unpaywall_pdf(doi)
                     if alt_pdf and alt_pdf != candidate.pdf_url:
                         candidate.pdf_url = alt_pdf
-                        paper = self._create_paper_from_candidate(candidate)
+                        try:
+                            paper = self._create_paper_from_candidate(candidate)
+                        except Exception as alt_download_exc:
+                            if _is_restricted_pdf_exception(alt_download_exc):
+                                skip_restricted_pdf(alt_download_exc)
+                                return
+                            raise alt_download_exc
+                    elif original_restricted:
+                        skip_restricted_pdf(download_exc)
+                        return
                     else:
                         raise download_exc
+                elif original_restricted:
+                    skip_restricted_pdf(download_exc)
+                    return
                 else:
                     raise download_exc
 
@@ -461,7 +515,7 @@ class DailyIngestionService:
             _emit("MinerU 解析中")
             self._pipeline().parse_paper(self.session, paper)
             _emit("生成摘要 + 自动分类")
-            self._pipeline().summarize_paper(self.session, paper, model="gpt-5.4")
+            self._pipeline().summarize_paper(self.session, paper)
             stats["processed_papers"] += 1
             _emit("完成")
             self._write_item_status(item, "processed")
@@ -550,11 +604,15 @@ class DailyIngestionService:
         _BLOCKED = ('dl.acm.org', 'ieeexplore.ieee.org', 'onlinelibrary.wiley.com',
                     'www.sciencedirect.com', 'journals.sagepub.com', 'www.tandfonline.com')
         if any(domain in pdf_url for domain in _BLOCKED):
-            raise ValueError(f"Paywalled domain, skipping: {pdf_url[:60]}")
+            raise RestrictedPdfError(f"源站限制直接下载 PDF：{pdf_url}")
 
         client = get_http_client(follow_redirects=True, timeout=30.0)
         try:
-            response = client.get(pdf_url)
+            response = client.get(pdf_url, headers=PDF_DOWNLOAD_HEADERS)
+            if response.status_code in {401, 403, 451}:
+                raise RestrictedPdfError(
+                    f"源站返回 HTTP {response.status_code}，限制直接下载 PDF：{pdf_url}"
+                )
             response.raise_for_status()
             return response.content
         finally:
@@ -563,6 +621,13 @@ class DailyIngestionService:
     def _create_paper_from_candidate(self, candidate: SourceCandidate) -> Paper:
         local_pdf_path = self.storage_service.import_uploaded_pdf(
             _build_storage_filename(candidate), io.BytesIO(self.pdf_downloader(candidate.pdf_url))
+        )
+        metadata = candidate.metadata or {}
+        venue = (
+            metadata.get("venue")
+            or metadata.get("journal")
+            or metadata.get("publication_title")
+            or ""
         )
         paper = Paper(
             source=candidate.source_kind,
@@ -573,7 +638,9 @@ class DailyIngestionService:
             pdf_url=candidate.pdf_url,
             published_at=candidate.published_at,
             local_pdf_path=local_pdf_path,
+            venue=venue,
         )
+        apply_system_rank(paper)
         initialize_pending_category(self.session, paper, reason=PENDING_REASON)
         self._save(paper, refresh=True)
         return paper

@@ -32,6 +32,7 @@ from app.services.pdf_metadata import extract_title_from_pdf
 from app.services.pipeline import PaperPipelineService
 from app.services.storage import StorageService, storage_file_url
 from app.services.task_queue import BackgroundTaskQueue
+from app.services.venue_rank_service import apply_system_rank
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,7 @@ def import_paper(
         source=payload.source,
         local_pdf_path=stored_path,
     )
+    apply_system_rank(paper)
     initialize_pending_category(session, paper, reason="Waiting for summary and automatic classification.")
     session.add(paper)
 
@@ -156,6 +158,7 @@ def import_paper_from_url(
         published_at=published_date,
         local_pdf_path=stored_path,
     )
+    apply_system_rank(paper)
     initialize_pending_category(session, paper, reason="Waiting for summary and automatic classification.")
     session.add(paper)
 
@@ -206,6 +209,7 @@ def upload_paper(
         source=source.strip() or "manual",
         local_pdf_path=stored_path,
     )
+    apply_system_rank(paper)
     initialize_pending_category(session, paper, reason="Waiting for summary and automatic classification.")
     session.add(paper)
 
@@ -388,6 +392,12 @@ def get_paper(
         venue=paper.venue,
         doi=paper.doi,
         url=paper.url,
+        ccf_rank=paper.ccf_rank,
+        sci_zone=paper.sci_zone,
+        impact_factor=paper.impact_factor,
+        ccf_rank_override=paper.ccf_rank_override,
+        sci_zone_override=paper.sci_zone_override,
+        impact_factor_override=paper.impact_factor_override,
         favorite=paper.favorite,
         reading_status=paper.reading_status,
         reading_progress=paper.reading_progress,
@@ -639,8 +649,12 @@ def update_paper(
         updates["source"] = source
 
     updates = PaperUpdateRequest(**updates).model_dump(exclude_unset=True)
+    old_venue = paper.venue
     for field_name, value in updates.items():
         setattr(paper, field_name, value)
+
+    if "venue" in updates and paper.venue != old_venue:
+        apply_system_rank(paper)
 
     if updates:
         paper.updated_at = datetime.now(timezone.utc)

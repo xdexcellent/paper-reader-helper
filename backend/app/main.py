@@ -22,6 +22,7 @@ from app.api.routes.subscriptions import router as subscriptions_router
 from app.api.routes.agent import router as agent_router
 from app.api.routes.categories import router as categories_router
 from app.api.routes.zotero import router as zotero_router
+from app.api.routes.settings import router as settings_router
 from app.core.config import settings
 from app.core.db import init_db
 from app.core.auth import get_current_user
@@ -34,6 +35,7 @@ from app.models.paper_summary import PaperSummary  # noqa: F401
 from app.models.chat_session import ChatSession  # noqa: F401
 from app.models.chat_message import ChatMessageRecord  # noqa: F401
 from app.models.automation_settings import AutomationSettings  # noqa: F401
+from app.models.ai_provider_settings import AiProviderSettings  # noqa: F401
 from app.models.daily_run import DailyRun  # noqa: F401
 from app.models.ingestion_item import IngestionItem  # noqa: F401
 from app.models.daily_briefing import (  # noqa: F401
@@ -187,6 +189,7 @@ app.include_router(subscriptions_router, dependencies=protected_dependencies)
 app.include_router(agent_router, dependencies=protected_dependencies)
 app.include_router(categories_router, dependencies=protected_dependencies)
 app.include_router(zotero_router, dependencies=protected_dependencies)
+app.include_router(settings_router, dependencies=protected_dependencies)
 
 # ─── Static file mounts (after API routes so they don't shadow them) ──────
 

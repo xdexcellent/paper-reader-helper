@@ -251,7 +251,8 @@ def test_migrate_add_columns_upgrades_legacy_paper_table_for_reader_metadata(tmp
                     favorite,
                     reading_status,
                     reading_progress,
-                    user_notes
+                    user_notes,
+                    representative_image_path
                 FROM paper
                 WHERE id = 1
                 """
@@ -266,6 +267,7 @@ def test_migrate_add_columns_upgrades_legacy_paper_table_for_reader_metadata(tmp
     assert "reading_status" in columns
     assert "reading_progress" in columns
     assert "user_notes" in columns
+    assert "representative_image_path" in columns
     assert row.year is None
     assert row.venue == ""
     assert row.doi == ""
@@ -274,6 +276,7 @@ def test_migrate_add_columns_upgrades_legacy_paper_table_for_reader_metadata(tmp
     assert row.reading_status == "unread"
     assert row.reading_progress == 0
     assert row.user_notes == ""
+    assert row.representative_image_path == ""
 
 
 def test_init_schema_creates_phase3_block_tables_without_rewriting_legacy_papers(tmp_path, monkeypatch) -> None:
@@ -382,6 +385,7 @@ def test_init_schema_creates_phase3_block_tables_without_rewriting_legacy_papers
         "block_type",
         "text",
         "bbox_json",
+        "asset_path",
         "source_hash",
         "source_json",
         "created_at",

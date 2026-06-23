@@ -47,8 +47,7 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)) -> ChatR
     for msg in request.messages:
         messages.append({"role": msg.role, "content": msg.content})
 
-    model = request.model or "gpt-5.4"
-    reply = client.chat(messages, model=model)
+    reply = client.chat(messages, model=request.model)
     return ChatResponse(reply=reply)
 
 
@@ -57,7 +56,7 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)) -> ChatR
 class CreateSessionRequest(BaseModel):
     title: str = "新对话"
     paper_id: int | None = None
-    model: str = "gpt-5.4"
+    model: str | None = None
 
 
 class SessionResponse(BaseModel):
@@ -116,7 +115,8 @@ def _message_to_response(m: ChatMessageRecord) -> MessageResponse:
 def create_session(
     req: CreateSessionRequest, db: Session = Depends(get_session)
 ) -> SessionResponse:
-    cs = ChatSession(title=req.title, paper_id=req.paper_id, model=req.model)
+    model = req.model.strip() if req.model else ""
+    cs = ChatSession(title=req.title, paper_id=req.paper_id, model=model)
     db.add(cs)
     db.commit()
     db.refresh(cs)
@@ -181,14 +181,16 @@ def send_message(
     if cs is None:
         raise HTTPException(status_code=404, detail="会话不存在")
 
+    client = DeepSeekClient()
+
     # Update session paper and model if provided
     if req.paper_id is not None:
         cs.paper_id = req.paper_id
     if req.paper_id == -1: 
         cs.paper_id = None
         
-    if req.model:
-        cs.model = req.model
+    if req.model is not None:
+        cs.model = req.model.strip()
 
     # Save user message
     user_msg = ChatMessageRecord(
@@ -208,7 +210,6 @@ def send_message(
         cs.title = req.content[:25] + ("…" if len(req.content) > 25 else "")
 
     # Build context for AI
-    client = DeepSeekClient()
     system_parts = [
         "你是一个专业的AI学术研究助手。请用专业、简洁的中文回答用户的问题。",
         "回复时可以使用 Markdown 格式来增强可读性。",
@@ -238,7 +239,7 @@ def send_message(
             messages.append({"role": m.role, "content": m.content})
 
     # Call AI
-    reply_text = client.chat(messages, model=cs.model)
+    reply_text = client.chat(messages, model=cs.model or None)
 
     # Save AI reply
     ai_msg = ChatMessageRecord(

@@ -9,6 +9,9 @@ export type PaperUpdatePayload = {
   venue?: string
   doi?: string
   url?: string
+  ccf_rank_override?: string
+  sci_zone_override?: string
+  impact_factor_override?: string
   favorite?: boolean
   reading_status?: ReadingStatus
   reading_progress?: number
@@ -25,6 +28,12 @@ export type Paper = {
   venue?: string
   doi?: string
   url?: string
+  ccf_rank?: string
+  sci_zone?: string
+  impact_factor?: string
+  ccf_rank_override?: string
+  sci_zone_override?: string
+  impact_factor_override?: string
   favorite?: boolean
   reading_status?: ReadingStatus
   reading_progress?: number
@@ -34,6 +43,7 @@ export type Paper = {
   summary_status: string
   embedding_status: string
   local_pdf_path: string
+  representative_image_url?: string
   updated_at?: string
   primary_category_id?: number | null
   category_status?: string
@@ -79,6 +89,7 @@ export type PaperBlock = {
   block_type: string
   text: string
   bbox: number[] | null
+  asset_path?: string
   source_hash: string
   translation?: PaperBlockTranslation | null
 }
@@ -139,6 +150,23 @@ export interface AutomationSettings {
   https_proxy?: string | null
   research_direction?: string
   research_keywords?: string
+}
+
+export interface AiProviderSettings {
+  provider_name: string
+  api_base: string
+  api_key_set: boolean
+  api_key_preview: string
+  default_model: string
+  available_models: string[]
+}
+
+export interface AiProviderSettingsUpdate {
+  provider_name?: string
+  api_base?: string
+  api_key?: string
+  default_model?: string
+  available_models?: string[]
 }
 
 export interface AutomationRunStatus {
@@ -335,4 +363,18 @@ export type ZoteroCandidateFilter = {
 
 export type ZoteroImportConfirm = {
   allow_metadata_only: boolean
+}
+
+export type EffectiveRank = {
+  ccf: string
+  sciZone: string
+  impactFactor: string
+}
+
+export function effectiveRank(paper: Pick<Paper, 'ccf_rank' | 'sci_zone' | 'impact_factor' | 'ccf_rank_override' | 'sci_zone_override' | 'impact_factor_override'>): EffectiveRank {
+  return {
+    ccf: paper.ccf_rank_override?.trim() || paper.ccf_rank || '',
+    sciZone: paper.sci_zone_override?.trim() || paper.sci_zone || '',
+    impactFactor: paper.impact_factor_override?.trim() || paper.impact_factor || '',
+  }
 }

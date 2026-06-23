@@ -130,12 +130,21 @@ class BlockExtractionService:
                 )
 
         candidates = self.extract_from_parse_result(parse_result)
-        block_count = self.replace_blocks(session, paper.id, candidates)
         representative_image_path = self.extract_representative_image(
             parse_result,
             candidates,
             paper.local_pdf_path,
         )
+        block_count = 0
+        try:
+            block_count = self.replace_blocks(session, paper.id, candidates)
+        except Exception:
+            logger.warning(
+                "replace_blocks 失败，但代表图已提取，继续返回: paper_id=%s",
+                paper.id,
+                exc_info=True,
+            )
+            session.rollback()
         return BlockRebuildResult(
             paper_id=paper.id,
             block_count=block_count,
