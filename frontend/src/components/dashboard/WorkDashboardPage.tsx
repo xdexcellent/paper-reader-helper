@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import type { AutomationSubscriptionIssue, DailyBriefingSnapshot, Paper } from '../../types'
 import { DashboardTopbar, type DashboardNotification } from './DashboardTopbar'
 import { DashboardContent } from './DashboardContent'
+import { cancelTodayBriefing } from '../../lib/api'
 import { DashboardToastContainer, showToast } from './DashboardToast'
 import { DashboardContentSkeleton } from './DashboardSkeleton'
 import { DailyReportDrawer } from './DailyReportDrawer'
@@ -131,6 +132,17 @@ export function WorkDashboardPage({ papers = [], refreshLibrary }: WorkDashboard
                 ? `${dashboard.automationStatus?.today_run?.progress}%`
                 : '请稍候'}
             </span>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const res = await cancelTodayBriefing()
+                  showToast(res.message, res.ok ? 'info' : 'error')
+                  window.location.reload()
+                } catch { showToast('取消失败', 'error') }
+              }}
+              className="shrink-0 rounded-lg border border-red-200 bg-white px-3 py-1 text-[12px] font-medium text-red-600 hover:bg-red-50"
+            >取消</button>
           </div>
         </div>
       )}

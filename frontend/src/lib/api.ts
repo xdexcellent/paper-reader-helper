@@ -561,6 +561,14 @@ export async function runTodayBriefing(): Promise<{ run_id: number | null; statu
   return readJson(response)
 }
 
+export async function cancelTodayBriefing(): Promise<{ ok: boolean; message: string }> {
+  const response = await fetch(`${API_BASE}/automation/cancel`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  })
+  return readJson(response)
+}
+
 export async function fetchBriefing(date?: string): Promise<DailyBriefingSnapshot> {
   const path = date ? `/briefing/${encodeURIComponent(date)}` : '/briefing/today'
   const response = await fetch(`${API_BASE}${path}`, { headers: getAuthHeaders() })

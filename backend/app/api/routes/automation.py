@@ -116,6 +116,36 @@ def run_today_briefing(
     return AutomationRunResponse(run_id=run.id, status=run.status)
 
 
+@router.post("/cancel", status_code=200)
+def cancel_running_run(
+    db: Session = Depends(get_session),
+) -> dict:
+    today = _today_for_settings(db)
+    running = db.exec(
+        select(DailyRun)
+        .where(DailyRun.run_date == today, DailyRun.status == "running")
+        .order_by(DailyRun.created_at.desc())
+        .limit(1)
+    ).first()
+    if running is None:
+        queued = db.exec(
+            select(DailyRun)
+            .where(DailyRun.run_date == today, DailyRun.status == "queued")
+            .order_by(DailyRun.created_at.desc())
+            .limit(1)
+        ).first()
+        if queued is None:
+            return {"ok": False, "message": "没有正在运行的任务"}
+        db.delete(queued)
+        db.commit()
+        return {"ok": True, "message": "已取消排队中的任务"}
+    running.status = "cancelled"
+    running.progress_message = "用户取消"
+    db.add(running)
+    db.commit()
+    return {"ok": True, "message": "已取消运行中的任务"}
+
+
 @router.get("/status/today", response_model=AutomationTodayStatusResponse)
 def get_today_automation_status(
     db: Session = Depends(get_session),
