@@ -2,7 +2,7 @@
 
 import logging
 
-from passlib.context import CryptContext
+import bcrypt
 from sqlmodel import Session, select
 
 from app.core.config import settings
@@ -10,20 +10,18 @@ from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
-_pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 # ── Password helpers ────────────────────────────────────────
 
 
 def hash_password(plain: str) -> str:
     """Return a bcrypt hash of *plain*."""
-    return _pwd_ctx.hash(plain)
+    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
     """Check *plain* against a bcrypt *hashed* value."""
-    return _pwd_ctx.verify(plain, hashed)
+    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 
 # ── Repository helpers ──────────────────────────────────────
