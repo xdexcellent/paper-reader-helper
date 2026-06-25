@@ -1619,6 +1619,50 @@ input[type="checkbox"], input[type="radio"] {
 }
 .login-apply button { font-weight: 800; }
 
+/* ── Login Page Animations ── */
+
+@keyframes login-fade-in-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes login-fade-in-left {
+  from { opacity: 0; transform: translateX(-30px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes login-scale-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.login-left-panel {
+  animation: login-fade-in-left 0.6s ease-out both;
+}
+.login-brand-block {
+  animation: login-fade-in-up 0.5s ease-out 0.1s both;
+}
+.login-feature-item {
+  animation: login-fade-in-up 0.5s ease-out both;
+}
+.login-feature-item:nth-child(1) { animation-delay: 0.2s; }
+.login-feature-item:nth-child(2) { animation-delay: 0.3s; }
+.login-feature-item:nth-child(3) { animation-delay: 0.4s; }
+.login-overview-card {
+  animation: login-fade-in-up 0.5s ease-out 0.4s both;
+}
+.login-kpi-card {
+  animation: login-scale-in 0.4s ease-out both;
+}
+.login-kpi-card:nth-child(1) { animation-delay: 0.45s; }
+.login-kpi-card:nth-child(2) { animation-delay: 0.5s; }
+.login-kpi-card:nth-child(3) { animation-delay: 0.55s; }
+.login-kpi-card:nth-child(4) { animation-delay: 0.6s; }
+.login-paper-item {
+  animation: login-fade-in-up 0.4s ease-out both;
+}
+.login-paper-item:nth-child(1) { animation-delay: 0.6s; }
+.login-paper-item:nth-child(2) { animation-delay: 0.65s; }
+.login-paper-item:nth-child(3) { animation-delay: 0.7s; }
+
 .login-footer-note {
   position: absolute;
   bottom: 54px;
