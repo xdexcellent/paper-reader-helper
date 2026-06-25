@@ -39,6 +39,7 @@ def init_db() -> None:
     SQLModel.metadata.create_all(engine)
     _migrate_add_columns()
     _bootstrap_category_data()
+    _bootstrap_default_user()
 
 
 def _column_exists(conn, table: str, column: str) -> bool:
@@ -71,6 +72,8 @@ def _migrate_add_columns() -> None:
         ("paper", "category_reason", "TEXT DEFAULT ''"),
         ("paper", "year", "INTEGER"),
         ("paper", "venue", "TEXT DEFAULT ''"),
+        ("paper", "venue_resolution_status", "TEXT DEFAULT 'pending'"),
+        ("paper", "venue_resolution_note", "TEXT DEFAULT ''"),
         ("paper", "doi", "TEXT DEFAULT ''"),
         ("paper", "url", "TEXT DEFAULT ''"),
         ("paper", "ccf_rank", "TEXT DEFAULT ''"),
@@ -169,6 +172,20 @@ def _migrate_add_columns() -> None:
             )
             conn.commit()
 
+        if _table_exists(conn, "paper"):
+            if _column_exists(conn, "paper", "venue_resolution_status") and _column_exists(conn, "paper", "venue"):
+                conn.execute(
+                    text(
+                        """
+                        UPDATE paper
+                        SET venue_resolution_status = 'resolved'
+                        WHERE TRIM(COALESCE(venue, '')) != ''
+                          AND TRIM(COALESCE(venue_resolution_status, '')) IN ('', 'pending')
+                        """
+                    )
+                )
+            conn.commit()
+
         if _table_exists(conn, "daily_briefing"):
             if _column_exists(conn, "daily_briefing", "briefing_date") and _column_exists(conn, "daily_briefing", "run_date"):
                 conn.execute(
@@ -216,6 +233,13 @@ def _bootstrap_category_data() -> None:
     with Session(engine) as session:
         ensure_default_categories(session)
         backfill_uncategorized_papers(session)
+
+
+def _bootstrap_default_user() -> None:
+    from app.services.user_service import bootstrap_user_if_needed
+
+    with Session(engine) as session:
+        bootstrap_user_if_needed(session)
 
 
 def get_session():

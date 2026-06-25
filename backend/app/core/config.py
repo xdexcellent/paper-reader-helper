@@ -77,6 +77,7 @@ class Settings(BaseSettings):
 
     jwt_secret: str = "paper-reader-secret-change-me"
     app_password: str = ""
+    app_username: str = "admin"
     embedding_model_path: str = "BAAI/bge-m3"
 
     # Proxy settings (fallback when DB settings not available)

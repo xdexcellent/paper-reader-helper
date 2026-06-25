@@ -9,16 +9,22 @@ from app.models.paper_block_translation import (
 )
 from app.models.zotero_import_candidate import ZoteroImportCandidate
 from app.models.zotero_import_run import ZoteroImportRun
+from app.models.easyscholar_settings import EasyScholarSettings
+from app.models.venue_rank import VenueRank
+from app.models.user import User
 
 __all__ = [
     "AgentAction",
     "AgentRun",
     "AgentToolEvent",
     "AiProviderSettings",
+    "EasyScholarSettings",
     "PaperBlock",
     "PaperBlockTranslation",
     "PaperBlockTranslationStatus",
     "PaperBlockType",
+    "User",
+    "VenueRank",
     "ZoteroImportCandidate",
     "ZoteroImportRun",
 ]

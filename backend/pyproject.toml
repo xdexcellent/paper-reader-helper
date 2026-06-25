@@ -10,6 +10,7 @@ dependencies = [
   "httpx==0.28.1",
   "python-multipart==0.0.20",
   "pyjwt>=2.12.1",
+  "passlib[bcrypt]>=1.7.4",
   "sentence-transformers>=5.4.0",
 ]
 

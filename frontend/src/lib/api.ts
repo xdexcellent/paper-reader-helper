@@ -23,6 +23,8 @@ import type {
   ZoteroImportConfirm,
   AiProviderSettings,
   AiProviderSettingsUpdate,
+  EasyScholarSettings,
+  EasyScholarSettingsUpdate,
 } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000'
@@ -114,11 +116,11 @@ export async function checkAuthStatus(): Promise<{ requires_password: boolean; a
   return readJson(response)
 }
 
-export async function loginApi(password: string): Promise<{ token: string }> {
+export async function loginApi(account: string, password: string): Promise<{ token: string }> {
   const response = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({ account, password }),
   })
   return readJson(response, { reportUnauthorized: false })
 }
@@ -513,6 +515,42 @@ export async function fetchAiProviderModels(payload: {
   })
   const data = await readJson<{ models: string[] }>(response)
   return data.models
+}
+
+export async function fetchEasyScholarSettings(): Promise<EasyScholarSettings> {
+  const response = await fetch(`${API_BASE}/settings/easyscholar`, { headers: getAuthHeaders() })
+  return readJson<EasyScholarSettings>(response)
+}
+
+export async function updateEasyScholarSettings(payload: EasyScholarSettingsUpdate): Promise<EasyScholarSettings> {
+  const response = await fetch(`${API_BASE}/settings/easyscholar`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(payload),
+  })
+  return readJson<EasyScholarSettings>(response)
+}
+
+export async function refreshVenueRanks(): Promise<{ message: string; total_venues: number }> {
+  const response = await fetch(`${API_BASE}/papers/refresh-venue-ranks`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  })
+  return readJson<{ message: string; total_venues: number }>(response)
+}
+
+export interface VenueRanksStatus {
+  total: number
+  success: number
+  no_data: number
+  error: number
+  pending: number
+  running: boolean
+}
+
+export async function fetchVenueRanksStatus(): Promise<VenueRanksStatus> {
+  const response = await fetch(`${API_BASE}/papers/venue-ranks/status`, { headers: getAuthHeaders() })
+  return readJson<VenueRanksStatus>(response)
 }
 
 export async function runTodayBriefing(): Promise<{ run_id: number | null; status: string }> {

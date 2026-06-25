@@ -9,7 +9,7 @@ interface AuthState {
 }
 
 interface AuthContextType extends AuthState {
-  login: (password: string) => Promise<boolean>
+  login: (account: string, password: string) => Promise<boolean>
   logout: () => void
 }
 
@@ -93,9 +93,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [handleUnauthorized])
 
-  const login = useCallback(async (password: string) => {
+  const login = useCallback(async (account: string, password: string) => {
     try {
-      const { token } = await loginApi(password)
+      const { token } = await loginApi(account, password)
       localStorage.setItem('auth_token', token)
       setState(prev => ({ ...prev, isAuthenticated: true, error: '' }))
       return true

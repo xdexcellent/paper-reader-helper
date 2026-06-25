@@ -1,13 +1,15 @@
-"""Simplified authentication: single password from .env, JWT tokens."""
+"""Authentication: single-user account + bcrypt password, JWT tokens."""
 
-import hmac
 import time
 
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlmodel import Session
 
 from app.core.config import settings
+from app.core.db import get_session
+from app.services.user_service import has_any_user
 
 _bearer = HTTPBearer(auto_error=False)
 DEFAULT_JWT_SECRETS = {
@@ -17,42 +19,34 @@ DEFAULT_JWT_SECRETS = {
 }
 
 
-def validate_auth_settings() -> None:
+def validate_auth_settings(auth_enabled: bool) -> None:
     """Reject insecure auth configuration when password auth is enabled."""
-    if settings.app_password and settings.jwt_secret in DEFAULT_JWT_SECRETS:
+    if auth_enabled and settings.jwt_secret in DEFAULT_JWT_SECRETS:
         raise RuntimeError(
             "JWT_SECRET must be changed when APP_PASSWORD is configured."
         )
 
 
-def create_token() -> str:
+def create_token(username: str) -> str:
     """Create a JWT token (valid for 7 days)."""
-    validate_auth_settings()
     payload = {
-        "sub": "user",
+        "sub": username,
         "iat": int(time.time()),
         "exp": int(time.time()) + 7 * 86400,
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 
-def verify_password(password: str) -> bool:
-    """Check if the password matches the configured app password."""
-    if not settings.app_password:
-        # No password configured → always pass
-        return True
-    return hmac.compare_digest(password, settings.app_password)
-
-
 def get_current_user(
     creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    session: Session = Depends(get_session),
 ) -> str:
-    """Dependency: require valid JWT. Returns 'user' string."""
-    if not settings.app_password:
-        # No password configured → skip auth
+    """Dependency: require valid JWT when a user exists. Returns username."""
+    if not has_any_user(session):
+        # No user in DB → skip auth
         return "user"
     try:
-        validate_auth_settings()
+        validate_auth_settings(auth_enabled=True)
     except RuntimeError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -82,12 +76,13 @@ def get_current_user(
 
 def get_optional_user(
     creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    session: Session = Depends(get_session),
 ) -> str | None:
     """Dependency: optional auth. Returns user or None."""
-    if not settings.app_password:
+    if not has_any_user(session):
         return "user"
     try:
-        validate_auth_settings()
+        validate_auth_settings(auth_enabled=True)
     except RuntimeError:
         return None
     if creds is None:
