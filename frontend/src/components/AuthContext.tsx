@@ -8,8 +8,25 @@ interface AuthState {
   error: string
 }
 
+const TOKEN_KEY = 'auth_token'
+
+function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY)
+}
+
+function setToken(token: string, remember: boolean): void {
+  localStorage.removeItem(TOKEN_KEY)
+  sessionStorage.removeItem(TOKEN_KEY)
+  ;(remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, token)
+}
+
+function removeToken(): void {
+  localStorage.removeItem(TOKEN_KEY)
+  sessionStorage.removeItem(TOKEN_KEY)
+}
+
 interface AuthContextType extends AuthState {
-  login: (account: string, password: string) => Promise<boolean>
+  login: (account: string, password: string, remember?: boolean) => Promise<boolean>
   logout: () => void
 }
 
@@ -30,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   })
 
   const handleUnauthorized = useCallback((message: string) => {
-    localStorage.removeItem('auth_token')
+    removeToken()
     setState(prev => ({
       ...prev,
       isAuthenticated: false,
@@ -47,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!status.requires_password) {
           setState({ isAuthenticated: true, requiresPassword: false, isLoading: false, error: '' })
         } else {
-          const token = localStorage.getItem('auth_token')
+          const token = getToken()
           if (!token) {
             setState({
               isAuthenticated: false,
@@ -67,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch {
-        localStorage.removeItem('auth_token')
+        removeToken()
         setState({
           isAuthenticated: false,
           requiresPassword: true,
@@ -93,10 +110,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [handleUnauthorized])
 
-  const login = useCallback(async (account: string, password: string) => {
+  const login = useCallback(async (account: string, password: string, remember: boolean = false) => {
     try {
       const { token } = await loginApi(account, password)
-      localStorage.setItem('auth_token', token)
+      setToken(token, remember)
       setState(prev => ({ ...prev, isAuthenticated: true, error: '' }))
       return true
     } catch (e) {
@@ -106,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(() => {
-    localStorage.removeItem('auth_token')
+    removeToken()
     setState(prev => ({ ...prev, isAuthenticated: false, error: '' }))
   }, [])
 

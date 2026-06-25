@@ -25,12 +25,12 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  async function handleSubmit(e: FormEvent) {
+async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!account.trim() || !password.trim() || submitting) return
     setSubmitting(true)
     try {
-      await login(account, password)
+      await login(account, password, remember)
     } finally {
       setSubmitting(false)
     }
