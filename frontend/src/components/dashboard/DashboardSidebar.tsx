@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/components/AuthContext'
 import {
   Plus,
   LayoutDashboard,
@@ -230,7 +231,7 @@ function UserInfoBlock({ name, badge }: { name: string; badge: string }) {
             <RefreshCw size={13} />数据同步
           </button>
           <div className="my-1 border-t border-[#F1F5F9]" />
-          <button onClick={() => { setMenuOpen(false); showToast('退出登录功能开发中', 'info') }} className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[#EF4444] hover:bg-red-50">
+          <button onClick={() => { setMenuOpen(false); logout(); navigate('/') }} className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[#EF4444] hover:bg-red-50">
             <LogOut size={13} />退出登录
           </button>
         </div>
@@ -252,6 +253,8 @@ export function DashboardSidebar({
   onProgressClick,
   onStatsClick,
 }: DashboardSidebarProps) {
+  const navigate = useNavigate()
+  const { logout } = useAuth()
   const location = useLocation()
 
   function isItemActive(item: NavigationItemData): boolean {
