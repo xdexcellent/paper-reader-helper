@@ -145,33 +145,33 @@ export function DashboardContent({
   }
 
   return (
-    <div className="grid grid-cols-[1fr_320px] gap-5 p-5">
+    <div className="dash-content grid grid-cols-[1fr_320px] gap-5 p-5">
       {/* Center column */}
       <div className="flex flex-col gap-5 min-w-0">
-        <PageHeader
+        <div className="dash-page-header"><PageHeader
           date={briefingDate}
           lastUpdate={generatedAtTime ? `最后更新 ${generatedAtTime}` : undefined}
           readingProgress={readingProgress !== undefined ? `阅读进度 ${readingProgress}%` : undefined}
-        />
+        /></div>
         <KpiCardRow metrics={kpiMetrics} onMetricClick={setActiveKpiMetric} />
-        <PrioritySection
+        <div className="dash-priority-section"><PrioritySection
           papers={priorityPapers}
           onReadPaper={handleReadPaper}
           onViewAll={handleViewAll}
           onAddToProject={onAddToProject}
           onFavoriteChange={() => onRefreshData?.()}
-        />
-        <PaperSummarySection
+        /></div>
+        <div className="dash-paper-summary"><PaperSummarySection
           papers={papers}
           onOpenPaper={onOpenPaper}
           searchQuery={searchQuery}
           onAddToProject={onAddToProject}
           onRefreshData={onRefreshData}
-        />
+        /></div>
       </div>
 
       {/* Right panel */}
-      <div className="flex flex-col gap-4">
+      <div className="dash-right-panel flex flex-col gap-4">
         <ProgressPanel
           readCount={progress.readCount}
           pendingCount={progress.pendingCount}

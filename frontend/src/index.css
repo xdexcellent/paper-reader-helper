@@ -1619,6 +1619,44 @@ input[type="checkbox"], input[type="radio"] {
 }
 .login-apply button { font-weight: 800; }
 
+/* ── Dashboard Animations ── */
+
+@keyframes dash-fade-in-up {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes dash-scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes dash-slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.dash-content {
+  animation: dash-fade-in-up 0.4s ease-out both;
+}
+.dash-page-header {
+  animation: dash-fade-in-up 0.4s ease-out 0.05s both;
+}
+.dash-kpi-card {
+  animation: dash-scale-in 0.35s ease-out both;
+}
+.dash-kpi-card:nth-child(1) { animation-delay: 0.1s; }
+.dash-kpi-card:nth-child(2) { animation-delay: 0.15s; }
+.dash-kpi-card:nth-child(3) { animation-delay: 0.2s; }
+.dash-kpi-card:nth-child(4) { animation-delay: 0.25s; }
+.dash-priority-section {
+  animation: dash-fade-in-up 0.4s ease-out 0.25s both;
+}
+.dash-paper-summary {
+  animation: dash-fade-in-up 0.4s ease-out 0.3s both;
+}
+.dash-right-panel {
+  animation: dash-slide-in-right 0.4s ease-out 0.2s both;
+}
+
 /* ── Login Page Animations ── */
 
 @keyframes login-fade-in-up {
