@@ -178,6 +178,8 @@ function ResearchProgressCard({
 }
 
 function UserInfoBlock({ name, badge }: { name: string; badge: string }) {
+  const { logout } = useAuth()
+  const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const [preferencesOpen, setPreferencesOpen] = useState(false)
   const [literatureSettingsOpen, setLiteratureSettingsOpen] = useState(false)
@@ -253,8 +255,6 @@ export function DashboardSidebar({
   onProgressClick,
   onStatsClick,
 }: DashboardSidebarProps) {
-  const navigate = useNavigate()
-  const { logout } = useAuth()
   const location = useLocation()
 
   function isItemActive(item: NavigationItemData): boolean {
