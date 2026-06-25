@@ -140,6 +140,7 @@ class MineruClient:
                     headers={
                         "Accept": "application/pdf,*/*",
                         "Range": _PDF_PREFLIGHT_RANGE,
+                        "User-Agent": "Mozilla/5.0",
                     },
                 )
             except httpx.HTTPError as exc:
