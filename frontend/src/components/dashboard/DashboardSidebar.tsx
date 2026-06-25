@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 import type { NavigationItemData } from './mockData'
 import { showToast } from './DashboardToast'
-import { PreferencesDialog, UserPreferencesDialog } from './DashboardDialogs'
+import { LiteratureSettingsDialog, PreferencesDialog, UserPreferencesDialog } from './DashboardDialogs'
 
 // --- Types ---
 
@@ -179,6 +179,7 @@ function ResearchProgressCard({
 function UserInfoBlock({ name, badge }: { name: string; badge: string }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [preferencesOpen, setPreferencesOpen] = useState(false)
+  const [literatureSettingsOpen, setLiteratureSettingsOpen] = useState(false)
   const [userPreferencesOpen, setUserPreferencesOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -216,6 +217,9 @@ function UserInfoBlock({ name, badge }: { name: string; badge: string }) {
           <button onClick={() => { setMenuOpen(false); setPreferencesOpen(true) }} className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[#334155] hover:bg-[#F8FAFC]">
             <Settings size={13} />AI 供应商配置
           </button>
+          <button onClick={() => { setMenuOpen(false); setLiteratureSettingsOpen(true) }} className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[#334155] hover:bg-[#F8FAFC]">
+            <Sparkles size={13} />文献信息设置
+          </button>
           <button onClick={() => { setMenuOpen(false); setUserPreferencesOpen(true) }} className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[#334155] hover:bg-[#F8FAFC]">
             <User size={13} />偏好设置
           </button>
@@ -232,6 +236,7 @@ function UserInfoBlock({ name, badge }: { name: string; badge: string }) {
         </div>
       )}
       <PreferencesDialog open={preferencesOpen} onOpenChange={setPreferencesOpen} />
+      <LiteratureSettingsDialog open={literatureSettingsOpen} onOpenChange={setLiteratureSettingsOpen} />
       <UserPreferencesDialog open={userPreferencesOpen} onOpenChange={setUserPreferencesOpen} />
     </div>
   )

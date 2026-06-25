@@ -8,7 +8,12 @@ from app.schemas.settings import (
     AiProviderSettingsResponse,
     AiProviderSettingsUpdate,
 )
+from app.schemas.easyscholar_settings import (
+    EasyScholarSettingsResponse,
+    EasyScholarSettingsUpdate,
+)
 from app.services.ai_provider_settings_service import AiProviderSettingsService
+from app.services.easyscholar_settings_service import EasyScholarSettingsService
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -45,3 +50,19 @@ def fetch_ai_provider_models(
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"获取模型失败：{exc}") from exc
     return AiProviderModelsResponse(models=models)
+
+
+@router.get("/easyscholar", response_model=EasyScholarSettingsResponse)
+def get_easyscholar_settings(
+    db: Session = Depends(get_session),
+) -> EasyScholarSettingsResponse:
+    return EasyScholarSettingsResponse(**EasyScholarSettingsService.to_response(db))
+
+
+@router.put("/easyscholar", response_model=EasyScholarSettingsResponse)
+def update_easyscholar_settings(
+    payload: EasyScholarSettingsUpdate,
+    db: Session = Depends(get_session),
+) -> EasyScholarSettingsResponse:
+    EasyScholarSettingsService.update_settings(db, payload.model_dump(exclude_unset=True))
+    return EasyScholarSettingsResponse(**EasyScholarSettingsService.to_response(db))

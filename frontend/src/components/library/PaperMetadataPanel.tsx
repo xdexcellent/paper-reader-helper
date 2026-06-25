@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 
 import { effectiveRank, type Category, type PaperDetail, type PaperUpdatePayload, type ReadingStatus } from '../../types'
 import type { AiModelOption } from '../../lib/aiModels'
-import { RankBadge } from '../RankBadge'
+import { RankBadge, VenueRankBadges } from '../RankBadge'
 import { StatusBadge } from '../StatusBadge'
 import { Icon } from '../UiIcon'
 import { PaperTagEditor } from './PaperTagEditor'
@@ -415,6 +415,12 @@ export function PaperMetadataPanel({
                 {rank.impactFactor && (
                   <span className="paper-rank-source">IF · {paper.impact_factor_override?.trim() ? '手动' : '系统匹配'}</span>
                 )}
+              </div>
+            )}
+            {paper.venue_rank && (
+              <div className="paper-rank-row">
+                <span className="paper-rank-label">期刊指标</span>
+                <VenueRankBadges venueRank={paper.venue_rank} />
               </div>
             )}
           </div>

@@ -36,7 +36,7 @@ export function PrioritySkeleton() {
           <div key={i} className="rounded-[16px] border border-[#F1F5F9] bg-white p-4 flex gap-4">
             <div className="space-y-2">
               <Pulse className="h-6 w-6 rounded-md" />
-              <Pulse className="h-[72px] w-[56px] rounded-lg" />
+              <Pulse className="h-[72px] w-[92px] rounded-lg" />
             </div>
             <div className="flex-1 space-y-2">
               <Pulse className="h-4 w-full" />
@@ -68,7 +68,7 @@ export function PaperListSkeleton() {
       </div>
       {[1, 2, 3, 4].map(i => (
         <div key={i} className="rounded-[14px] border border-[#F1F5F9] bg-white p-4 flex gap-4">
-          <Pulse className="h-[80px] w-[60px] rounded-lg shrink-0" />
+          <Pulse className="h-[80px] w-[102px] rounded-lg shrink-0" />
           <div className="flex-1 space-y-2">
             <Pulse className="h-4 w-4/5" />
             <Pulse className="h-3 w-2/3" />

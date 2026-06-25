@@ -38,6 +38,7 @@ type KpiConfig = {
   note: string | ((stats: StatsOverview) => string)
   icon: React.ReactNode
   iconColor: string
+  detailView: TrackingDetailView
 }
 
 const kpiConfigs: KpiConfig[] = [
@@ -48,6 +49,7 @@ const kpiConfigs: KpiConfig[] = [
     note: '论文库总量',
     icon: <FileText size={20} color="#2563EB" />,
     iconColor: '#2563EB',
+    detailView: 'total',
   },
   {
     key: 'completion_rate',
@@ -56,6 +58,7 @@ const kpiConfigs: KpiConfig[] = [
     note: (s) => `${s.ready} 篇已就绪`,
     icon: <TrendingUp size={20} color="#14B8A6" />,
     iconColor: '#14B8A6',
+    detailView: 'ready',
   },
   {
     key: 'parsed',
@@ -64,6 +67,7 @@ const kpiConfigs: KpiConfig[] = [
     note: '已完成解析',
     icon: <Layers size={20} color="#10B981" />,
     iconColor: '#10B981',
+    detailView: 'parsed',
   },
   {
     key: 'summarized',
@@ -72,6 +76,7 @@ const kpiConfigs: KpiConfig[] = [
     note: '已生成摘要',
     icon: <BookOpen size={20} color="#8B5CF6" />,
     iconColor: '#8B5CF6',
+    detailView: 'summarized',
   },
   {
     key: 'pending',
@@ -80,6 +85,7 @@ const kpiConfigs: KpiConfig[] = [
     note: '等待处理',
     icon: <Clock size={20} color="#F59E0B" />,
     iconColor: '#F59E0B',
+    detailView: 'pending',
   },
   {
     key: 'processing',
@@ -88,6 +94,7 @@ const kpiConfigs: KpiConfig[] = [
     note: '当前处理中',
     icon: <Loader size={20} color="#EF4444" />,
     iconColor: '#EF4444',
+    detailView: 'processing',
   },
 ]
 
@@ -255,6 +262,7 @@ export function AcademicTrackingPage({ papers, refreshLibrary }: AcademicTrackin
                 loading={loading}
                 error={error && !stats}
                 onRetry={loadData}
+                onClick={() => setDetailView(kpi.detailView)}
               />
             )
           })}

@@ -85,12 +85,19 @@ vi.mock('../TrackingTopbar', () => ({
 }))
 
 vi.mock('../TrackingKpiCard', () => ({
-  TrackingKpiCard: ({ label, value, note, loading, error }: any) => (
-    <div data-testid={`kpi-card-${label}`} data-loading={loading} data-error={error} data-value={value}>
+  TrackingKpiCard: ({ label, value, note, loading, error, onClick }: any) => (
+    <button
+      type="button"
+      data-testid={`kpi-card-${label}`}
+      data-loading={loading}
+      data-error={error}
+      data-value={value}
+      onClick={onClick}
+    >
       <span data-testid="kpi-label">{label}</span>
       <span data-testid="kpi-value">{value}</span>
       <span data-testid="kpi-note">{note}</span>
-    </div>
+    </button>
   ),
 }))
 
@@ -566,6 +573,27 @@ describe('AcademicTrackingPage', () => {
 
       fireEvent.click(screen.getByText('activity details'))
       expect(screen.getByTestId('tracking-detail-drawer')).toHaveAttribute('data-view', 'activities')
+    })
+
+    it('opens paper detail drawers from the top KPI cards', async () => {
+      mockedFetchStatsOverview.mockResolvedValue(mockStatsOverview)
+      mockedFetchDailyStats.mockResolvedValue(mockDailyStats)
+      mockedFetchSourceDist.mockResolvedValue(mockSourceDist)
+
+      renderTrackingPage({ papers: mockPapers })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('kpi-card-正在运行中')).toHaveAttribute('data-loading', 'false')
+      })
+
+      fireEvent.click(screen.getByTestId('kpi-card-正在运行中'))
+      expect(screen.getByTestId('tracking-detail-drawer')).toHaveAttribute('data-view', 'processing')
+
+      fireEvent.click(screen.getByTestId('kpi-card-待处理队列'))
+      expect(screen.getByTestId('tracking-detail-drawer')).toHaveAttribute('data-view', 'pending')
+
+      fireEvent.click(screen.getByTestId('kpi-card-总文章数'))
+      expect(screen.getByTestId('tracking-detail-drawer')).toHaveAttribute('data-view', 'total')
     })
   })
 })

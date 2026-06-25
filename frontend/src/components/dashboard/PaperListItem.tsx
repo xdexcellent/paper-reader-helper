@@ -98,7 +98,7 @@ export function PaperListItem({ paper, onOpenPaper, onPaperUpdated, onAddToProje
             thumbnailUrl={paper.thumbnailUrl}
             title={paper.title}
             abstractText={paper.abstract}
-            className="h-[88px] w-[68px]"
+            className="h-[88px] w-[112px]"
           />
         </button>
       </div>

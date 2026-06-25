@@ -97,6 +97,33 @@ class PaperUpdateRequest(BaseModel):
         return value
 
 
+class VenueRankInfo(BaseModel):
+    impact_factor: str = ""
+    impact_factor_5y: str = ""
+    jcr_sci: str = ""
+    jcr_ssci: str = ""
+    cas_upgrade: str = ""
+    cas_upgrade_top: str = ""
+    cas_base: str = ""
+    cas_upgrade_small: str = ""
+    jci: str = ""
+    esi: str = ""
+    warn: str = ""
+    ei: str = ""
+    ahci: str = ""
+    cssci: str = ""
+    pku: str = ""
+    cscd: str = ""
+    utd24: str = ""
+    ft50: str = ""
+    ajg: str = ""
+    fms: str = ""
+    swufe: str = ""
+    cufe: str = ""
+    uibe: str = ""
+    sdufe: str = ""
+
+
 class PaperResponse(BaseModel):
     id: int
     title: str
@@ -128,21 +155,20 @@ class PaperResponse(BaseModel):
     category_confidence: float = 0.0
     category_reason: str = ""
     tags: list[str] = []
+    venue_rank: VenueRankInfo | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
     @model_validator(mode='before')
     @classmethod
     def extract_tags(cls, data):
-        # Handle both dict and ORM object
         if hasattr(data, '__dict__'):
-            # ORM object
             tags_json = getattr(data, 'tags_json', '[]')
         elif isinstance(data, dict):
             tags_json = data.pop('tags_json', data.get('tags', '[]'))
         else:
             return data
-        
+
         if isinstance(tags_json, str):
             try:
                 tags = json.loads(tags_json)
@@ -152,9 +178,8 @@ class PaperResponse(BaseModel):
             tags = tags_json
         else:
             tags = []
-        
+
         if hasattr(data, '__dict__'):
-            # Return dict for ORM objects
             d = {}
             for field in [
                 'id', 'title', 'source', 'authors', 'abstract_raw', 'year',

@@ -162,6 +162,11 @@ class OpenAlexAdapter(SourceAdapter):
                     metadata={
                         "doi": doi,
                         "openalex_id": openalex_id,
+                        "venue": ((work.get("primary_location") or {}).get("source") or {}).get("display_name") or "",
+                        "journal": ((work.get("primary_location") or {}).get("source") or {}).get("display_name") or "",
+                        "landing_page_url": ((work.get("primary_location") or {}).get("landing_page_url") or ""),
+                        "host_venue": (work.get("host_venue") or {}).get("display_name") if isinstance(work.get("host_venue"), dict) else "",
+                        "primary_location": work.get("primary_location") or {},
                         "cited_by_count": work.get("cited_by_count", 0),
                         "type": work.get("type", ""),
                         "query": query,

@@ -27,6 +27,7 @@ from app.services.pipeline import PaperPipelineService
 from app.services.source_adapters.base import SourceCandidate
 from app.services.source_adapters.registry import get_adapter
 from app.services.storage import StorageService
+from app.services.venue_enrichment_service import batch_backfill_missing_venues
 from app.services.venue_rank_service import apply_system_rank
 
 logger = logging.getLogger(__name__)
@@ -139,9 +140,7 @@ def _filter_candidates_with_pdf(
             projects.append(candidate)
         elif candidate.pdf_url:
             papers_with_pdf.append(candidate)
-        # 无 pdf_url 的论文候选：丢弃
 
-    # 项目不受 fetch_limit 限制（通常很少）；论文按 fetch_limit 截断
     paper_slots = max(fetch_limit - len(projects), 0)
     return projects[:fetch_limit] + papers_with_pdf[:paper_slots]
 
@@ -196,11 +195,6 @@ class DailyIngestionService:
                 self.session = None
 
     def resume_run(self, run_id: int, run_date: date) -> DailyRun:
-        """Resume a pre-created DailyRun (status=queued) in a fresh session.
-
-        Used by the async API: the API handler creates the DailyRun immediately
-        and returns it, then a background thread calls this method to do the work.
-        """
         with Session(engine) as session:
             self.session = session
             try:
@@ -209,7 +203,6 @@ class DailyIngestionService:
                 self.session = None
 
     def _resume_run_in_session(self, run_id: int, run_date: date) -> DailyRun:
-        """Resume a pre-created DailyRun record: transition to running and execute the pipeline."""
         if self.session is None:
             raise RuntimeError("DailyIngestionService requires an active database session.")
 
@@ -253,7 +246,6 @@ class DailyIngestionService:
         self._save(run, refresh=True)
 
     def _execute_pipeline(self, run: DailyRun, settings: object, stats: dict[str, int]) -> DailyRun:
-        """Shared pipeline: fetch subscriptions, process candidates, generate briefing."""
         try:
             self._update_progress(run, 5, "正在加载订阅列表...")
             subscriptions = list(
@@ -266,8 +258,6 @@ class DailyIngestionService:
             self._update_progress(run, 10, f"开始处理 {len(subscriptions)} 个订阅源...")
             total_subs = max(len(subscriptions), 1)
             for sub_idx, subscription in enumerate(subscriptions):
-                # 每轮循环前重新检查订阅状态，允许用户在运行中暂停并立即生效
-                # expire() 强制从 DB 重读，避免 session identity map 缓存了旧的 is_active
                 self.session.expire(subscription)
                 fresh_sub = self.session.get(Subscription, subscription.id)
                 if fresh_sub is None or not fresh_sub.is_active:
@@ -307,7 +297,6 @@ class DailyIngestionService:
                         research_keywords=getattr(settings, "research_keywords", "") or "",
                     )
                 except Exception as exc:
-                    # 日报生成失败不应阻断整个 run；日志记录 + 继续完成流程
                     logger.exception("Daily briefing generation failed for run %s", run.id)
                     self.session.rollback()
                     stats["briefing_error"] = str(exc)[:200]
@@ -333,7 +322,55 @@ class DailyIngestionService:
         run.stats_json = json.dumps(stats, ensure_ascii=False, sort_keys=True)
         run.updated_at = _utcnow()
         self._save(run, refresh=True)
+
+        if run.status == "completed":
+            self._try_backfill_venues_and_resume_ranks(run.id)
+            self.session.refresh(run)
+
         return run
+
+    def _try_backfill_venues_and_resume_ranks(self, run_id: int) -> None:
+        try:
+            paper_ids = [
+                item.paper_id
+                for item in self.session.exec(
+                    select(IngestionItem).where(
+                        IngestionItem.daily_run_id == run_id,
+                        IngestionItem.paper_id != None,  # noqa: E711
+                    )
+                ).all()
+                if item.paper_id is not None
+            ]
+            if paper_ids:
+                summary = batch_backfill_missing_venues(self.session, paper_ids=paper_ids)
+                logger.info("Daily ingestion venue backfill summary for run %s: %s", run_id, summary)
+        except Exception:
+            logger.exception("Daily ingestion venue backfill failed for run %s", run_id)
+
+        self._try_resume_pending_venue_ranks()
+
+    def _try_resume_pending_venue_ranks(self) -> None:
+        try:
+            from app.models.venue_rank import VenueRank
+            from app.services.easyscholar_settings_service import EasyScholarSettingsService
+
+            settings = EasyScholarSettingsService.get_settings(self.session)
+            if not settings.enabled or not settings.api_key:
+                return
+
+            retryable_rows = list(
+                self.session.exec(
+                    select(VenueRank).where(VenueRank.query_status != "success")
+                ).all()
+            )
+            if not retryable_rows:
+                return
+
+            logger.info("Cross-day: retrying %d unresolved venue rank queries", len(retryable_rows))
+            from app.services.venue_rank_service import batch_refresh_venue_ranks
+            batch_refresh_venue_ranks(self.session, settings.api_key)
+        except Exception:
+            logger.exception("Cross-day venue rank continuation failed")
 
     def _process_subscription(
         self,
@@ -357,7 +394,6 @@ class DailyIngestionService:
         try:
             source_kind = subscription.source_kind or subscription.type
             adapter = self.adapter_resolver(source_kind)
-            # 预处理：适度超量拉取（1.5倍）以便过滤无 PDF 的条目，避免触发 API 限流
             original_limit = subscription.fetch_limit
             subscription.fetch_limit = max(int(original_limit * 1.5), original_limit + 2)
             try:
@@ -389,11 +425,9 @@ class DailyIngestionService:
             progress_run.stats_json = json.dumps(stats, ensure_ascii=False, sort_keys=True)
             self._save(progress_run, refresh=True)
 
-        # 预处理过滤：论文必须有 pdf_url，否则直接 drop 不进入后续流程
         candidates = _filter_candidates_with_pdf(raw_candidates, subscription.fetch_limit)
         dropped_no_pdf = len(raw_candidates) - len(candidates)
         if dropped_no_pdf > 0:
-            # 仍保留一个 stats 计数便于观察过滤比例，但不再体现在 IngestionItem 上
             stats["skipped_no_pdf_url"] = stats.get("skipped_no_pdf_url", 0) + dropped_no_pdf
             logger.info(
                 "Subscription '%s': dropped %d candidate(s) without pdf_url, kept %d",
@@ -449,7 +483,6 @@ class DailyIngestionService:
             self._write_item_status(item, "deduplicated")
             return
         if not candidate.pdf_url:
-            # Try Unpaywall as fallback if we have a DOI
             doi = (candidate.metadata or {}).get("doi", "")
             if doi:
                 _emit("尝试 Unpaywall 查找 PDF")
@@ -459,11 +492,6 @@ class DailyIngestionService:
                     logger.info("Unpaywall found PDF for DOI %s: %s", doi, pdf_from_unpaywall)
 
         if not candidate.pdf_url:
-            # Metadata-only sources (DBLP / Crossref / many RSS feeds) routinely
-            # deliver candidates without a downloadable PDF URL. Treating each of
-            # those as a pipeline failure floods the 风险点 panel with noise and
-            # hides genuine download/parse errors, so we classify them as skipped
-            # instead. The candidate is still persisted for briefing visibility.
             stats["skipped_no_pdf_url"] += 1
             _emit("源站未提供 PDF，跳过")
             self._write_item_status(item, "skipped_no_pdf", "No pdf_url available for candidate.")
@@ -483,7 +511,6 @@ class DailyIngestionService:
                 skip_restricted_pdf(restricted_exc)
                 return
             except Exception as download_exc:
-                # PDF download failed — try Unpaywall as fallback
                 doi = (candidate.metadata or {}).get("doi", "")
                 original_restricted = _is_restricted_pdf_exception(download_exc)
                 if doi:
@@ -584,8 +611,6 @@ class DailyIngestionService:
         return None
 
     def _try_unpaywall_pdf(self, doi: str) -> str:
-        """Try to find a PDF URL via Unpaywall for the given DOI."""
-        import os
         email = os.environ.get("UNPAYWALL_EMAIL") or os.environ.get("OPENALEX_EMAIL") or "user@example.com"
         try:
             client = get_http_client(follow_redirects=True, timeout=15.0)
@@ -600,7 +625,6 @@ class DailyIngestionService:
             return ""
 
     def _download_pdf_bytes(self, pdf_url: str) -> bytes:
-        # Skip known paywalled domains
         _BLOCKED = ('dl.acm.org', 'ieeexplore.ieee.org', 'onlinelibrary.wiley.com',
                     'www.sciencedirect.com', 'journals.sagepub.com', 'www.tandfonline.com')
         if any(domain in pdf_url for domain in _BLOCKED):
@@ -640,7 +664,10 @@ class DailyIngestionService:
             local_pdf_path=local_pdf_path,
             venue=venue,
         )
-        apply_system_rank(paper)
+        if venue:
+            paper.venue_resolution_status = "resolved"
+            paper.venue_resolution_note = "source_metadata"
+        apply_system_rank(paper, self.session)
         initialize_pending_category(self.session, paper, reason=PENDING_REASON)
         self._save(paper, refresh=True)
         return paper
@@ -680,3 +707,5 @@ class DailyIngestionService:
         if self._pipeline_service is None:
             self._pipeline_service = self.pipeline_factory()
         return self._pipeline_service
+
+

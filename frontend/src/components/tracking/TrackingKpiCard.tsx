@@ -9,6 +9,7 @@ export type TrackingKpiCardProps = {
   loading?: boolean
   error?: boolean
   onRetry?: () => void
+  onClick?: () => void
 }
 
 /**
@@ -40,9 +41,22 @@ export function TrackingKpiCard({
   loading,
   error,
   onRetry,
+  onClick,
 }: TrackingKpiCardProps) {
+  const isInteractive = Boolean(onClick) && !loading && !error
+  const Element = isInteractive ? 'button' : 'div'
+
   return (
-    <div className="tracking-kpi-card" style={cardStyle}>
+    <Element
+      type={isInteractive ? 'button' : undefined}
+      className={`tracking-kpi-card${isInteractive ? ' tracking-kpi-card--interactive' : ''}`}
+      style={{
+        ...cardStyle,
+        cursor: isInteractive ? 'pointer' : 'default',
+      }}
+      onClick={isInteractive ? onClick : undefined}
+      aria-label={isInteractive ? `查看${label}详情` : undefined}
+    >
       {/* Icon container */}
       <div
         className="tracking-kpi-icon"
@@ -85,7 +99,7 @@ export function TrackingKpiCard({
           </>
         )}
       </div>
-    </div>
+    </Element>
   )
 }
 
@@ -103,7 +117,10 @@ const cardStyle: React.CSSProperties = {
   border: '1px solid var(--border-subtle)',
   boxShadow: 'var(--shadow-card)',
   transition: 'transform var(--transition-normal), box-shadow var(--transition-normal), border-color var(--transition-normal)',
-  cursor: 'default',
+  color: 'inherit',
+  font: 'inherit',
+  textAlign: 'left',
+  width: '100%',
 }
 
 const iconContainerStyle: React.CSSProperties = {

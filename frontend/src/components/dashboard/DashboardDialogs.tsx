@@ -9,11 +9,16 @@ import {
   fetchAiProviderModels,
   fetchAiProviderSettings,
   fetchAutomationSettings,
+  fetchEasyScholarSettings,
+  fetchVenueRanksStatus,
+  refreshVenueRanks,
   updateAiProviderSettings,
   updateAutomationSettings,
+  updateEasyScholarSettings,
 } from '../../lib/api'
 import { notifyAiProviderSettingsChanged } from '../../lib/aiModels'
-import type { AiProviderSettings, AutomationSettings } from '../../types'
+import type { AiProviderSettings, AutomationSettings, EasyScholarSettings } from '../../types'
+import type { VenueRanksStatus } from '../../lib/api'
 
 // ─── Automation Settings Dialog ─────────────────────────────────────
 
@@ -526,6 +531,159 @@ export function PlanAdjustmentDialog({ open, onOpenChange, onSave }: PlanDialogP
         <div className="border-t border-[#F1F5F9] px-6 py-3 flex justify-end gap-2">
           <button onClick={() => onOpenChange(false)} className="rounded-lg px-4 py-2 text-[13px] text-[#64748B] hover:bg-[#F8FAFC]">取消</button>
           <button onClick={handleSave} className="rounded-lg bg-[#2563EB] px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1d4ed8]">保存</button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Literature Settings Dialog (EasyScholar) ──────────────────────
+
+type LiteratureDialogProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+export function LiteratureSettingsDialog({ open, onOpenChange }: LiteratureDialogProps) {
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [settings, setSettings] = useState<EasyScholarSettings>({ api_key_set: false, api_key_preview: '', enabled: true })
+  const [apiKeyInput, setApiKeyInput] = useState('')
+  const [refreshStatus, setRefreshStatus] = useState<VenueRanksStatus | null>(null)
+  const [refreshLoading, setRefreshLoading] = useState(false)
+  const [polling, setPolling] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    setLoading(true)
+    fetchEasyScholarSettings()
+      .then((data) => {
+        if (cancelled) return
+        setSettings(data)
+        setApiKeyInput(data.api_key_preview || '')
+      })
+      .catch(() => showToast('加载文献信息设置失败', 'error'))
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [open])
+
+  useEffect(() => {
+    if (!polling) return
+    const interval = setInterval(async () => {
+      try {
+        const status = await fetchVenueRanksStatus()
+        setRefreshStatus(status)
+        if (!status.running && (status.pending === 0 || !status.running)) {
+          setPolling(false)
+        }
+      } catch { setPolling(false) }
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [polling])
+
+  async function handleRefresh() {
+    setRefreshLoading(true)
+    try {
+      const result = await refreshVenueRanks()
+      showToast(`EasyScholar 刷新已启动，共 ${result.total_venues} 个 venue`, 'success')
+      setPolling(true)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '启动刷新失败', 'error')
+    } finally {
+      setRefreshLoading(false)
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      const apiKeyChanged = apiKeyInput.trim() && apiKeyInput.trim() !== settings.api_key_preview
+      const next = await updateEasyScholarSettings({
+        api_key: apiKeyChanged ? apiKeyInput.trim() : undefined,
+        enabled: settings.enabled,
+      })
+      setSettings(next)
+      setApiKeyInput(next.api_key_preview || '')
+      showToast('文献信息设置已保存', 'success')
+      onOpenChange(false)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '保存失败', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const progressDone = (refreshStatus ? refreshStatus.success + refreshStatus.no_data + refreshStatus.error : 0)
+  const progressTotal = refreshStatus ? refreshStatus.total : 0
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="!max-w-[560px] !rounded-2xl !p-0 !bg-white !text-[#0F172A] !ring-[#E2E8F0]" style={{ background: '#FFFFFF', color: '#0F172A' }}>
+        <DialogHeader className="px-6 pt-5 pb-0">
+          <DialogTitle className="!text-[16px] !font-semibold !text-[#0F172A]">文献信息设置</DialogTitle>
+          <DialogDescription className="!text-[13px] !text-[#64748B]">
+            配置 EasyScholar API Key 以自动获取期刊的影响因子、JCR 分区、中科院分区、JCI、ESI、预警等信息
+          </DialogDescription>
+        </DialogHeader>
+        <div className="px-6 py-4 space-y-4">
+          {loading ? (
+            <div className="py-8 text-center text-[13px] text-[#94A3B8]">加载中...</div>
+          ) : (
+            <section className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 space-y-3">
+              <label className="flex items-center justify-between">
+                <span className="text-[13px] text-[#334155]">启用 EasyScholar</span>
+                <input
+                  type="checkbox"
+                  checked={settings.enabled}
+                  onChange={(e) => setSettings({ ...settings, enabled: e.target.checked })}
+                  className="h-4 w-4 rounded border-[#CBD5E1] text-[#2563EB] focus:ring-[#2563EB]/20"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[12px] font-medium text-[#334155]">API Key</span>
+                <input
+                  type="password"
+                  value={apiKeyInput}
+                  onChange={(event) => setApiKeyInput(event.target.value)}
+                  placeholder={settings.api_key_set ? '已保存 API Key，输入新值可替换' : '输入 API Key'}
+                  style={{ background: '#FFFFFF', color: '#334155', borderColor: '#E2E8F0' }}
+                  className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-[13px] outline-none placeholder:text-[#94A3B8] focus:border-[#2563EB]"
+                />
+              </label>
+
+              <div className="pt-2 border-t border-[#E2E8F0]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[13px] font-medium text-[#334155]">缓存状态</span>
+                  <button
+                    type="button"
+                    onClick={handleRefresh}
+                    disabled={refreshLoading || !settings.enabled || (refreshStatus?.running ?? false)}
+                    className="rounded-lg bg-[#2563EB] px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-50"
+                  >
+                    {refreshLoading || polling ? '刷新中...' : '立即刷新全库'}
+                  </button>
+                </div>
+                {refreshStatus && (
+                  <div className="text-[12px] text-[#64748B] space-y-1">
+                    <p>已查询 {progressDone} / {progressTotal}，待查 {refreshStatus.pending}，成功 {refreshStatus.success}</p>
+                    {refreshStatus.pending > 0 && !refreshStatus.running && (
+                      <p className="text-[#EF4444]">今日 EasyScholar 配额可能已用尽，剩余 venue 明天自动继续</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+        </div>
+        <div className="border-t border-[#F1F5F9] px-6 py-3 flex justify-end gap-2">
+          <button onClick={() => onOpenChange(false)} className="rounded-lg px-4 py-2 text-[13px] text-[#64748B] hover:bg-[#F8FAFC]">取消</button>
+          <button onClick={handleSave} disabled={loading || saving} className="rounded-lg bg-[#2563EB] px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-50">
+            {saving ? '保存中...' : '保存'}
+          </button>
         </div>
       </DialogContent>
     </Dialog>

@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import type { AutomationSubscriptionIssue, DailyBriefingSnapshot, Paper } from '../../types'
 import type { MockPaper, MockProgress, MockSuggestion } from './mockData'
 import type { KpiCardProps } from './KpiCard'
 import type { PriorityPaperCardProps } from './PriorityPaperCard'
@@ -10,10 +12,15 @@ import { PaperSummarySection } from './PaperSummarySection'
 import { ProgressPanel } from './ProgressPanel'
 import { SuggestionsPanel } from './SuggestionsPanel'
 import { showToast } from './DashboardToast'
+import { DashboardKpiDialog } from './DashboardKpiDialog'
 
 type DashboardContentProps = {
   papers: MockPaper[]
   kpiMetrics: KpiCardProps[]
+  briefing: DailyBriefingSnapshot | null
+  rawPapers: Paper[]
+  subscriptionIssues: AutomationSubscriptionIssue[]
+  dashboardError?: string
   priorityPapers: Omit<PriorityPaperCardProps, 'onRead'>[]
   progress: MockProgress
   suggestions: MockSuggestion[]
@@ -32,6 +39,10 @@ type DashboardContentProps = {
 export function DashboardContent({
   papers,
   kpiMetrics,
+  briefing,
+  rawPapers,
+  subscriptionIssues,
+  dashboardError,
   priorityPapers,
   progress,
   suggestions,
@@ -47,6 +58,7 @@ export function DashboardContent({
   onRefreshData,
 }: DashboardContentProps) {
   const navigate = useNavigate()
+  const [activeKpiMetric, setActiveKpiMetric] = useState<KpiCardProps | null>(null)
 
   // Map MockSuggestion[] to SuggestionItemData[] with number field
   const suggestionItems: SuggestionItemData[] = suggestions.map(
@@ -141,7 +153,7 @@ export function DashboardContent({
           lastUpdate={generatedAtTime ? `最后更新 ${generatedAtTime}` : undefined}
           readingProgress={readingProgress !== undefined ? `阅读进度 ${readingProgress}%` : undefined}
         />
-        <KpiCardRow metrics={kpiMetrics} />
+        <KpiCardRow metrics={kpiMetrics} onMetricClick={setActiveKpiMetric} />
         <PrioritySection
           papers={priorityPapers}
           onReadPaper={handleReadPaper}
@@ -174,6 +186,17 @@ export function DashboardContent({
           onAction={handleSuggestionAction}
         />
       </div>
+
+      <DashboardKpiDialog
+        open={activeKpiMetric !== null}
+        onOpenChange={(open) => { if (!open) setActiveKpiMetric(null) }}
+        metric={activeKpiMetric}
+        briefing={briefing}
+        papers={rawPapers}
+        subscriptionIssues={subscriptionIssues}
+        error={dashboardError}
+        onOpenPaper={onOpenPaper}
+      />
     </div>
   )
 }

@@ -50,6 +50,45 @@ export type Paper = {
   category_confidence?: number
   category_reason?: string
   tags?: string[]
+  venue_rank?: VenueRankInfo | null
+}
+
+export interface VenueRankInfo {
+  impact_factor: string
+  impact_factor_5y: string
+  jcr_sci: string
+  jcr_ssci: string
+  cas_upgrade: string
+  cas_upgrade_top: string
+  cas_base: string
+  cas_upgrade_small: string
+  jci: string
+  esi: string
+  warn: string
+  ei: string
+  ahci: string
+  cssci: string
+  pku: string
+  cscd: string
+  utd24: string
+  ft50: string
+  ajg: string
+  fms: string
+  swufe: string
+  cufe: string
+  uibe: string
+  sdufe: string
+}
+
+export interface EasyScholarSettings {
+  api_key_set: boolean
+  api_key_preview: string
+  enabled: boolean
+}
+
+export interface EasyScholarSettingsUpdate {
+  api_key?: string
+  enabled?: boolean
 }
 
 export type PaperDetail = Paper & {

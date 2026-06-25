@@ -27,10 +27,6 @@ class ZoteroImportService:
     def build_candidates(
         self, session: Session, run: ZoteroImportRun, items: list[dict]
     ) -> list[ZoteroImportCandidate]:
-        """为每个 Zotero 条目创建候选项记录并检测重复。
-
-        返回创建的 ZoteroImportCandidate 列表。
-        """
         candidates: list[ZoteroImportCandidate] = []
         for item in items:
             mapped = item.get("_mapped", {}) or item
@@ -39,7 +35,6 @@ class ZoteroImportService:
                 session, mapped
             )
 
-            # 默认选中：非重复且无严重警告
             is_selected = True
             if is_dup:
                 is_selected = False
@@ -66,7 +61,7 @@ class ZoteroImportService:
                     mapped.get("mapped_tags", []), ensure_ascii=False
                 ),
                 attachment_path=mapped.get("attachment_path", ""),
-                attachment_exists=False,  # 导入时再检查
+                attachment_exists=False,
                 is_duplicate=is_dup,
                 duplicate_of_paper_id=dup_paper_id,
                 duplicate_reason=dup_reason,
@@ -80,31 +75,19 @@ class ZoteroImportService:
 
         session.commit()
 
-        # 刷新以获取 ID
         for c in candidates:
             session.refresh(c)
 
-        # 更新 run 的计数
         self._update_run_counts(session, run)
         return candidates
 
     def detect_duplicates(
         self, session: Session, candidate: dict
     ) -> tuple[bool, int | None, str]:
-        """检测候选项与已有论文的重复。
-
-        返回 (is_duplicate, existing_paper_id, reason)。
-
-        匹配规则（按优先级）：
-        1. DOI 匹配：规范化后相等
-        2. 标题匹配：不区分大小写，去除标点符号，去除空格
-        3. URL 匹配：完全相等
-        """
         doi = (candidate.get("mapped_doi") or "").strip()
         title = (candidate.get("mapped_title") or "").strip()
         url = (candidate.get("mapped_url") or "").strip()
 
-        # 规则 1: DOI 匹配
         if doi:
             normalized_doi = self._normalize_doi(doi)
             existing = session.exec(
@@ -114,7 +97,6 @@ class ZoteroImportService:
                 if self._normalize_doi(p.doi) == normalized_doi:
                     return True, p.id, f"DOI 匹配: {doi}"
 
-        # 规则 2: 标题匹配
         if title:
             normalized_title = self._normalize_title(title)
             if normalized_title:
@@ -125,7 +107,6 @@ class ZoteroImportService:
                     if self._normalize_title(p.title) == normalized_title:
                         return True, p.id, f"标题匹配: {title[:50]}"
 
-        # 规则 3: URL 匹配
         if url and url.startswith(("http://", "https://")):
             existing = session.exec(
                 select(Paper).where(Paper.url == url)
@@ -142,19 +123,6 @@ class ZoteroImportService:
         candidate_ids: list[int],
         allow_metadata_only: bool = False,
     ) -> dict:
-        """导入选定的候选项。
-
-        参数：
-        - session: 数据库会话
-        - run: 导入运行记录
-        - candidate_ids: 要导入的候选项 ID 列表
-        - allow_metadata_only: 是否允许无附件的条目导入
-
-        返回 dict: {
-            "imported": int, "skipped": int, "failed": int,
-            "details": [{"candidate_id": int, "status": str, "paper_id": int|None, "error": str}]
-        }
-        """
         result: dict[str, Any] = {
             "imported": 0,
             "skipped": 0,
@@ -174,7 +142,6 @@ class ZoteroImportService:
                 result["failed"] += 1
                 continue
 
-            # 跳过未选中
             if not candidate.is_selected:
                 candidate.import_status = "skipped"
                 result["skipped"] += 1
@@ -187,7 +154,6 @@ class ZoteroImportService:
                 session.add(candidate)
                 continue
 
-            # 跳过重复
             if candidate.is_duplicate:
                 candidate.import_status = "skipped"
                 result["skipped"] += 1
@@ -239,7 +205,6 @@ class ZoteroImportService:
 
         session.commit()
 
-        # 更新 run 计数
         self._update_run_counts(session, run)
         run.status = "completed"
         session.add(run)
@@ -253,26 +218,18 @@ class ZoteroImportService:
         candidate: ZoteroImportCandidate,
         allow_metadata_only: bool,
     ) -> Paper | None:
-        """从候选项创建 Paper 记录。
-
-        返回创建的 Paper 对象，或 None（被跳过时）。
-        """
         now = datetime.now(timezone.utc)
 
-        # 解析 tags
         try:
             tags = json.loads(candidate.mapped_tags_json)
         except (json.JSONDecodeError, TypeError):
             tags = []
 
-        # 处理 PDF 附件
         local_pdf_path = ""
         if candidate.attachment_path:
             attachment_path = candidate.attachment_path
 
-            # Zotero 存储格式: "storage:filename.pdf" 或 "attach:filename.pdf"
             if attachment_path.startswith("storage:"):
-                # 相对存储路径——无法自动解析绝对路径，标记为无附件
                 candidate.warning_message = (
                     (candidate.warning_message + "; " if candidate.warning_message else "")
                     + "附件使用 Zotero 相对存储路径，无法自动导入 PDF"
@@ -285,7 +242,6 @@ class ZoteroImportService:
                 )
                 candidate.attachment_exists = False
             else:
-                # 绝对路径或可访问路径
                 src_path = Path(attachment_path)
                 if src_path.is_file():
                     try:
@@ -305,9 +261,8 @@ class ZoteroImportService:
                     )
                     candidate.attachment_exists = False
 
-        # 无附件处理
         if not local_pdf_path and not allow_metadata_only:
-            return None  # 跳过
+            return None
 
         paper = Paper(
             source="zotero",
@@ -325,14 +280,16 @@ class ZoteroImportService:
             created_at=now,
             updated_at=now,
         )
-        apply_system_rank(paper)
+        if paper.venue:
+            paper.venue_resolution_status = "resolved"
+            paper.venue_resolution_note = "zotero_metadata"
+        apply_system_rank(paper, session)
         session.add(paper)
         session.commit()
         session.refresh(paper)
         return paper
 
     def _update_run_counts(self, session: Session, run: ZoteroImportRun) -> None:
-        """根据候选项更新 run 的计数统计。"""
         candidates = session.exec(
             select(ZoteroImportCandidate).where(
                 ZoteroImportCandidate.import_run_id == run.id
@@ -349,7 +306,6 @@ class ZoteroImportService:
 
     @staticmethod
     def _normalize_doi(doi: str) -> str:
-        """规范化 DOI：去除前缀和尾部空格，统一小写。"""
         doi = doi.strip().lower()
         for prefix in ("https://doi.org/", "http://doi.org/", "https://dx.doi.org/", "http://dx.doi.org/"):
             if doi.startswith(prefix):
@@ -359,10 +315,7 @@ class ZoteroImportService:
 
     @staticmethod
     def _normalize_title(title: str) -> str:
-        """规范化标题：小写、去标点、去多余空格。"""
         title = title.strip().lower()
-        # 去掉所有标点符号（保留字母、数字、空格）
         title = re.sub(r"[^\w\s]", "", title)
-        # 合并多余空格
         title = re.sub(r"\s+", " ", title).strip()
         return title

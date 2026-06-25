@@ -11,6 +11,7 @@ from app.services.source_adapters.github_trending_adapter import (
     _build_trending_url,
 )
 from app.services.source_adapters.hf_papers_adapter import HFPapersAdapter
+from app.services.source_adapters.openalex_adapter import OpenAlexAdapter
 from app.services.source_adapters.openreview_adapter import OpenReviewAdapter
 from app.services.source_adapters.registry import get_adapter
 from app.services.source_adapters.rss_adapter import RssAdapter
@@ -426,3 +427,40 @@ def test_build_trending_url_encodes_language_path() -> None:
     assert _build_trending_url({"language": "c#", "since": "weekly"}) == (
         "https://github.com/trending/c%23?since=weekly"
     )
+
+
+def test_openalex_adapter_maps_venue_metadata() -> None:
+    payload = {
+        "results": [
+            {
+                "id": "https://openalex.org/W4393148714",
+                "doi": "https://doi.org/10.1609/aaai.v38i5.28226",
+                "title": "T2I-Adapter",
+                "authorships": [{"author": {"display_name": "Alice"}}],
+                "publication_date": "2024-02-01",
+                "type": "article",
+                "primary_location": {
+                    "landing_page_url": "https://doi.org/10.1609/aaai.v38i5.28226",
+                    "source": {"display_name": "Proceedings of the AAAI Conference on Artificial Intelligence"},
+                },
+                "cited_by_count": 12,
+            }
+        ]
+    }
+    captured: dict[str, object] = {}
+
+    def fetch_json(url: str, params: dict, headers: dict) -> dict:
+        captured["url"] = url
+        captured["params"] = dict(params)
+        return payload
+
+    adapter = OpenAlexAdapter(fetch_json=fetch_json)
+    candidates = adapter.fetch_candidates(_subscription("openalex", query="adapter", fetch_limit=3))
+
+    assert captured["url"] == "https://api.openalex.org/works"
+    assert len(candidates) == 1
+    candidate = candidates[0]
+    assert candidate.metadata["venue"] == "Proceedings of the AAAI Conference on Artificial Intelligence"
+    assert candidate.metadata["journal"] == "Proceedings of the AAAI Conference on Artificial Intelligence"
+    assert candidate.metadata["landing_page_url"] == "https://doi.org/10.1609/aaai.v38i5.28226"
+

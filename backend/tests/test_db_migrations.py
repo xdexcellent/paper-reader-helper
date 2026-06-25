@@ -1,5 +1,8 @@
+from pathlib import Path
+
+import pytest
 from sqlalchemy import text
-from sqlmodel import SQLModel, create_engine
+from sqlmodel import SQLModel, Session, create_engine
 
 import app.core.db as db_module
 from app.models.agent_action import AgentAction  # noqa: F401
@@ -246,6 +249,8 @@ def test_migrate_add_columns_upgrades_legacy_paper_table_for_reader_metadata(tmp
                 SELECT
                     year,
                     venue,
+                    venue_resolution_status,
+                    venue_resolution_note,
                     doi,
                     url,
                     favorite,
@@ -261,6 +266,8 @@ def test_migrate_add_columns_upgrades_legacy_paper_table_for_reader_metadata(tmp
 
     assert "year" in columns
     assert "venue" in columns
+    assert "venue_resolution_status" in columns
+    assert "venue_resolution_note" in columns
     assert "doi" in columns
     assert "url" in columns
     assert "favorite" in columns
@@ -270,6 +277,8 @@ def test_migrate_add_columns_upgrades_legacy_paper_table_for_reader_metadata(tmp
     assert "representative_image_path" in columns
     assert row.year is None
     assert row.venue == ""
+    assert row.venue_resolution_status == "pending"
+    assert row.venue_resolution_note == ""
     assert row.doi == ""
     assert row.url == ""
     assert row.favorite == 0
@@ -277,6 +286,79 @@ def test_migrate_add_columns_upgrades_legacy_paper_table_for_reader_metadata(tmp
     assert row.reading_progress == 0
     assert row.user_notes == ""
     assert row.representative_image_path == ""
+
+
+def test_migrate_add_columns_marks_existing_venue_as_resolved(tmp_path, monkeypatch) -> None:
+    db_path = tmp_path / "legacy_paper_venue_resolution.db"
+    test_engine = create_engine(
+        f"sqlite:///{db_path}",
+        connect_args={"check_same_thread": False},
+    )
+    monkeypatch.setattr(db_module, "engine", test_engine)
+
+    with test_engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE paper (
+                    id INTEGER PRIMARY KEY,
+                    source TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    local_pdf_path TEXT NOT NULL,
+                    venue TEXT DEFAULT '',
+                    status TEXT NOT NULL,
+                    parse_status TEXT NOT NULL,
+                    summary_status TEXT NOT NULL,
+                    embedding_status TEXT NOT NULL,
+                    created_at TIMESTAMP NOT NULL,
+                    updated_at TIMESTAMP NOT NULL
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO paper (
+                    id,
+                    source,
+                    title,
+                    local_pdf_path,
+                    venue,
+                    status,
+                    parse_status,
+                    summary_status,
+                    embedding_status,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    1,
+                    'manual',
+                    'Legacy With Venue',
+                    '/tmp/legacy.pdf',
+                    'ICCV',
+                    'queued',
+                    'pending',
+                    'pending',
+                    'pending',
+                    '2026-05-03 00:00:00',
+                    '2026-05-03 00:00:00'
+                )
+                """
+            )
+        )
+
+    db_module._migrate_add_columns()
+
+    with test_engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT venue_resolution_status, venue_resolution_note FROM paper WHERE id = 1"
+            )
+        ).one()
+
+    assert row.venue_resolution_status == "resolved"
+    assert row.venue_resolution_note == ""
 
 
 def test_init_schema_creates_phase3_block_tables_without_rewriting_legacy_papers(tmp_path, monkeypatch) -> None:
@@ -521,41 +603,31 @@ def test_init_schema_creates_phase4_agent_zotero_tables_without_rewriting_legacy
             )
         ).one()
 
-    # All 5 new tables exist
     assert "agentrun" in tables
     assert "agenttoolevent" in tables
     assert "agentaction" in tables
     assert "zoteroimportrun" in tables
     assert "zoteroimportcandidate" in tables
 
-    # AgentRun expected columns
     assert {
         "id", "prompt", "scope_type", "scope_config_json", "model",
         "status", "chat_session_id", "created_at", "updated_at",
     }.issubset(agent_run_columns)
-
-    # AgentToolEvent expected columns
     assert {
         "id", "agent_run_id", "tool_name", "input_summary", "output_summary",
         "status", "error_message", "created_at",
     }.issubset(agent_tool_event_columns)
-
-    # AgentAction expected columns
     assert {
         "id", "agent_run_id", "action_type", "target_paper_id", "target_category_id",
         "before_values_json", "after_values_json", "rationale", "confidence",
         "risk_level", "status", "revert_action_id", "rejection_reason",
         "error_message", "created_at", "updated_at",
     }.issubset(agent_action_columns)
-
-    # ZoteroImportRun expected columns
     assert {
         "id", "source_fingerprint", "status", "imported_count", "skipped_count",
         "duplicate_count", "warning_count", "failed_count", "error_message",
         "created_at", "updated_at",
     }.issubset(zotero_import_run_columns)
-
-    # ZoteroImportCandidate expected columns
     assert {
         "id", "import_run_id", "source_key", "zotero_item_type", "raw_title",
         "mapped_title", "mapped_authors", "mapped_year", "mapped_doi",
@@ -566,8 +638,6 @@ def test_init_schema_creates_phase4_agent_zotero_tables_without_rewriting_legacy
         "warning_message", "import_status", "imported_paper_id",
         "import_error", "created_at",
     }.issubset(zotero_import_candidate_columns)
-
-    # Legacy paper row preserved unchanged
     assert paper_row.source == "manual"
     assert paper_row.title == "Phase 4 Legacy Paper"
     assert paper_row.status == "ready"

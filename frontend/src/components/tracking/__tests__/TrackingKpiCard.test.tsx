@@ -30,6 +30,26 @@ describe('TrackingKpiCard', () => {
     })
   })
 
+  describe('interactive state', () => {
+    it('renders as a button and calls onClick when interactive', () => {
+      const onClick = vi.fn()
+      render(<TrackingKpiCard {...defaultProps} onClick={onClick} />)
+
+      const button = screen.getByRole('button', { name: '查看总文章数详情' })
+      expect(button).toHaveClass('tracking-kpi-card--interactive')
+
+      fireEvent.click(button)
+      expect(onClick).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not expose the card as a button while loading', () => {
+      const onClick = vi.fn()
+      render(<TrackingKpiCard {...defaultProps} loading onClick={onClick} />)
+
+      expect(screen.queryByRole('button', { name: '查看总文章数详情' })).not.toBeInTheDocument()
+    })
+  })
+
   describe('loading state', () => {
     it('shows skeleton placeholders when loading', () => {
       const { container } = render(<TrackingKpiCard {...defaultProps} loading />)

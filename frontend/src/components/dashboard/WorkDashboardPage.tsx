@@ -167,6 +167,10 @@ export function WorkDashboardPage({ papers = [], refreshLibrary }: WorkDashboard
           <DashboardContent
             papers={dashboard.papers}
             kpiMetrics={dashboard.kpiMetrics}
+            briefing={dashboard.briefing}
+            rawPapers={papers}
+            subscriptionIssues={dashboard.automationStatus?.today_run?.subscription_issues ?? []}
+            dashboardError={dashboard.error}
             priorityPapers={dashboard.priorityPapers}
             progress={dashboard.progress}
             suggestions={dashboard.suggestions}

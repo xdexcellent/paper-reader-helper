@@ -338,7 +338,7 @@ test('does not open the workspace when auth status cannot be checked', async () 
 
   renderApp()
 
-  expect(await screen.findByRole('button', { name: '进入系统' })).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: '登录' })).toBeInTheDocument()
   expect(apiMocks.fetchPapers).not.toHaveBeenCalled()
 })
 
@@ -351,7 +351,7 @@ test('启动时会校验本地 token，过期后直接回到登录页', async ()
 
   renderApp()
 
-  expect(await screen.findByRole('button', { name: '进入系统' })).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: '登录' })).toBeInTheDocument()
   expect(apiMocks.fetchPapers).not.toHaveBeenCalled()
   expect(localStorage.getItem('auth_token')).toBeNull()
 })
@@ -374,7 +374,7 @@ test('运行时收到未授权事件后会清空 token 并回到登录页', asyn
     }))
   })
 
-  expect(await screen.findByRole('button', { name: '进入系统' })).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: '登录' })).toBeInTheDocument()
   expect(localStorage.getItem('auth_token')).toBeNull()
 })
 

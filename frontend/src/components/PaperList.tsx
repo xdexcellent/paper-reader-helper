@@ -148,7 +148,7 @@ export function PaperList({
       )}
 
       {computedTags.length > 0 && (
-        <div className="tag-filter-bar">
+        <div className={`tag-filter-bar${showAllTags ? ' expanded' : ''}`}>
           <button
             type="button"
             className={`tag-filter-pill${!currentActiveTag ? ' active' : ''}`}

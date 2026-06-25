@@ -6,16 +6,17 @@ import httpx
 import pytest
 from sqlmodel import SQLModel, Session, create_engine, select
 
-import app.services.daily_ingestion as daily_ingestion_module
 import app.api.routes.automation as automation_routes
+import app.services.daily_ingestion as daily_ingestion_module
 from app.models.daily_briefing import DailyBriefing, DailyBriefingPaperItem, DailyBriefingProjectItem
 from app.models.daily_run import DailyRun
+from app.models.easyscholar_settings import EasyScholarSettings
 from app.models.ingestion_item import IngestionItem
 from app.models.paper import Paper
 from app.models.subscription import Subscription
-from app.services.daily_briefing_service import DailyBriefingService
 from app.services.automation_settings_service import AutomationSettingsService
 from app.services.category_service import ensure_default_categories
+from app.services.daily_briefing_service import DailyBriefingService
 from app.services.daily_ingestion import DailyIngestionService
 from app.services.source_adapters.base import SourceCandidate
 from app.services.storage import StorageService
@@ -189,14 +190,7 @@ def test_run_for_date_handles_mixed_paper_and_project_candidates(session_factory
     assert run.trigger_type == "scheduled"
     assert run.completed_at is not None
     assert run.error_message is None
-    assert run.scheduled_for.replace(tzinfo=timezone.utc) == datetime(
-        2026,
-        4,
-        18,
-        0,
-        30,
-        tzinfo=timezone.utc,
-    )
+    assert run.scheduled_for.replace(tzinfo=timezone.utc) == datetime(2026, 4, 18, 0, 30, tzinfo=timezone.utc)
     assert len(pipeline.parse_calls) == 1
     assert len(pipeline.summarize_calls) == 1
 
@@ -228,13 +222,71 @@ def test_run_for_date_handles_mixed_paper_and_project_candidates(session_factory
     assert inactive_sub.last_error is None
 
 
+def test_run_for_date_backfills_new_paper_venue_after_completion(monkeypatch, session_factory, tmp_path: Path) -> None:
+    candidate = SourceCandidate(
+        artifact_type="paper",
+        source_kind="arxiv",
+        external_id="2404.00001v1",
+        title="Venue Later",
+        pdf_url="https://arxiv.org/pdf/2404.00001v1.pdf",
+        published_at=datetime(2026, 4, 18, 8, 0, tzinfo=timezone.utc),
+    )
+
+    monkeypatch.setattr(
+        "app.services.venue_enrichment_service.fetch_arxiv_paper",
+        lambda _arxiv_id, raise_on_error=True: {"journal_ref": "Nature"},
+    )
+
+    with Session(session_factory) as session:
+        _configure_settings(session)
+        _make_subscription(session, "arxiv", query="cat:cs.AI")
+        service = _make_service(session, tmp_path, {"arxiv": _FakeAdapter([candidate])})
+
+        run = service.run_for_date(date(2026, 4, 18))
+        paper = session.exec(select(Paper)).one()
+
+    assert run.status == "completed"
+    assert paper.venue == "Nature"
+    assert paper.venue_resolution_status == "resolved"
+    assert paper.venue_resolution_note == "resolved_from_arxiv_journal_ref"
+
+
+def test_run_for_date_resumes_pending_venue_ranks_after_backfill(monkeypatch, session_factory, tmp_path: Path) -> None:
+    candidate = SourceCandidate(
+        artifact_type="paper",
+        source_kind="arxiv",
+        external_id="2404.00001v1",
+        title="Resume Ranks",
+        pdf_url="https://arxiv.org/pdf/2404.00001v1.pdf",
+        published_at=datetime(2026, 4, 18, 8, 0, tzinfo=timezone.utc),
+    )
+    resumed: list[str] = []
+
+    monkeypatch.setattr(
+        "app.services.venue_enrichment_service.fetch_arxiv_paper",
+        lambda _arxiv_id, raise_on_error=True: {"journal_ref": "Cell"},
+    )
+    monkeypatch.setattr(
+        "app.services.venue_rank_service.batch_refresh_venue_ranks",
+        lambda _session, _api_key: resumed.append(_api_key) or {"total": 1, "success": 1, "no_data": 0, "error": 0, "pending": 0, "stopped_reason": ""},
+    )
+
+    with Session(session_factory) as session:
+        _configure_settings(session)
+        session.add(EasyScholarSettings(id=1, api_key="k-test", enabled=True))
+        session.commit()
+        _make_subscription(session, "arxiv", query="cat:cs.AI")
+        service = _make_service(session, tmp_path, {"arxiv": _FakeAdapter([candidate])})
+
+        run = service.run_for_date(date(2026, 4, 18))
+
+    assert run.status == "completed"
+    assert resumed == ["k-test"]
+
+
 def test_run_for_date_drops_rss_candidate_without_pdf_url_even_if_title_matches_existing(
     session_factory, tmp_path: Path
 ) -> None:
-    """When a subscription returns a candidate without pdf_url, it is dropped
-    in the pre-filter — even if a title/URL match would have deduplicated it
-    against an existing paper. This matches the user-facing intent: "没有
-    pdf_url 就 pass 掉，不做后续操作"."""
     candidate = SourceCandidate(
         artifact_type="paper",
         source_kind="rss",
@@ -296,12 +348,8 @@ def test_run_for_date_drops_rss_candidate_without_pdf_url_even_if_title_matches_
 
         run = service.run_for_date(date(2026, 4, 18))
         papers = session.exec(select(Paper)).all()
-        items = session.exec(
-            select(IngestionItem).where(IngestionItem.daily_run_id == run.id)
-        ).all()
+        items = session.exec(select(IngestionItem).where(IngestionItem.daily_run_id == run.id)).all()
 
-    # Existing paper untouched, no new ingestion item for this run, candidate
-    # counted as dropped in stats.skipped_no_pdf_url.
     assert len(papers) == 1
     assert papers[0].id == existing_paper.id
     assert items == []
@@ -336,12 +384,8 @@ def test_run_for_date_drops_candidate_without_pdf_url_before_processing(
 
         run = service.run_for_date(date(2026, 4, 18))
         papers = session.exec(select(Paper)).all()
-        items = session.exec(
-            select(IngestionItem).where(IngestionItem.daily_run_id == run.id)
-        ).all()
+        items = session.exec(select(IngestionItem).where(IngestionItem.daily_run_id == run.id)).all()
 
-    # 没 pdf_url 的候选在过滤阶段就被丢弃：不建 Paper、也不建 IngestionItem。
-    # 过滤计数记在 stats.skipped_no_pdf_url 里，"论文处理失败" 面板完全不会看到它。
     assert papers == []
     assert items == []
     stats = json.loads(run.stats_json)
@@ -383,9 +427,7 @@ def test_run_for_date_skips_restricted_pdf_without_failed_risk_item(
         )
 
         run = service.run_for_date(date(2026, 4, 18))
-        items = session.exec(
-            select(IngestionItem).where(IngestionItem.daily_run_id == run.id)
-        ).all()
+        items = session.exec(select(IngestionItem).where(IngestionItem.daily_run_id == run.id)).all()
         failed_items = DailyBriefingService().get_failed_items_for_run(session, run.id)
 
     assert len(items) == 1
@@ -413,9 +455,6 @@ def test_run_for_date_can_manage_default_database_session(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # This test focuses on DailyIngestionService running without an injected
-    # Session. Use a candidate with pdf_url so it survives the pre-filter and
-    # we can assert an IngestionItem was persisted end-to-end.
     candidate = SourceCandidate(
         artifact_type="paper",
         source_kind="openreview",
@@ -443,9 +482,7 @@ def test_run_for_date_can_manage_default_database_session(
 
     with Session(session_factory) as session:
         persisted_run = session.get(DailyRun, run.id)
-        item = session.exec(
-            select(IngestionItem).where(IngestionItem.daily_run_id == run.id)
-        ).one()
+        item = session.exec(select(IngestionItem).where(IngestionItem.daily_run_id == run.id)).one()
 
     assert persisted_run is not None
     assert persisted_run.status == "completed"
@@ -472,8 +509,6 @@ def test_run_today_endpoint_triggers_manual_ingestion(client, monkeypatch: pytes
     body = response.json()
     assert body["status"] == "queued"
     assert body["run_id"] is not None
-
-    # Verify background was dispatched with the correct run_id
     assert len(background_calls) == 1
     assert background_calls[0][0] == body["run_id"]
     assert isinstance(background_calls[0][1], date)
@@ -669,13 +704,9 @@ def test_run_for_date_populates_stats_json_with_major_counters(session_factory, 
     stats = json.loads(run.stats_json)
     assert stats == {
         "subscriptions_total": 1,
-        # Candidates without pdf_url (Known Title + Missing PDF) are dropped in
-        # the pre-filter, so only Fresh Paper + Demo Project reach processing.
         "candidates_total": 2,
         "projects_found": 1,
         "papers_imported": 1,
-        # Known Title used to dedup against an existing paper, but now that
-        # it's filtered out before dedup runs, deduplicated stays at 0.
         "deduplicated": 0,
         "failed_items": 0,
         "skipped_no_pdf_url": 2,
@@ -685,8 +716,6 @@ def test_run_for_date_populates_stats_json_with_major_counters(session_factory, 
 
 
 def test_run_for_date_records_fetch_error_on_subscription(session_factory, tmp_path: Path) -> None:
-    import httpx
-
     with Session(session_factory) as session:
         _configure_settings(session)
         sub = _make_subscription(session, "github_trending", config={"since": "daily"})
@@ -704,3 +733,32 @@ def test_run_for_date_records_fetch_error_on_subscription(session_factory, tmp_p
     assert sub is not None
     assert sub.last_error is not None
     assert "10061" in sub.last_error
+
+
+def test_run_for_date_keeps_openalex_source_venue_metadata(session_factory, tmp_path: Path) -> None:
+    Path(tmp_path).mkdir(parents=True, exist_ok=True)
+    candidate = SourceCandidate(
+        artifact_type="paper",
+        source_kind="openalex",
+        external_id="W4393148714",
+        title="T2I-Adapter",
+        pdf_url="https://example.com/t2i-adapter.pdf",
+        published_at=datetime(2026, 4, 18, 8, 0, tzinfo=timezone.utc),
+        metadata={
+            "venue": "Proceedings of the AAAI Conference on Artificial Intelligence",
+            "journal": "Proceedings of the AAAI Conference on Artificial Intelligence",
+        },
+    )
+
+    with Session(session_factory) as session:
+        _configure_settings(session)
+        _make_subscription(session, "openalex", query="adapter")
+        service = _make_service(session, tmp_path, {"openalex": _FakeAdapter([candidate])})
+
+        run = service.run_for_date(date(2026, 4, 18))
+        paper = session.exec(select(Paper)).one()
+
+    assert run.status == "completed"
+    assert paper.venue == "Proceedings of the AAAI Conference on Artificial Intelligence"
+    assert paper.venue_resolution_status == "resolved"
+    assert paper.venue_resolution_note == "source_metadata"

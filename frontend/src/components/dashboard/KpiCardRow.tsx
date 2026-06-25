@@ -2,9 +2,10 @@ import { KpiCard, type KpiCardProps } from './KpiCard'
 
 type KpiCardRowProps = {
   metrics: KpiCardProps[]
+  onMetricClick?: (metric: KpiCardProps) => void
 }
 
-export function KpiCardRow({ metrics }: KpiCardRowProps) {
+export function KpiCardRow({ metrics, onMetricClick }: KpiCardRowProps) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
       {metrics.map((metric) => (
@@ -15,6 +16,7 @@ export function KpiCardRow({ metrics }: KpiCardRowProps) {
           trend={metric.trend}
           icon={metric.icon}
           color={metric.color}
+          onClick={onMetricClick ? () => onMetricClick(metric) : undefined}
         />
       ))}
     </div>

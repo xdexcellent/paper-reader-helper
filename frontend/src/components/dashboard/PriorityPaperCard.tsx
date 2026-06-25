@@ -133,7 +133,7 @@ export function PriorityPaperCard({
             thumbnailUrl={thumbnailUrl}
             title={title}
             abstractText={abstractText}
-            className="h-[88px] w-[68px]"
+            className="h-[88px] w-[112px]"
           />
         </button>
       </div>

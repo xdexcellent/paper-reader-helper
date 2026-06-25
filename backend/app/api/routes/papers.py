@@ -6,7 +6,6 @@ from pathlib import Path
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy.exc import NoResultFound
 from sqlmodel import Session, select
 
 from app.core.db import get_session
@@ -19,12 +18,14 @@ from app.models.paper import Paper
 from app.models.paper_content import PaperContent
 from app.models.paper_embedding import PaperEmbedding
 from app.models.paper_summary import PaperSummary
+from app.models.venue_rank import VenueRank
 from app.schemas.paper import (
     PaperDetailResponse,
     PaperImportRequest,
     PaperImportUrlRequest,
     PaperResponse,
     PaperUpdateRequest,
+    VenueRankInfo,
 )
 from app.services.category_service import initialize_pending_category, update_paper_category
 from app.services.http_client_factory import get_http_client
@@ -32,7 +33,16 @@ from app.services.pdf_metadata import extract_title_from_pdf
 from app.services.pipeline import PaperPipelineService
 from app.services.storage import StorageService, storage_file_url
 from app.services.task_queue import BackgroundTaskQueue
-from app.services.venue_rank_service import apply_system_rank
+from app.services.venue_enrichment_service import batch_backfill_missing_venues, get_venue_backfill_status
+from app.services.venue_rank_service import _venue_key, apply_system_rank, batch_refresh_venue_ranks
+
+_batch_refresh_state: dict = {
+    "running": False,
+    "stage": "",
+    "last_error": "",
+    "venue_backfill": {"total": 0, "resolved": 0, "no_source": 0, "no_match": 0, "error": 0},
+    "venue_rank": {"total": 0, "success": 0, "no_data": 0, "error": 0, "pending": 0, "stopped_reason": ""},
+}
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +84,12 @@ def _recover_stale_pipeline_state(session: Session, paper: Paper) -> Paper:
     return paper
 
 
+def _mark_resolved_if_venue_present(paper: Paper, note: str) -> None:
+    if paper.venue:
+        paper.venue_resolution_status = "resolved"
+        paper.venue_resolution_note = note
+
+
 @router.post("/import", response_model=PaperResponse, status_code=201)
 def import_paper(
     payload: PaperImportRequest, session: Session = Depends(get_session)
@@ -90,7 +106,7 @@ def import_paper(
         source=payload.source,
         local_pdf_path=stored_path,
     )
-    apply_system_rank(paper)
+    apply_system_rank(paper, session)
     initialize_pending_category(session, paper, reason="Waiting for summary and automatic classification.")
     session.add(paper)
 
@@ -109,13 +125,8 @@ def import_paper(
 def import_paper_from_url(
     payload: PaperImportUrlRequest, session: Session = Depends(get_session)
 ) -> Paper:
-    """Download a paper from URL and add to library."""
-    import httpx
     import io
-    from app.services.storage import StorageService
-    from datetime import datetime
 
-    # Download the PDF
     try:
         client = get_http_client(follow_redirects=True, timeout=30.0)
         try:
@@ -127,27 +138,22 @@ def import_paper_from_url(
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"下载 PDF 失败: {exc}") from exc
 
-    # Save to storage
     storage = StorageService()
     file_obj = io.BytesIO(pdf_bytes)
-    # Give it a safe filename, if it's arxiv id we can use it
     filename = payload.source_id + ".pdf" if payload.source_id else "downloaded.pdf"
-    
+
     try:
         stored_path = storage.import_uploaded_pdf(filename, file_obj)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"存储 PDF 失败: {exc}") from exc
 
-    # Parse published_at
     published_date = None
     if payload.published_at:
         try:
-            # Simple ISO parse fallback
             published_date = datetime.fromisoformat(payload.published_at.replace("Z", "+00:00"))
         except ValueError:
             pass
 
-    # Create record
     paper = Paper(
         title=payload.title,
         source=payload.source,
@@ -158,7 +164,7 @@ def import_paper_from_url(
         published_at=published_date,
         local_pdf_path=stored_path,
     )
-    apply_system_rank(paper)
+    apply_system_rank(paper, session)
     initialize_pending_category(session, paper, reason="Waiting for summary and automatic classification.")
     session.add(paper)
 
@@ -166,14 +172,11 @@ def import_paper_from_url(
         session.commit()
     except Exception:
         session.rollback()
-        import shutil
-        from pathlib import Path
         shutil.rmtree(Path(stored_path).parent, ignore_errors=True)
         raise
 
     session.refresh(paper)
     return paper
-
 
 
 @router.post("/upload", response_model=PaperResponse, status_code=201)
@@ -209,7 +212,7 @@ def upload_paper(
         source=source.strip() or "manual",
         local_pdf_path=stored_path,
     )
-    apply_system_rank(paper)
+    apply_system_rank(paper, session)
     initialize_pending_category(session, paper, reason="Waiting for summary and automatic classification.")
     session.add(paper)
 
@@ -232,8 +235,8 @@ def list_papers(session: Session = Depends(get_session)) -> list[Paper]:
 
 @router.get("/tags/all", response_model=list[str])
 def list_all_tags(session: Session = Depends(get_session)) -> list[str]:
-    """Return all unique tags across all papers."""
     import json as _json
+
     papers = list(session.exec(select(Paper)).all())
     tag_set: set[str] = set()
     for p in papers:
@@ -248,7 +251,6 @@ def list_all_tags(session: Session = Depends(get_session)) -> list[str]:
 
 @router.post("/rebuild-representative-images")
 def rebuild_representative_images(session: Session = Depends(get_session)) -> dict:
-    """批量补救：为所有缺少代表图且已完成解析的论文重新提取代表图。"""
     from app.services.block_extraction_service import BlockExtractionService
 
     papers = list(
@@ -285,9 +287,7 @@ def rebuild_representative_images(session: Session = Depends(get_session)) -> di
                 failure_count += 1
         except Exception:
             session.rollback()
-            logger.warning(
-                "代表图重建失败: paper_id=%s", paper.id, exc_info=True
-            )
+            logger.warning("代表图重建失败: paper_id=%s", paper.id, exc_info=True)
             failure_count += 1
 
     return {
@@ -308,7 +308,6 @@ def semantic_search(
     top_k: int = Query(default=10, ge=1, le=50),
     session: Session = Depends(get_session),
 ) -> list[SemanticSearchResult]:
-    """Perform semantic vector search across papers with embeddings."""
     import json as _json
     import math
     from app.models.paper_embedding import PaperEmbedding
@@ -319,10 +318,7 @@ def semantic_search(
     except Exception as e:
         from app.services.embedding_service import EmbeddingUnavailableError
         if isinstance(e, EmbeddingUnavailableError):
-            raise HTTPException(
-                status_code=503,
-                detail=str(e),
-            )
+            raise HTTPException(status_code=503, detail=str(e))
         raise HTTPException(status_code=500, detail=f"Embedding模型加载失败: {e}")
 
     embeddings = list(session.exec(select(PaperEmbedding)).all())
@@ -369,12 +365,8 @@ def get_paper(
     if paper is None:
         raise HTTPException(status_code=404, detail="论文不存在")
 
-    content = session.exec(
-        select(PaperContent).where(PaperContent.paper_id == paper_id)
-    ).first()
-    summary = session.exec(
-        select(PaperSummary).where(PaperSummary.paper_id == paper_id)
-    ).first()
+    content = session.exec(select(PaperContent).where(PaperContent.paper_id == paper_id)).first()
+    summary = session.exec(select(PaperSummary).where(PaperSummary.paper_id == paper_id)).first()
 
     import json as _json
     try:
@@ -382,7 +374,43 @@ def get_paper(
     except (ValueError, TypeError):
         tags = []
 
+    venue_rank_row = None
+    if paper.venue:
+        vk = _venue_key(paper.venue)
+        if vk:
+            venue_rank_row = session.get(VenueRank, vk)
+
+    venue_rank_val = None
+    if venue_rank_row is not None and venue_rank_row.query_status == "success":
+        venue_rank_val = VenueRankInfo(
+            impact_factor=venue_rank_row.impact_factor,
+            impact_factor_5y=venue_rank_row.impact_factor_5y,
+            jcr_sci=venue_rank_row.jcr_sci,
+            jcr_ssci=venue_rank_row.jcr_ssci,
+            cas_upgrade=venue_rank_row.cas_upgrade,
+            cas_upgrade_top=venue_rank_row.cas_upgrade_top,
+            cas_base=venue_rank_row.cas_base,
+            cas_upgrade_small=venue_rank_row.cas_upgrade_small,
+            jci=venue_rank_row.jci,
+            esi=venue_rank_row.esi,
+            warn=venue_rank_row.warn,
+            ei=venue_rank_row.ei,
+            ahci=venue_rank_row.ahci,
+            cssci=venue_rank_row.cssci,
+            pku=venue_rank_row.pku,
+            cscd=venue_rank_row.cscd,
+            utd24=venue_rank_row.utd24,
+            ft50=venue_rank_row.ft50,
+            ajg=venue_rank_row.ajg,
+            fms=venue_rank_row.fms,
+            swufe=venue_rank_row.swufe,
+            cufe=venue_rank_row.cufe,
+            uibe=venue_rank_row.uibe,
+            sdufe=venue_rank_row.sdufe,
+        )
+
     return PaperDetailResponse(
+        venue_rank=venue_rank_val,
         id=paper.id,
         title=paper.title,
         source=paper.source,
@@ -426,6 +454,7 @@ def get_paper(
         relevance_note=summary.relevance_note if summary else "",
     )
 
+
 @router.post("/{paper_id}/parse", status_code=202)
 def parse_paper(paper_id: int, session: Session = Depends(get_session)) -> dict:
     paper = session.get(Paper, paper_id)
@@ -436,7 +465,6 @@ def parse_paper(paper_id: int, session: Session = Depends(get_session)) -> dict:
     if paper.parse_status == "processing":
         raise HTTPException(status_code=409, detail="当前论文解析任务正在进行中")
 
-    # Mark as parsing immediately
     paper.status = "parsing"
     paper.parse_status = "processing"
     session.add(paper)
@@ -444,8 +472,9 @@ def parse_paper(paper_id: int, session: Session = Depends(get_session)) -> dict:
     queue = BackgroundTaskQueue()
 
     def run_parse():
-        from sqlmodel import Session as SyncSession
         from app.core.db import engine
+        from sqlmodel import Session as SyncSession
+
         with SyncSession(engine) as db:
             p = db.get(Paper, paper_id)
             if p is None:
@@ -470,23 +499,20 @@ def summarize_paper(
     if paper is None:
         raise HTTPException(status_code=404, detail="论文不存在")
 
-    # Check that parsing is done
     if paper.parse_status != "completed":
         raise HTTPException(status_code=400, detail="论文尚未完成解析")
 
-    # Mark as summarizing immediately
     paper.status = "summarizing"
     paper.summary_status = "processing"
     session.add(paper)
     session.commit()
 
-    from app.services.task_queue import BackgroundTaskQueue
-
     queue = BackgroundTaskQueue()
 
     def run_summarize():
-        from sqlmodel import Session as SyncSession
         from app.core.db import engine
+        from sqlmodel import Session as SyncSession
+
         with SyncSession(engine) as db:
             p = db.get(Paper, paper_id)
             if p is None:
@@ -507,15 +533,11 @@ def translate_abstract(
     model: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> dict:
-    """Translate the paper abstract to Chinese using AI."""
     paper = session.get(Paper, paper_id)
     if paper is None:
         raise HTTPException(status_code=404, detail="论文不存在")
 
-    # Get the abstract content
-    content = session.exec(
-        select(PaperContent).where(PaperContent.paper_id == paper_id)
-    ).first()
+    content = session.exec(select(PaperContent).where(PaperContent.paper_id == paper_id)).first()
 
     abstract_text = ""
     if content and content.abstract_md:
@@ -544,62 +566,39 @@ def translate_abstract(
         raise HTTPException(status_code=500, detail=f"翻译失败: {str(exc)}") from exc
 
 
-
 @router.delete("/{paper_id}")
 def delete_paper(paper_id: int, session: Session = Depends(get_session)) -> dict:
-    """删除论文及其关联数据"""
     paper = session.get(Paper, paper_id)
     if paper is None:
         raise HTTPException(status_code=404, detail="论文不存在")
 
-    # 1. ChatMessageRecord → ChatSession (间接依赖)
-    chat_sessions = list(
-        session.exec(select(ChatSession).where(ChatSession.paper_id == paper_id)).all()
-    )
+    chat_sessions = list(session.exec(select(ChatSession).where(ChatSession.paper_id == paper_id)).all())
     for cs in chat_sessions:
-        for msg in session.exec(
-            select(ChatMessageRecord).where(ChatMessageRecord.session_id == cs.id)
-        ).all():
+        for msg in session.exec(select(ChatMessageRecord).where(ChatMessageRecord.session_id == cs.id)).all():
             session.delete(msg)
         session.delete(cs)
 
-    # 2. PaperEmbedding
-    embedding = session.exec(
-        select(PaperEmbedding).where(PaperEmbedding.paper_id == paper_id)
-    ).first()
+    embedding = session.exec(select(PaperEmbedding).where(PaperEmbedding.paper_id == paper_id)).first()
     if embedding:
         session.delete(embedding)
 
-    # 3. DailyBriefingPaperItem
-    for bp_item in session.exec(
-        select(DailyBriefingPaperItem).where(DailyBriefingPaperItem.paper_id == paper_id)
-    ).all():
+    for bp_item in session.exec(select(DailyBriefingPaperItem).where(DailyBriefingPaperItem.paper_id == paper_id)).all():
         session.delete(bp_item)
 
-    # 4. IngestionItem — 保留 run 历史, 只置空 paper_id
-    for ing_item in session.exec(
-        select(IngestionItem).where(IngestionItem.paper_id == paper_id)
-    ).all():
+    for ing_item in session.exec(select(IngestionItem).where(IngestionItem.paper_id == paper_id)).all():
         ing_item.paper_id = None
         session.add(ing_item)
 
-    # 5. PaperContent & PaperSummary
-    content = session.exec(
-        select(PaperContent).where(PaperContent.paper_id == paper_id)
-    ).first()
+    content = session.exec(select(PaperContent).where(PaperContent.paper_id == paper_id)).first()
     if content:
         session.delete(content)
 
-    summary = session.exec(
-        select(PaperSummary).where(PaperSummary.paper_id == paper_id)
-    ).first()
+    summary = session.exec(select(PaperSummary).where(PaperSummary.paper_id == paper_id)).first()
     if summary:
         session.delete(summary)
 
     session.flush()
 
-
-    # 删除存储的文件
     if paper.local_pdf_path:
         storage_path = Path(paper.local_pdf_path)
         if storage_path.exists():
@@ -608,6 +607,8 @@ def delete_paper(paper_id: int, session: Session = Depends(get_session)) -> dict
     session.delete(paper)
     session.commit()
     return {"success": True}
+
+
 @router.get("/search", response_model=list[PaperResponse])
 def search_papers(
     q: str = Query(default=""),
@@ -615,7 +616,6 @@ def search_papers(
     source: str = Query(default=""),
     session: Session = Depends(get_session),
 ) -> list[Paper]:
-    """搜索和过滤论文"""
     query = select(Paper)
 
     if q:
@@ -637,7 +637,6 @@ def update_paper(
     source: str | None = Query(default=None),
     session: Session = Depends(get_session),
 ) -> Paper:
-    """更新论文信息"""
     paper = session.get(Paper, paper_id)
     if paper is None:
         raise HTTPException(status_code=404, detail="论文不存在")
@@ -654,7 +653,13 @@ def update_paper(
         setattr(paper, field_name, value)
 
     if "venue" in updates and paper.venue != old_venue:
-        apply_system_rank(paper)
+        if paper.venue:
+            paper.venue_resolution_status = "resolved"
+            paper.venue_resolution_note = "manual_update"
+        else:
+            paper.venue_resolution_status = "pending"
+            paper.venue_resolution_note = "venue_cleared"
+        apply_system_rank(paper, session)
 
     if updates:
         paper.updated_at = datetime.now(timezone.utc)
@@ -667,7 +672,6 @@ def update_paper(
 
 @router.get("/{paper_id}/pdf")
 def get_paper_pdf(paper_id: int, session: Session = Depends(get_session)):
-    """Return the PDF file for in-browser viewing."""
     paper = session.get(Paper, paper_id)
     if paper is None:
         raise HTTPException(status_code=404, detail="论文不存在")
@@ -687,8 +691,6 @@ def get_paper_pdf(paper_id: int, session: Session = Depends(get_session)):
     )
 
 
-# ─── Tags ───────────────────────────────────────────────────
-
 class UpdateTagsRequest(BaseModel):
     tags: list[str]
 
@@ -704,6 +706,7 @@ def update_paper_tags(
     session: Session = Depends(get_session),
 ) -> Paper:
     import json as _json
+
     paper = session.get(Paper, paper_id)
     if paper is None:
         raise HTTPException(status_code=404, detail="论文不存在")
@@ -738,29 +741,22 @@ def update_primary_category(
     )
 
 
-# ─── Tags & Semantic Search endpoints moved to top ──────────────────
-
-
-# ─── Manual Embedding Trigger ──────────────────────────────
-
 @router.post("/{paper_id}/embed", status_code=202)
 def embed_paper(paper_id: int, session: Session = Depends(get_session)) -> dict:
     paper = session.get(Paper, paper_id)
     if paper is None:
         raise HTTPException(status_code=404, detail="论文不存在")
 
-    content = session.exec(
-        select(PaperContent).where(PaperContent.paper_id == paper_id)
-    ).first()
+    content = session.exec(select(PaperContent).where(PaperContent.paper_id == paper_id)).first()
     if content is None:
         raise HTTPException(status_code=400, detail="论文尚未解析，请先解析")
 
-    from app.services.task_queue import BackgroundTaskQueue
     queue = BackgroundTaskQueue()
 
     def run_embed():
-        from sqlmodel import Session as SyncSession
         from app.core.db import engine
+        from sqlmodel import Session as SyncSession
+
         with SyncSession(engine) as db:
             p = db.get(Paper, paper_id)
             c = db.exec(select(PaperContent).where(PaperContent.paper_id == paper_id)).first()
@@ -773,3 +769,115 @@ def embed_paper(paper_id: int, session: Session = Depends(get_session)) -> dict:
 
     task_id = queue.submit("embed", run_embed, paper_id=paper_id)
     return {"task_id": task_id, "message": "向量生成任务已提交"}
+
+
+@router.post("/refresh-venue-ranks")
+def refresh_venue_ranks(session: Session = Depends(get_session)) -> dict:
+    from app.services.easyscholar_settings_service import EasyScholarSettingsService
+    from app.services.venue_rank_service import is_ccf_venue
+
+    settings = EasyScholarSettingsService.get_settings(session)
+    if not settings.enabled or not settings.api_key:
+        raise HTTPException(status_code=400, detail="EasyScholar 未启用或 API Key 未配置")
+
+    if _batch_refresh_state["running"]:
+        raise HTTPException(status_code=409, detail="刷新任务已在运行中")
+
+    total_venues = len(list(session.exec(select(VenueRank)).all()))
+    if total_venues == 0:
+        papers = list(session.exec(select(Paper)).all())
+        venues = set()
+        for p in papers:
+            if p.venue and not is_ccf_venue(p.venue):
+                key = _venue_key(p.venue)
+                if key:
+                    venues.add(key)
+        total_venues = len(venues)
+
+    venue_status = get_venue_backfill_status(session)
+
+    def _run():
+        import threading  # noqa: F401
+        from app.core.db import engine
+        from sqlmodel import Session as SyncSession
+
+        with SyncSession(engine) as db:
+            _batch_refresh_state["running"] = True
+            _batch_refresh_state["stage"] = "venue_backfill"
+            _batch_refresh_state["last_error"] = ""
+            try:
+                _batch_refresh_state["venue_backfill"] = batch_backfill_missing_venues(db)
+                _batch_refresh_state["stage"] = "venue_rank_refresh"
+                _batch_refresh_state["venue_rank"] = batch_refresh_venue_ranks(
+                    db,
+                    EasyScholarSettingsService.get_settings(db).api_key,
+                )
+                _batch_refresh_state["stage"] = "completed"
+            except Exception as exc:
+                logger.exception("Combined venue backfill + EasyScholar refresh failed")
+                _batch_refresh_state["stage"] = "failed"
+                _batch_refresh_state["last_error"] = str(exc)
+            finally:
+                _batch_refresh_state["running"] = False
+
+    import threading
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+
+    return {
+        "message": "venue 补全与 EasyScholar 刷新任务已启动",
+        "total_venues": total_venues,
+        "missing_venues": venue_status["missing_total"],
+        "supported_missing_venues": venue_status["supported_missing"],
+    }
+
+
+@router.post("/backfill-venues")
+def backfill_venues(session: Session = Depends(get_session)) -> dict:
+    return refresh_venue_ranks(session)
+
+
+@router.get("/venue-ranks/status")
+def get_venue_ranks_status(session: Session = Depends(get_session)) -> dict:
+    from app.services.venue_rank_service import is_ccf_venue
+
+    rows = list(session.exec(select(VenueRank)).all())
+    total = len(rows)
+    success = sum(1 for r in rows if r.query_status == "success")
+    no_data = sum(1 for r in rows if r.query_status == "no_data")
+    error_count = sum(1 for r in rows if r.query_status == "error")
+    pending = sum(1 for r in rows if r.query_status == "pending")
+
+    if pending == 0 and total == 0:
+        papers = list(session.exec(select(Paper)).all())
+        venues = set()
+        for p in papers:
+            if p.venue and not is_ccf_venue(p.venue):
+                key = _venue_key(p.venue)
+                if key:
+                    venues.add(key)
+        total = len(venues)
+
+    venue_status = get_venue_backfill_status(session)
+
+    return {
+        "total": total,
+        "success": success,
+        "no_data": no_data,
+        "error": error_count,
+        "pending": pending,
+        "running": _batch_refresh_state["running"],
+        "stage": _batch_refresh_state["stage"],
+        "last_error": _batch_refresh_state["last_error"],
+        "venue_backfill": {
+            **venue_status,
+            "last_run": _batch_refresh_state["venue_backfill"],
+        },
+        "venue_rank": _batch_refresh_state["venue_rank"],
+    }
+
+
+@router.get("/backfill-venues/status")
+def get_backfill_venues_status(session: Session = Depends(get_session)) -> dict:
+    return get_venue_ranks_status(session)

@@ -57,6 +57,19 @@ def test_patch_paper_metadata_persists_and_returns_phase2_fields(client) -> None
     assert listed["url"] == "https://example.com/paper"
 
 
+def test_patch_paper_updates_venue_resolution_state(client) -> None:
+    paper_id = _create_paper(client)
+
+    update_response = client.patch(f"/papers/{paper_id}", json={"venue": "NeurIPS"})
+    assert update_response.status_code == 200
+
+    clear_response = client.patch(f"/papers/{paper_id}", json={"venue": ""})
+    assert clear_response.status_code == 200
+
+    detail = client.get(f"/papers/{paper_id}").json()
+    assert detail["venue"] == ""
+
+
 def test_patch_paper_toggles_favorite(client) -> None:
     paper_id = _create_paper(client)
 

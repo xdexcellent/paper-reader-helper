@@ -9,7 +9,18 @@ import {
 import type { DailyStatsItem, SourceDistItem, StatsOverview } from '../../lib/api'
 import type { Paper } from '../../types'
 
-export type TrackingDetailView = 'sources' | 'imports' | 'completion' | 'topics' | 'activities'
+export type TrackingDetailView =
+  | 'total'
+  | 'ready'
+  | 'parsed'
+  | 'summarized'
+  | 'pending'
+  | 'processing'
+  | 'sources'
+  | 'imports'
+  | 'completion'
+  | 'topics'
+  | 'activities'
 
 export type TrackingDetailDrawerProps = {
   open: boolean
@@ -25,6 +36,30 @@ export type TrackingDetailDrawerProps = {
 }
 
 const viewCopy: Record<TrackingDetailView, { title: string; description: string }> = {
+  total: {
+    title: '总文章数详情',
+    description: '查看当前统计范围内的全部论文。',
+  },
+  ready: {
+    title: '处理完成详情',
+    description: '查看已经处理完成并可阅读的论文。',
+  },
+  parsed: {
+    title: '结构提取详情',
+    description: '查看已完成结构解析的论文。',
+  },
+  summarized: {
+    title: '摘要生成详情',
+    description: '查看已经生成摘要的论文。',
+  },
+  pending: {
+    title: '待处理队列详情',
+    description: '查看仍在等待解析或摘要处理的论文。',
+  },
+  processing: {
+    title: '正在运行中详情',
+    description: '查看当前处于解析中或摘要生成中的论文。',
+  },
   sources: {
     title: '来源分布详情',
     description: '查看当前统计范围内各论文来源的数量和占比。',
@@ -85,6 +120,9 @@ export function TrackingDetailDrawer({
         </DrawerHeader>
 
         <div className="tracking-detail-body">
+          {isPaperStatusView(activeView) && (
+            <PaperStatusDetails view={activeView} papers={papers} onOpenPaper={onOpenPaper} />
+          )}
           {activeView === 'sources' && <SourceDetails sources={sources} />}
           {activeView === 'imports' && <DailyDetails data={dailyData} rangeDays={rangeDays} mode="imports" />}
           {activeView === 'completion' && (
@@ -100,6 +138,118 @@ export function TrackingDetailDrawer({
   )
 }
 
+function isPaperStatusView(view: TrackingDetailView): view is PaperStatusDetailView {
+  return paperStatusDetailViews.has(view as PaperStatusDetailView)
+}
+
+type PaperStatusDetailView = 'total' | 'ready' | 'parsed' | 'summarized' | 'pending' | 'processing'
+
+const paperStatusDetailViews = new Set<PaperStatusDetailView>([
+  'total',
+  'ready',
+  'parsed',
+  'summarized',
+  'pending',
+  'processing',
+])
+
+function PaperStatusDetails({
+  view,
+  papers,
+  onOpenPaper,
+}: {
+  view: PaperStatusDetailView
+  papers: Paper[]
+  onOpenPaper?: (paperId: number) => void
+}) {
+  const scopedPapers = filterPapersByStatusView(papers, view)
+  const sortedPapers = sortPapersByUpdatedAt(scopedPapers)
+  const summary = buildPaperStatusSummary(scopedPapers)
+
+  return (
+    <>
+      <SummaryGrid
+        items={[
+          { label: '论文数量', value: scopedPapers.length },
+          { label: '已完成', value: summary.ready },
+          { label: '处理中', value: summary.processing },
+        ]}
+      />
+      <EmptyAwareTable isEmpty={sortedPapers.length === 0} emptyText="暂无匹配论文">
+        <thead>
+          <tr>
+            <th>更新时间</th>
+            <th>论文</th>
+            <th>处理状态</th>
+            <th>解析</th>
+            <th>摘要</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedPapers.map((paper) => (
+            <tr key={paper.id}>
+              <td>{formatDateTime(paper.updated_at)}</td>
+              <td>
+                <span className="tracking-detail-paper-title">{paper.title}</span>
+              </td>
+              <td>
+                <span className={statusClassName(paper.status)}>
+                  {statusLabel(paper.status)}
+                </span>
+              </td>
+              <td>{pipelineStatusLabel(paper.parse_status)}</td>
+              <td>{pipelineStatusLabel(paper.summary_status)}</td>
+              <td>
+                <button
+                  type="button"
+                  className="tracking-detail-row-action"
+                  onClick={() => onOpenPaper?.(paper.id)}
+                  disabled={!onOpenPaper}
+                >
+                  打开
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </EmptyAwareTable>
+    </>
+  )
+}
+
+function filterPapersByStatusView(papers: Paper[], view: PaperStatusDetailView): Paper[] {
+  switch (view) {
+    case 'ready':
+      return papers.filter((paper) => paper.status === 'ready')
+    case 'parsed':
+      return papers.filter((paper) => paper.parse_status === 'completed' || paper.parse_status === 'done')
+    case 'summarized':
+      return papers.filter((paper) => paper.summary_status === 'completed' || paper.summary_status === 'done')
+    case 'pending':
+      return papers.filter((paper) => paper.status === 'queued')
+    case 'processing':
+      return papers.filter((paper) => paper.status === 'parsing' || paper.status === 'summarizing')
+    case 'total':
+    default:
+      return papers
+  }
+}
+
+function buildPaperStatusSummary(papers: Paper[]): { ready: number; processing: number } {
+  return {
+    ready: papers.filter((paper) => paper.status === 'ready').length,
+    processing: papers.filter((paper) => paper.status === 'parsing' || paper.status === 'summarizing').length,
+  }
+}
+
+function sortPapersByUpdatedAt(papers: Paper[]): Paper[] {
+  return [...papers].sort((left, right) => {
+    const leftTime = left.updated_at ? new Date(left.updated_at).getTime() : 0
+    const rightTime = right.updated_at ? new Date(right.updated_at).getTime() : 0
+    return rightTime - leftTime
+  })
+}
 function SourceDetails({ sources }: { sources: SourceDistItem[] }) {
   const total = sources.reduce((sum, source) => sum + source.count, 0)
   const topSource = sources[0]
@@ -244,11 +394,7 @@ function ActivityDetails({
   papers: Paper[]
   onOpenPaper?: (paperId: number) => void
 }) {
-  const sortedPapers = [...papers].sort((left, right) => {
-    const leftTime = left.updated_at ? new Date(left.updated_at).getTime() : 0
-    const rightTime = right.updated_at ? new Date(right.updated_at).getTime() : 0
-    return rightTime - leftTime
-  })
+  const sortedPapers = sortPapersByUpdatedAt(papers)
   const completed = papers.filter((paper) => paper.status === 'ready').length
   const processing = papers.filter((paper) => paper.status === 'parsing' || paper.status === 'summarizing').length
 
@@ -356,6 +502,21 @@ function formatDateTime(value?: string): string {
   const hour = String(date.getHours()).padStart(2, '0')
   const minute = String(date.getMinutes()).padStart(2, '0')
   return `${year}-${month}-${day} ${hour}:${minute}`
+}
+
+function pipelineStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    completed: '完成',
+    done: '完成',
+    pending: '待处理',
+    processing: '处理中',
+    failed: '失败',
+  }
+  return labels[status] ?? status
+}
+
+function statusClassName(status: string): string {
+  return `tracking-detail-status tracking-detail-status--${statusTone(status)}`
 }
 
 function statusLabel(status: string): string {
