@@ -19,9 +19,9 @@ import { Icon } from './UiIcon'
 
 export function LoginPage() {
   const { login, error, isLoading } = useAuth()
-  const [account, setAccount] = useState('')
+  const [account, setAccount] = useState(() => localStorage.getItem('saved_account') ?? '')
   const [password, setPassword] = useState('')
-  const [remember, setRemember] = useState(false)
+  const [remember, setRemember] = useState(() => localStorage.getItem('remember_me') === 'true')
   const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -30,7 +30,16 @@ async function handleSubmit(e: FormEvent) {
     if (!account.trim() || !password.trim() || submitting) return
     setSubmitting(true)
     try {
-      await login(account, password, remember)
+      const success = await login(account, password, remember)
+      if (success) {
+        if (remember) {
+          localStorage.setItem('saved_account', account.trim())
+          localStorage.setItem('remember_me', 'true')
+        } else {
+          localStorage.removeItem('saved_account')
+          localStorage.removeItem('remember_me')
+        }
+      }
     } finally {
       setSubmitting(false)
     }

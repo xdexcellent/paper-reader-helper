@@ -658,6 +658,35 @@ export async function semanticSearch(query: string, topK: number = 10): Promise<
   return readJson(response)
 }
 
+// ─── Paper Insights (AI Assistant) ─────────────────────────
+export interface PaperInsights {
+  key_points: {
+    problem: string
+    method: string
+    experiment: string
+    future: string
+  }
+  insights: {
+    research_question: string
+    main_contribution: string
+    method_highlight: string
+  }
+  followup_questions: string[]
+}
+
+export async function fetchPaperInsights(
+  paperId: number,
+  options?: { force?: boolean; model?: string },
+): Promise<PaperInsights> {
+  const params = new URLSearchParams()
+  if (options?.force) params.set('force', 'true')
+  if (options?.model) params.set('model', options.model)
+  const qs = params.toString()
+  const url = `${API_BASE}/papers/${paperId}/insights${qs ? `?${qs}` : ''}`
+  const response = await fetch(url, { headers: getAuthHeaders() })
+  return readJson(response)
+}
+
 // ─── Embedding ─────────────────────────────────────────────
 export async function embedPaper(paperId: number): Promise<{ task_id: string; message: string }> {
   const response = await fetch(`${API_BASE}/papers/${paperId}/embed`, {

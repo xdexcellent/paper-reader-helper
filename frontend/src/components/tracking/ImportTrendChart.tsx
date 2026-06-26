@@ -109,6 +109,7 @@ export function ImportTrendChart({ data, loading, rangeDays = 7, onViewDetails }
           {bars.map((bar, i) => (
             <rect
               key={i}
+              className="chart-bar"
               x={bar.x - barWidth / 2}
               y={bar.barY}
               width={barWidth}
@@ -118,6 +119,7 @@ export function ImportTrendChart({ data, loading, rangeDays = 7, onViewDetails }
               opacity={hoveredIndex === i ? 0.64 : 1}
               stroke={hoveredIndex === i ? '#1D4ED8' : 'transparent'}
               strokeWidth={hoveredIndex === i ? 1 : 0}
+              style={{ animationDelay: `${i * 0.04}s` }}
             />
           ))}
 

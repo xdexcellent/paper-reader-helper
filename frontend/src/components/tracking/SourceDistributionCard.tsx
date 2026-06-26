@@ -77,13 +77,15 @@ export function SourceDistributionCard({ sources, loading, onViewDetails }: Sour
 
       {/* Stacked progress bar */}
       <div style={barContainerStyle} role="img" aria-label="来源占比分布">
-        {barSegments.map((seg) => (
+        {barSegments.map((seg, i) => (
           <div
             key={seg.label}
+            className="source-bar-seg"
             style={{
               ...barSegmentStyle,
               width: `${seg.percent}%`,
               background: seg.color,
+              animationDelay: `${i * 0.06}s`,
             }}
             title={`${seg.label}: ${seg.percent.toFixed(1)}%`}
           />

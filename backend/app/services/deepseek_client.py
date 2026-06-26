@@ -84,6 +84,32 @@ _SUMMARY_SYSTEM_PROMPT = """\
 """
 
 
+_INSIGHTS_SYSTEM_PROMPT = """\
+你是一个专业的学术论文分析助手。请根据用户提供的论文内容，生成结构化的研究洞见。
+
+请严格以 JSON 格式返回结果，包含以下结构：
+{
+  "key_points": {
+    "problem": "问题与目标：论文要解决的核心研究问题、任务边界和评价标准（50-100字中文）",
+    "method": "方法框架：论文的方法流程、关键模块和技术路线（50-100字中文）",
+    "experiment": "实验结果：实验设计、基线对比和主要指标结论（50-100字中文）",
+    "future": "后续问题：基于论文可以继续探索的研究方向（50-100字中文）"
+  },
+  "insights": {
+    "research_question": "研究问题：论文聚焦的核心科学问题（30-80字中文）",
+    "main_contribution": "主要贡献：论文的主要创新点和贡献（30-80字中文）",
+    "method_highlight": "方法亮点：方法中的关键创新或巧妙设计（30-80字中文）"
+  },
+  "followup_questions": ["基于论文内容的追问问题1", "追问问题2", "追问问题3", "追问问题4"]
+}
+
+关键规则：
+1. 无论输入论文是什么语言，所有字段必须使用简体中文完整句子回答。
+2. followup_questions 必须恰好包含4个与论文内容紧密相关的问题，不要泛泛而谈。
+3. 仅返回 JSON 对象，不要包含任何解释、markdown 标记或多余文本。
+"""
+
+
 class DeepSeekClient:
     """Client for OpenAI-compatible chat APIs to generate paper summaries."""
 
@@ -393,4 +419,112 @@ class DeepSeekClient:
             "relevance_note": placeholder,
             "model_name": "fallback",
             "prompt_version": "v3",
+        }
+
+    # ── Paper Insights ────────────────────────────────────────
+
+    def generate_paper_insights(
+        self,
+        paper_title: str,
+        paper_content: dict[str, str],
+        model: str | None = None,
+    ) -> dict:
+        """Generate structured insights (key points, insights, followup questions) for a paper.
+
+        Returns a dict with keys: key_points, insights, followup_questions.
+        Falls back to placeholder values when the API is unavailable or parsing fails.
+        """
+        model_name = self.resolve_model(model)
+        if not self.api_key:
+            logger.warning("AI provider API key not configured, using placeholder insights")
+            return self._insights_fallback()
+
+        parts = [f"论文标题：{paper_title}\n"]
+        section_labels = {
+            "abstract_md": "摘要 (Abstract)",
+            "introduction_md": "引言 (Introduction)",
+            "method_md": "方法 (Methods)",
+            "conclusion_md": "结论 (Conclusion)",
+        }
+        has_content = False
+        for key, label in section_labels.items():
+            text = (paper_content.get(key) or "").strip()
+            if text:
+                max_len = 1500 if key != "abstract_md" else 800
+                if len(text) > max_len:
+                    text = text[:max_len] + "…"
+                parts.append(f"### {label}\n{text}\n")
+                has_content = True
+
+        if not has_content:
+            logger.info("No paper content available for insights (paper: %s)", paper_title[:60])
+            return self._insights_fallback()
+
+        parts.append("\n请根据以上论文内容生成结构化研究洞见，以 JSON 格式返回。")
+        user_content = "\n".join(parts)
+
+        messages = [
+            {"role": "system", "content": _INSIGHTS_SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ]
+
+        request_body: dict = {
+            "model": model_name,
+            "messages": messages,
+            "stream": True,
+        }
+
+        try:
+            content = self._stream_chat(self._resolve_chat_endpoint(), request_body)
+            logger.debug("AI provider insights response collected (%d chars)", len(content))
+
+            json_str = content
+            match = re.search(r"\{[\s\S]*\}", json_str)
+            if match:
+                json_str = match.group(0)
+
+            parsed = json.loads(json_str)
+
+            result = {
+                "key_points": {
+                    "problem": parsed.get("key_points", {}).get("problem", ""),
+                    "method": parsed.get("key_points", {}).get("method", ""),
+                    "experiment": parsed.get("key_points", {}).get("experiment", ""),
+                    "future": parsed.get("key_points", {}).get("future", ""),
+                },
+                "insights": {
+                    "research_question": parsed.get("insights", {}).get("research_question", ""),
+                    "main_contribution": parsed.get("insights", {}).get("main_contribution", ""),
+                    "method_highlight": parsed.get("insights", {}).get("method_highlight", ""),
+                },
+                "followup_questions": parsed.get("followup_questions", []),
+            }
+
+            if not isinstance(result["followup_questions"], list):
+                result["followup_questions"] = []
+            result["followup_questions"] = [
+                str(q) for q in result["followup_questions"] if q
+            ][:4]
+
+            return result
+        except Exception:
+            logger.exception("Failed to generate paper insights")
+            return self._insights_fallback()
+
+    def _insights_fallback(self) -> dict:
+        """Return placeholder insights when API is unavailable or parsing fails."""
+        placeholder = "论文内容尚在解析中，洞见生成暂时不可用。"
+        return {
+            "key_points": {
+                "problem": placeholder,
+                "method": "",
+                "experiment": "",
+                "future": "",
+            },
+            "insights": {
+                "research_question": "",
+                "main_contribution": "",
+                "method_highlight": "",
+            },
+            "followup_questions": [],
         }

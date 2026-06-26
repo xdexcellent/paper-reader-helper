@@ -1,5 +1,6 @@
 import logging
 import shutil
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -881,3 +882,76 @@ def get_venue_ranks_status(session: Session = Depends(get_session)) -> dict:
 @router.get("/backfill-venues/status")
 def get_backfill_venues_status(session: Session = Depends(get_session)) -> dict:
     return get_venue_ranks_status(session)
+
+
+# ─── Paper Insights (AI Assistant) ──────────────────────────
+
+class PaperInsightsResponse(BaseModel):
+    key_points: dict[str, str]
+    insights: dict[str, str]
+    followup_questions: list[str]
+
+
+# Simple in-memory cache: {paper_id: (insights_dict, timestamp)}
+_insights_cache: dict[int, tuple[dict, float]] = {}
+_INSIGHTS_CACHE_TTL = 600.0  # 10 minutes
+
+
+@router.get("/{paper_id}/insights", response_model=PaperInsightsResponse)
+def get_paper_insights(
+    paper_id: int,
+    model: str | None = Query(default=None),
+    force: bool = Query(default=False),
+    db: Session = Depends(get_session),
+) -> PaperInsightsResponse:
+    """Generate structured AI insights for a paper (key points, insights, followup questions).
+
+    Results are cached in memory for 10 minutes to avoid repeated LLM calls.
+    Pass ?force=true to bypass the cache.
+    """
+    paper = db.get(Paper, paper_id)
+    if paper is None:
+        raise HTTPException(status_code=404, detail="论文不存在")
+
+    # Check cache
+    now = time.time()
+    if not force and paper_id in _insights_cache:
+        cached_data, cached_at = _insights_cache[paper_id]
+        if now - cached_at < _INSIGHTS_CACHE_TTL:
+            return PaperInsightsResponse(**cached_data)
+
+    # Gather paper content
+    content = db.exec(
+        select(PaperContent).where(PaperContent.paper_id == paper_id)
+    ).first()
+
+    content_dict: dict[str, str] = {}
+    if content:
+        content_dict = {
+            "abstract_md": content.abstract_md or "",
+            "introduction_md": content.introduction_md or "",
+            "method_md": content.method_md or "",
+            "conclusion_md": content.conclusion_md or "",
+        }
+
+    # Fallback: use full_markdown if all sections are empty
+    if not any(content_dict.values()) and content and content.full_markdown:
+        content_dict["abstract_md"] = content.full_markdown[:3000]
+
+    # Final fallback: use paper's raw abstract
+    if not any(content_dict.values()):
+        content_dict["abstract_md"] = paper.abstract_raw or ""
+
+    from app.services.deepseek_client import DeepSeekClient
+
+    client = DeepSeekClient()
+    result = client.generate_paper_insights(
+        paper_title=paper.title,
+        paper_content=content_dict,
+        model=model,
+    )
+
+    # Cache the result
+    _insights_cache[paper_id] = (result, now)
+
+    return PaperInsightsResponse(**result)

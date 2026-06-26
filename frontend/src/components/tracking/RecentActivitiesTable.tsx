@@ -96,7 +96,7 @@ const statusColors: Record<ActivityItem['status'], { bg: string; color: string; 
 export function RecentActivitiesTable({ papers, loading, onViewAll }: RecentActivitiesTableProps) {
   if (loading) {
     return (
-      <div className="tracking-panel" style={cardStyle}>
+      <div className="tracking-panel academic-tracking-recent" style={cardStyle}>
         <PanelHeader title="近期处理动态" onAction={onViewAll} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {Array.from({ length: 5 }).map((_, i) => (
@@ -116,7 +116,7 @@ export function RecentActivitiesTable({ papers, loading, onViewAll }: RecentActi
 
   if (activities.length === 0) {
     return (
-      <div className="tracking-panel" style={cardStyle}>
+      <div className="tracking-panel academic-tracking-recent" style={cardStyle}>
         <PanelHeader title="近期处理动态" onAction={onViewAll} />
         <div style={emptyStyle}>
           <span style={emptyIconStyle}><ClipboardList size={22} /></span>
@@ -129,7 +129,7 @@ export function RecentActivitiesTable({ papers, loading, onViewAll }: RecentActi
   }
 
   return (
-    <div className="tracking-panel" style={cardStyle}>
+    <div className="tracking-panel academic-tracking-recent" style={cardStyle}>
       <PanelHeader title="近期处理动态" onAction={onViewAll} />
       <div style={{ overflowX: 'auto' }}>
         <table style={tableStyle}>

@@ -41,6 +41,8 @@ vite-dev.*.log
 # Local tool state
 .playwright-mcp/
 .agent/
+.eval-review/
+.qoder/
 
 # Trellis & IDE config (local only)
 .codex/
@@ -54,6 +56,11 @@ vite-dev.*.log
 .trellis/
 .vite/
 skills-lock.json
+
+# Generated / test artifacts
+markitdown/
+test-run-temp/
+*.zip
 
 # Rust / Tauri build artifacts
 src-tauri/target/

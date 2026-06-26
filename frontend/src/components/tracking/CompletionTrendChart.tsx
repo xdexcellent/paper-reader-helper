@@ -138,6 +138,7 @@ export function CompletionTrendChart({ data, loading, rangeDays = 7, onViewDetai
           return (
             <rect
               key={`bar-${i}`}
+              className="chart-bar"
               x={x}
               y={y}
               width={barWidth}
@@ -147,6 +148,7 @@ export function CompletionTrendChart({ data, loading, rangeDays = 7, onViewDetai
               opacity={hoveredIndex === i ? 0.68 : 1}
               stroke={hoveredIndex === i ? '#059669' : 'transparent'}
               strokeWidth={hoveredIndex === i ? 1 : 0}
+              style={{ animationDelay: `${i * 0.04}s` }}
             />
           )
         })}

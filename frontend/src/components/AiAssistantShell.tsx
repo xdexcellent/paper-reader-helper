@@ -12,8 +12,10 @@ import {
   sendSessionMessage,
   semanticSearch,
   uploadPaper,
+  fetchPaperInsights,
   type ChatSessionResponse,
   type SemanticSearchResult,
+  type PaperInsights,
 } from '../lib/api'
 import { SYSTEM_DEFAULT_MODEL_VALUE, getAiModelLabel, useAiModelOptions } from '../lib/aiModels'
 import type { Paper } from '../types'
@@ -124,12 +126,17 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
   const [semanticResults, setSemanticResults] = useState<SemanticSearchResult[]>([])
   const [isSearchingSemantic, setIsSearchingSemantic] = useState(false)
   const [historyQuery, setHistoryQuery] = useState('')
+  const [insights, setInsights] = useState<PaperInsights | null>(null)
+  const [isLoadingInsights, setIsLoadingInsights] = useState(false)
+  const [paperSearchQuery, setPaperSearchQuery] = useState('')
+  const [showPaperDropdown, setShowPaperDropdown] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const workspaceScrollRef = useRef<HTMLElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messageCache = useRef<Map<number, LocalMessage[]>>(new Map())
+  const paperSelectorRef = useRef<HTMLDivElement>(null)
 
   const allPapers = [
     ...localUploadedPapers,
@@ -148,6 +155,23 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
   const paperSummary = getPaperSummary(displayPaper)
   const relatedPapers = allPapers.filter(paper => paper.id !== displayPaper?.id).slice(0, 3)
   const activeSession = sessions.find(session => session.id === activeSessionId) ?? null
+  const filteredPapers = allPapers.filter(paper => {
+    const keyword = paperSearchQuery.trim().toLowerCase()
+    if (!keyword) return true
+    return [
+      paper.title,
+      paper.source,
+      paper.venue,
+      paper.year ? String(paper.year) : '',
+      ...(paper.tags ?? []),
+    ].some(value => value?.toLowerCase().includes(keyword))
+  }).slice(0, 50)
+
+  const handleSelectPaper = (paperId: number) => {
+    setSelectedPaperId(paperId)
+    setShowPaperDropdown(false)
+    setPaperSearchQuery('')
+  }
 
   async function handleSemanticSearch() {
     if (!semanticQuery.trim()) return
@@ -341,6 +365,42 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
     }
   }, [isLoadingSessions, sessions.length, activeSessionId])
 
+  useEffect(() => {
+    const paperId = displayPaper?.id
+    if (!paperId) {
+      setInsights(null)
+      return
+    }
+    let cancelled = false
+    setIsLoadingInsights(true)
+    fetchPaperInsights(paperId, { model: selectedModel || undefined })
+      .then(data => {
+        if (!cancelled) setInsights(data)
+      })
+      .catch(() => {
+        if (!cancelled) setInsights(null)
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingInsights(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayPaper?.id])
+
+  useEffect(() => {
+    if (!showPaperDropdown) return
+    const handleClickOutside = (event: MouseEvent) => {
+      if (paperSelectorRef.current && !paperSelectorRef.current.contains(event.target as Node)) {
+        setShowPaperDropdown(false)
+        setPaperSearchQuery('')
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showPaperDropdown])
+
   const handleFormSubmit = (event: React.FormEvent) => {
     event.preventDefault()
     handleSubmit()
@@ -458,6 +518,66 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
 
       <main ref={workspaceScrollRef} className="assistant-analysis-workspace" aria-label="论文分析工作区">
         <section className="assistant-paper-hero">
+          <div className="assistant-paper-selector" ref={paperSelectorRef}>
+            <button
+              type="button"
+              className="paper-selector-trigger"
+              onClick={() => setShowPaperDropdown(prev => !prev)}
+              aria-expanded={showPaperDropdown}
+              aria-haspopup="listbox"
+            >
+              <Icon name="search" />
+              <span className="paper-selector-label">
+                {selectedPaperTitle ?? displayPaperTitle}
+              </span>
+              <span className="paper-selector-count">{allPapers.length} 篇可选</span>
+            </button>
+            {showPaperDropdown && (
+              <div className="paper-selector-dropdown" role="listbox">
+                <div className="paper-selector-search">
+                  <Icon name="search" />
+                  <input
+                    type="text"
+                    placeholder="按标题、标签或来源搜索..."
+                    value={paperSearchQuery}
+                    onChange={event => setPaperSearchQuery(event.target.value)}
+                    autoFocus
+                  />
+                  {paperSearchQuery && (
+                    <button
+                      type="button"
+                      className="paper-selector-clear"
+                      onClick={() => setPaperSearchQuery('')}
+                      aria-label="清除搜索"
+                    >
+                      <Icon name="close" />
+                    </button>
+                  )}
+                </div>
+                <ul className="paper-selector-list">
+                  {filteredPapers.map(paper => (
+                    <li key={paper.id}>
+                      <button
+                        type="button"
+                        className={`paper-selector-item${paper.id === displayPaper?.id ? ' active' : ''}`}
+                        onClick={() => handleSelectPaper(paper.id)}
+                      >
+                        <Icon name="fileText" />
+                        <span className="paper-selector-item-copy">
+                          <strong>{paper.title}</strong>
+                          <em>{paper.year ?? '待整理'} · {getPaperSource(paper)}</em>
+                        </span>
+                        {paper.id === displayPaper?.id && <Icon name="check" />}
+                      </button>
+                    </li>
+                  ))}
+                  {filteredPapers.length === 0 && (
+                    <li className="paper-selector-empty">没有匹配的论文，试试调整搜索关键词</li>
+                  )}
+                </ul>
+              </div>
+            )}
+          </div>
           <div className="assistant-paper-copy">
             <span className="assistant-paper-source">来源：{getPaperSource(displayPaper)} | {displayPaper?.year ?? '年份待补充'}</span>
             <h2>{displayPaperTitle}</h2>
@@ -517,22 +637,23 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
               <p>{WELCOME_MESSAGE.content}</p>
               <h3>核心要点</h3>
               <div className="assistant-insight-grid">
-                <article data-tone="blue">
-                  <strong>问题与目标</strong>
-                  <span>快速定位论文要解决的研究问题、任务边界和评价标准。</span>
-                </article>
-                <article data-tone="green">
-                  <strong>方法框架</strong>
-                  <span>按模块拆解方法流程，并标出可复现所需的输入、输出和假设。</span>
-                </article>
-                <article data-tone="orange">
-                  <strong>实验结果</strong>
-                  <span>汇总基线、指标和消融设计，判断结论是否被实验充分支撑。</span>
-                </article>
-                <article data-tone="slate">
-                  <strong>后续问题</strong>
-                  <span>生成适合继续追问的研究问题，帮助延展成综述或实验计划。</span>
-                </article>
+                {([
+                  { tone: 'blue', label: '问题与目标', text: insights?.key_points.problem },
+                  { tone: 'green', label: '方法框架', text: insights?.key_points.method },
+                  { tone: 'orange', label: '实验结果', text: insights?.key_points.experiment },
+                  { tone: 'slate', label: '后续问题', text: insights?.key_points.future },
+                ] as const).map(item => (
+                  <article key={item.label} data-tone={item.tone}>
+                    <strong>{item.label}</strong>
+                    <span>
+                      {item.text
+                        ? item.text
+                        : isLoadingInsights
+                          ? '正在分析…'
+                          : '选择论文后将自动生成分析要点。'}
+                    </span>
+                  </article>
+                ))}
               </div>
               <div className="quick-questions-grid">
                 {QUICK_QUESTIONS.map(question => (
@@ -594,7 +715,10 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
 
         <section className="assistant-followups" aria-label="建议继续追问">
           <strong>建议继续追问</strong>
-          {['课程学习是如何设计的？', '主要贡献和局限分别是什么？', '与 Human 解题过程有哪些差异？', '实验设置是否足够可靠？'].map(prompt => (
+          {(insights?.followup_questions && insights.followup_questions.length > 0
+            ? insights.followup_questions
+            : ['这篇论文的核心贡献是什么？', '实验设计是否充分支撑了结论？', '方法有哪些局限性？', '可以如何扩展这项工作？']
+          ).map(prompt => (
             <button key={prompt} type="button" onClick={() => primePrompt(prompt)}>{prompt}</button>
           ))}
         </section>
@@ -748,21 +872,21 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
               <span data-tone="blue"><Icon name="target" /></span>
               <div>
                 <strong>研究问题</strong>
-                <p>{displayPaper ? '围绕论文摘要、方法链路和实验结论建立问答上下文。' : '从论文库中选择研究对象后生成针对性洞见。'}</p>
+                <p>{insights?.insights.research_question || (isLoadingInsights ? '正在分析…' : displayPaper ? '正在生成研究问题洞见…' : '从论文库中选择研究对象后生成针对性洞见。')}</p>
               </div>
             </article>
             <article>
               <span data-tone="orange"><Icon name="spark" /></span>
               <div>
                 <strong>主要贡献</strong>
-                <p>提炼方法创新、数据或任务设定、实验提升和可复用结论。</p>
+                <p>{insights?.insights.main_contribution || (isLoadingInsights ? '正在分析…' : displayPaper ? '正在生成主要贡献洞见…' : '选择论文后自动提炼核心创新点。')}</p>
               </div>
             </article>
             <article>
               <span data-tone="green"><Icon name="link" /></span>
               <div>
                 <strong>方法亮点</strong>
-                <p>结合当前模式输出结构化分析，便于继续写综述或实验计划。</p>
+                <p>{insights?.insights.method_highlight || (isLoadingInsights ? '正在分析…' : displayPaper ? '正在生成方法亮点洞见…' : '选择论文后自动提取方法创新。')}</p>
               </div>
             </article>
           </div>

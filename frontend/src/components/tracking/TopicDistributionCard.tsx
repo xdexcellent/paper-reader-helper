@@ -90,6 +90,7 @@ export function TopicDistributionCard({ sources, loading, onViewAll }: TopicDist
             return (
               <path
                 key={arc.label}
+                className="topic-arc"
                 d={arc.path}
                 fill={arc.color}
                 stroke="#FFFFFF"
@@ -99,7 +100,7 @@ export function TopicDistributionCard({ sources, loading, onViewAll }: TopicDist
                 cursor="pointer"
                 tabIndex={0}
                 aria-label={`${arc.label} ${arc.count} 篇 ${arc.percent.toFixed(1)}%`}
-                style={arcPathStyle}
+                style={{ ...arcPathStyle, animationDelay: `${index * 0.08}s` }}
                 onMouseEnter={() => setHoveredIndex(index)}
                 onMouseLeave={() => setHoveredIndex(null)}
                 onFocus={() => setHoveredIndex(index)}

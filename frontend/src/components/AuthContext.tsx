@@ -84,12 +84,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch {
-        removeToken()
+        // 网络请求失败时不清除 token —— 保留"记住我"的 token 供下次重试。
+        // 如果 token 真的无效，后端恢复后 checkAuthStatus 会返回 authenticated=false，
+        // 届时 handleUnauthorized 会正确清除 token。
+        const token = getToken()
         setState({
           isAuthenticated: false,
           requiresPassword: true,
           isLoading: false,
-          error: '无法确认登录状态，请重新登录',
+          error: token
+            ? '无法连接到服务器，请确认后端服务已启动后刷新页面'
+            : '无法确认登录状态，请重新登录',
         })
       }
     }
