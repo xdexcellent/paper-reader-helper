@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Sparkles } from 'lucide-react'
 import { autoClassifyPendingPapers } from '../../lib/api'
 import type { Category, Paper } from '../../types'
 import { filterCategoriesByScope } from './libraryFilters'
@@ -83,14 +84,15 @@ export function LibrarySidebar({
       {pendingCount > 0 && (
         <div className="library-control">
           <Button
-            variant="ghost"
+            variant="default"
             size="sm"
+            className="w-full justify-center shadow-sm"
             disabled={isClassifying}
             onClick={() => void handleAutoClassify()}
             type="button"
             title="使用 AI 自动为待确认论文分配分类"
           >
-            {isClassifying ? <><span className="spinner" />分类中...</> : <>AI 智能分类 ({pendingCount})</>}
+            {isClassifying ? <><span className="spinner" />分类中...</> : <><Sparkles size={14} /> AI 智能分类 ({pendingCount})</>}
           </Button>
           {classifyMessage && <small style={{ marginTop: '4px', display: 'block', opacity: 0.8 }}>{classifyMessage}</small>}
         </div>

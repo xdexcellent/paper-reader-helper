@@ -1712,7 +1712,7 @@ test('AI 智能推荐缺少作者字段时显示空态而不是示例学者', as
   expect(screen.queryByText('李思远')).not.toBeInTheDocument()
 })
 
-test('点击新订阅进入订阅管理视图', async () => {
+test('点击订阅管理导航进入订阅管理视图', async () => {
   const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
     new Response(JSON.stringify([]), {
       status: 200,
@@ -1727,9 +1727,9 @@ test('点击新订阅进入订阅管理视图', async () => {
     fireEvent.click(await screen.findByRole('link', { name: /AI 研究助手/ }))
     expect(await screen.findByText('对话历史')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('link', { name: /新订阅/ }))
+    fireEvent.click(screen.getByRole('link', { name: /订阅管理/ }))
 
-    expect(await screen.findByText('订阅管理')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '订阅管理' })).toBeInTheDocument()
     expect(screen.getByText('arXiv 快速搜索')).toBeInTheDocument()
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled())
   } finally {

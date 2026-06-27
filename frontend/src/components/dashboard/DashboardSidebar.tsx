@@ -81,15 +81,26 @@ function NavigationItem({
   isActive: boolean
 }) {
   const Icon = iconMap[item.icon]
+  const highlight = item.highlight
 
   return (
     <Link
       to={item.path}
       className={cn(
         'group flex items-center gap-3 px-5 py-2.5 transition-colors duration-200',
-        isActive
-          ? 'border-l-[3px] border-l-[#2563EB] bg-gradient-to-r from-blue-50 to-transparent text-[#2563EB]'
-          : 'border-l-[3px] border-l-transparent text-[#334155] hover:bg-slate-50'
+        highlight
+          ? cn(
+              'mx-3 my-0.5 rounded-lg border font-semibold',
+              isActive
+                ? 'border-[#2563EB] bg-[#2563EB] text-white shadow-sm'
+                : 'border-blue-200 bg-blue-50 text-[#2563EB] hover:bg-blue-100 hover:border-blue-300'
+            )
+          : cn(
+              'border-l-[3px]',
+              isActive
+                ? 'border-l-[#2563EB] bg-gradient-to-r from-blue-50 to-transparent text-[#2563EB]'
+                : 'border-l-transparent text-[#334155] hover:bg-slate-50'
+            )
       )}
     >
       {Icon && (
@@ -97,20 +108,31 @@ function NavigationItem({
           size={18}
           className={cn(
             'shrink-0',
-            isActive ? 'text-[#2563EB]' : 'text-[#64748B] group-hover:text-[#334155]'
+            highlight
+              ? isActive ? 'text-white' : 'text-[#2563EB]'
+              : isActive ? 'text-[#2563EB]' : 'text-[#64748B] group-hover:text-[#334155]'
           )}
         />
       )}
       <div className="min-w-0">
         <span
           className={cn(
-            'block text-sm font-medium leading-tight',
-            isActive ? 'text-[#2563EB]' : 'text-[#334155]'
+            'block text-sm leading-tight',
+            highlight
+              ? cn('font-semibold', isActive ? 'text-white' : 'text-[#2563EB]')
+              : cn('font-medium', isActive ? 'text-[#2563EB]' : 'text-[#334155]')
           )}
         >
           {item.label}
         </span>
-        <span className="block truncate text-xs text-[#94A3B8]">{item.subtitle}</span>
+        <span
+          className={cn(
+            'block truncate text-xs',
+            highlight && isActive ? 'text-blue-100' : 'text-[#94A3B8]'
+          )}
+        >
+          {item.subtitle}
+        </span>
       </div>
     </Link>
   )

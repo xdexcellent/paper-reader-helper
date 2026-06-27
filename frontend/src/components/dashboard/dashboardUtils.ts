@@ -209,11 +209,12 @@ export function buildDashboardNavigationItems({
   return [
     {
       id: 'nav-new-subscription',
-      label: '新订阅',
+      label: '订阅管理',
       subtitle: sourceCount > 0 ? `${sourceCount} 个订阅源` : '管理订阅源',
       icon: 'Plus',
       path: '/subscribe',
       isActive: false,
+      highlight: true,
     },
     {
       id: 'nav-dashboard',
