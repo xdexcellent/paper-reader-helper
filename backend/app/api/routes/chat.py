@@ -84,6 +84,11 @@ class SendMessageRequest(BaseModel):
     content: str
     paper_id: int | None = None
     model: str | None = None
+    chat_mode: str | None = None
+    answer_style: str | None = None
+    output_format: str | None = None
+    deep_analysis: bool | None = None
+    paper_only: bool | None = None
 
 
 class SendMessageResponse(BaseModel):
@@ -214,6 +219,51 @@ def send_message(
         "你是一个专业的AI学术研究助手。请用专业、简洁的中文回答用户的问题。",
         "回复时可以使用 Markdown 格式来增强可读性。",
     ]
+
+    # Apply structured conversation settings as system prompt directives
+    if req.chat_mode:
+        mode_hints = {
+            "论文解读": "请侧重论文的整体解读，覆盖问题、方法、实验和结论。",
+            "方法分析": "请侧重分析技术路线、关键模块和实验设计的细节。",
+            "实验总结": "请侧重梳理实验设置、数据集、基线对比和结果分析。",
+            "创新点": "请侧重提炼核心创新和与已有工作的差异。",
+            "局限性": "请侧重批判性分析局限、不足和改进方向。",
+            "中文通俗解释": "请用通俗易懂的中文解释，避免堆砌术语，适合非专业读者理解。",
+        }
+        hint = mode_hints.get(req.chat_mode)
+        if hint:
+            system_parts.append(hint)
+
+    if req.answer_style:
+        style_hints = {
+            "学术": "回答风格保持学术严谨，使用规范术语和引用格式。",
+            "简洁": "回答风格力求简洁直接，要点突出，避免冗余铺陈。",
+            "审稿式": "回答风格模拟审稿人视角，关注贡献声明、实验充分性和逻辑自洽。",
+        }
+        hint = style_hints.get(req.answer_style)
+        if hint:
+            system_parts.append(hint)
+
+    if req.output_format:
+        format_hints = {
+            "卡片": "输出格式使用结构化卡片，每个要点独立成块并加粗标题。",
+            "列表": "输出格式使用有序/无序列表，层次分明。",
+            "段落": "输出格式使用连贯段落，保持逻辑衔接。",
+        }
+        hint = format_hints.get(req.output_format)
+        if hint:
+            system_parts.append(hint)
+
+    if req.deep_analysis is not None:
+        if req.deep_analysis:
+            system_parts.append("请进行深度分析，提供充分论据、对比和推理，不要敷衍。")
+        else:
+            system_parts.append("请提供常规层面的回答，无需过度展开。")
+
+    if req.paper_only is not None and req.paper_only and cs.paper_id:
+        system_parts.append("仅基于当前关联论文和已关联上下文回答，不足之处请明确说明，不要引入外部猜测。")
+    elif req.paper_only is not None and not req.paper_only:
+        system_parts.append("可结合论文库与通用学术知识回答，但需区分论文内事实与外部知识。")
 
     if cs.paper_id:
         paper = db.get(Paper, cs.paper_id)

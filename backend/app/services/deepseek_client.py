@@ -328,10 +328,10 @@ class DeepSeekClient:
 
         # LLM calls must use the same URL/API key path as paper summarization.
         # Do not reuse automation proxy settings, which are intended for source fetching.
-        # Per-phase timeouts: read=30s detects half-open connections quickly;
-        # the total deadline below caps the whole streaming duration.
+        # Per-phase timeouts: read=180s allows for long model thinking time
+        # (especially with deep analysis); the total deadline below caps the whole streaming duration.
         client = get_http_client(
-            timeout=httpx.Timeout(connect=10.0, read=30.0, write=30.0, pool=10.0),
+            timeout=httpx.Timeout(connect=10.0, read=180.0, write=30.0, pool=10.0),
             use_db_proxy=False,
         )
         start = time.monotonic()

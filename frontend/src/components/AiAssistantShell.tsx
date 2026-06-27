@@ -10,11 +10,9 @@ import {
   fetchChatSessionDetail,
   deleteChatSession,
   sendSessionMessage,
-  semanticSearch,
   uploadPaper,
   fetchPaperInsights,
   type ChatSessionResponse,
-  type SemanticSearchResult,
   type PaperInsights,
 } from '../lib/api'
 import { SYSTEM_DEFAULT_MODEL_VALUE, getAiModelLabel, useAiModelOptions } from '../lib/aiModels'
@@ -122,9 +120,6 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
   const [outputFormat, setOutputFormat] = useState<(typeof OUTPUT_FORMATS)[number]>('卡片')
   const [deepAnalysis, setDeepAnalysis] = useState(true)
   const [paperOnly, setPaperOnly] = useState(false)
-  const [semanticQuery, setSemanticQuery] = useState('')
-  const [semanticResults, setSemanticResults] = useState<SemanticSearchResult[]>([])
-  const [isSearchingSemantic, setIsSearchingSemantic] = useState(false)
   const [historyQuery, setHistoryQuery] = useState('')
   const [insights, setInsights] = useState<PaperInsights | null>(null)
   const [isLoadingInsights, setIsLoadingInsights] = useState(false)
@@ -148,8 +143,8 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
   const displayPaperTitle = displayPaper?.title ?? '选择或上传一篇论文开始分析'
   const selectedModelLabel = getAiModelLabel(selectedModel, modelOptions)
   const contextScope = selectedPaperId
-    ? paperOnly ? '仅当前论文' : '当前论文 + 论文库'
-    : '论文库 + 通用学术知识'
+    ? paperOnly ? '仅当前论文' : '当前论文 + 通用知识'
+    : '通用学术知识'
   const showQuickQuestions = messages.length <= 1
   const paperTags = getPaperTags(displayPaper, chatMode)
   const paperSummary = getPaperSummary(displayPaper)
@@ -171,19 +166,6 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
     setSelectedPaperId(paperId)
     setShowPaperDropdown(false)
     setPaperSearchQuery('')
-  }
-
-  async function handleSemanticSearch() {
-    if (!semanticQuery.trim()) return
-    setIsSearchingSemantic(true)
-    try {
-      const results = await semanticSearch(semanticQuery.trim())
-      setSemanticResults(results)
-    } catch {
-      setSemanticResults([])
-    } finally {
-      setIsSearchingSemantic(false)
-    }
   }
 
   async function handleUploadPaper(files: FileList | null) {
@@ -297,19 +279,16 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
     const userMsg: LocalMessage = { role: 'user', content: text }
     const updatedMessages = [...messages, userMsg]
     setMessages(updatedMessages)
-    const requestText = [
-      `会话模式：${chatMode}`,
-      `回答风格：${answerStyle}`,
-      `输出格式：${outputFormat}`,
-      `分析深度：${deepAnalysis ? '深度分析' : '常规回答'}`,
-      `依据范围：${paperOnly ? '仅基于当前论文和已关联上下文回答，不足则明确说明' : '可结合论文库与通用学术知识回答'}`,
-      '',
-      text,
-    ].join('\n')
 
     setIsLoading(true)
     try {
-      const { reply } = await sendSessionMessage(sessionId, requestText, selectedPaperId, selectedModel)
+      const { reply } = await sendSessionMessage(sessionId, text, selectedPaperId, selectedModel, {
+        chat_mode: chatMode,
+        answer_style: answerStyle,
+        output_format: outputFormat,
+        deep_analysis: deepAnalysis,
+        paper_only: paperOnly,
+      })
       const finalMessages = [...updatedMessages, { role: 'assistant' as const, content: reply }]
       setMessages(finalMessages)
       messageCache.current.set(sessionId, finalMessages)
@@ -420,7 +399,14 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
 
   const getSessionSummary = (session: ChatSessionResponse) => {
     if (session.title === '新对话') return '准备开始新的论文问答'
-    return `讨论${session.paper_id ? '当前论文' : '论文库'}的研究问题`
+    const title = session.title
+    const hasPaper = session.paper_id != null
+    if (/总结|综述|方向/.test(title)) return hasPaper ? '论文综述与方向总结' : '论文库综述与方向分析'
+    if (/方法|框架|实验/.test(title)) return '方法与实验分析'
+    if (/贡献|创新|亮点/.test(title)) return '核心贡献与创新点提炼'
+    if (/不足|局限|改进/.test(title)) return '局限性与改进方向探讨'
+    if (/摘要|提纲|汇报/.test(title)) return '论文摘要与汇报材料'
+    return hasPaper ? '围绕关联论文展开问答' : '基于论文库的学术问答'
   }
 
   const filteredSessions = sessions.filter(session => {
@@ -757,20 +743,6 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
                 引用当前论文
               </button>
               <label>
-                <Icon name="search" />
-                <input
-                  value={semanticQuery}
-                  onChange={event => setSemanticQuery(event.target.value)}
-                  onKeyDown={event => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault()
-                      handleSemanticSearch()
-                    }
-                  }}
-                  placeholder="联网搜索"
-                />
-              </label>
-              <label>
                 <span>模型</span>
                 <select value={selectedModel} onChange={event => setSelectedModel(event.target.value)}>
                   {modelOptions.map(model => <option key={model.value || 'system-default'} value={model.value}>{model.label}</option>)}
@@ -805,28 +777,6 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
                 仅基于当前论文
               </label>
             </div>
-            {semanticResults.length > 0 && (
-              <div className="semantic-results assistant-semantic-results">
-                {semanticResults.map(result => (
-                  <button
-                    type="button"
-                    key={result.paper.id}
-                    className="semantic-result-item"
-                    onClick={() => setSelectedPaperId(result.paper.id)}
-                  >
-                    <span className="semantic-result-copy">
-                      <strong>{result.paper.title}</strong>
-                      {(result.paper.tags ?? []).length > 0 && (
-                        <span className="semantic-result-tags">
-                          {result.paper.tags!.map(tag => <em key={tag}>{tag}</em>)}
-                        </span>
-                      )}
-                    </span>
-                    <span className="semantic-result-score">{(result.similarity * 100).toFixed(1)}%</span>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
           <button
             type="submit"
@@ -843,11 +793,20 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
         <section className="assistant-side-card paper-info-card">
           <h2>论文信息</h2>
           <div className="assistant-paper-info-row">
-            <div className="assistant-paper-thumb" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-              <b />
+            <div className="assistant-paper-thumb">
+              {displayPaper?.representative_image_url ? (
+                <img
+                  src={displayPaper.representative_image_url}
+                  alt={displayPaper.title}
+                  loading="lazy"
+                  onError={e => { e.currentTarget.style.display = 'none' }}
+                />
+              ) : (
+                <div className="assistant-paper-thumb-fallback" aria-hidden="true">
+                  <Icon name="fileText" />
+                  <span>暂无预览</span>
+                </div>
+              )}
             </div>
             <div>
               <strong>{displayPaperTitle}</strong>
@@ -893,7 +852,7 @@ export function AiAssistantShell({ papers }: { papers: Paper[] }) {
         </section>
 
         <section className="assistant-side-card">
-          <h2>相关资源</h2>
+          <h2>{relatedPapers.length > 0 ? '论文库其他论文' : '快捷任务模板'}</h2>
           <div className="assistant-resource-list">
             {relatedPapers.length > 0 ? relatedPapers.map(paper => (
               <button key={paper.id} type="button" onClick={() => setSelectedPaperId(paper.id)}>

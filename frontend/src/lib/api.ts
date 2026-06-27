@@ -419,8 +419,22 @@ export async function deleteChatSession(id: number): Promise<void> {
   await ensureOk(response, '删除失败')
 }
 
-export async function sendSessionMessage(sessionId: number, content: string, paperId?: number | null, model?: string): Promise<{ reply: string }> {
-  const payload: any = { content }
+export interface ChatOptions {
+  chat_mode?: string
+  answer_style?: string
+  output_format?: string
+  deep_analysis?: boolean
+  paper_only?: boolean
+}
+
+export async function sendSessionMessage(
+  sessionId: number,
+  content: string,
+  paperId?: number | null,
+  model?: string,
+  options?: ChatOptions,
+): Promise<{ reply: string }> {
+  const payload: Record<string, unknown> = { content }
   if (paperId !== undefined) {
     // sending -1 will clear it in the backend
     payload.paper_id = paperId === null ? -1 : paperId
@@ -428,7 +442,14 @@ export async function sendSessionMessage(sessionId: number, content: string, pap
   if (model !== undefined) {
     payload.model = model.trim()
   }
-  
+  if (options) {
+    if (options.chat_mode !== undefined) payload.chat_mode = options.chat_mode
+    if (options.answer_style !== undefined) payload.answer_style = options.answer_style
+    if (options.output_format !== undefined) payload.output_format = options.output_format
+    if (options.deep_analysis !== undefined) payload.deep_analysis = options.deep_analysis
+    if (options.paper_only !== undefined) payload.paper_only = options.paper_only
+  }
+
   const response = await fetch(`${API_BASE}/chat/sessions/${sessionId}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
