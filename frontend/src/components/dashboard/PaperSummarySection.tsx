@@ -168,7 +168,7 @@ export function PaperSummarySection({ papers: initialPapers, onOpenPaper, search
       </div>
 
       {/* Paper list / grid */}
-      <div className={`mt-3 ${viewMode === 'grid' ? 'grid grid-cols-2 gap-3' : 'flex flex-col gap-2.5'}`}>
+      <div className={`dash-paper-list mt-3 ${viewMode === 'grid' ? 'grid grid-cols-2 gap-3' : 'flex flex-col gap-2.5'}`}>
         {localPapers.length === 0 ? (
           <EmptyState title="暂无论文" description="今日还没有候选论文，请先生成日报或添加订阅源" icon="inbox" />
         ) : pagedPapers.length > 0 ? (

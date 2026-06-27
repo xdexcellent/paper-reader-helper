@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card'
+import { Input } from '../ui/input'
+import { Button } from '../ui/button'
+import { Badge } from '../ui/badge'
 import { Icon } from '../UiIcon'
+import { cn } from '../../lib/utils'
 import { ZOTERO_PATH_SUGGESTIONS, detectOs, type ZoteroPathSuggestion } from './zoteroPaths'
 
 interface Props {
@@ -33,75 +38,94 @@ export function ZoteroSourceForm({ onScan, loading, error, valueOverride }: Prop
   }, [detectedOs])
 
   return (
-    <div className="zotero-source-form-wrapper">
-      <label className="zotero-source-label" htmlFor="zotero-source-path">
-        <span className="zotero-source-label-title">
-          <Icon name="file" /> Zotero 数据库路径
-        </span>
-        <span className="zotero-source-label-hint">
-          通常名为 <code>zotero.sqlite</code>，可从 Zotero &gt; 设置 &gt; 高级 中查看。
-        </span>
-      </label>
+    <Card className="zotero-source-form rounded-lg border-border/70 bg-card shadow-sm">
+      <CardHeader className="gap-1.5">
+        <CardTitle className="flex items-center gap-2 text-base font-semibold text-foreground">
+          <Icon name="file" className="size-4 text-blue-600" />
+          Zotero 数据库路径
+        </CardTitle>
+        <CardDescription className="text-sm text-muted-foreground">
+          通常名为 <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">zotero.sqlite</code>，可从 Zotero &gt; 设置 &gt; 高级 中查看。
+        </CardDescription>
+      </CardHeader>
 
-      <div className="zotero-source-form">
-        <input
-          id="zotero-source-path"
-          type="text"
-          value={sourcePath}
-          onChange={(e) => setSourcePath(e.target.value)}
-          placeholder="输入 zotero.sqlite 的完整路径"
-          aria-label="Zotero 数据库路径"
-          disabled={loading}
-          autoComplete="off"
-          spellCheck={false}
-        />
-        <button
-          type="button"
-          disabled={loading || !sourcePath.trim()}
-          onClick={() => onScan(sourcePath.trim())}
-          aria-label="扫描 Zotero 数据库"
-        >
-          {loading ? (
-            <>
-              <Icon name="refresh" className="zotero-spin" />
-              扫描中…
-            </>
-          ) : (
-            <>
-              <Icon name="search" />
-              扫描
-            </>
-          )}
-        </button>
-      </div>
-
-      <div className="zotero-source-suggestions" role="group" aria-label="常见默认路径">
-        <span className="zotero-source-suggestions-label">常见路径</span>
-        {suggestions.map((suggestion) => {
-          const isPrimary = suggestion.os === detectedOs
-          return (
-            <button
-              key={suggestion.os}
-              type="button"
-              className={`zotero-path-chip${isPrimary ? ' zotero-path-chip-primary' : ''}`}
-              onClick={() => setSourcePath(suggestion.path)}
-              disabled={loading}
-              title={`填入 ${suggestion.label} 默认路径`}
-            >
-              <span className="zotero-path-chip-os">{suggestion.label}</span>
-              <code className="zotero-path-chip-path">{suggestion.path}</code>
-              {isPrimary && <span className="zotero-path-chip-badge">推荐</span>}
-            </button>
-          )
-        })}
-      </div>
-
-      {error && (
-        <div role="alert" className="zotero-source-error">
-          <Icon name="warning" />
-          <span>{error}</span>
+      <CardContent className="flex flex-col gap-3">
+        <div className="flex gap-2">
+          <Input
+            id="zotero-source-path"
+            type="text"
+            value={sourcePath}
+            onChange={(e) => setSourcePath(e.target.value)}
+            placeholder="输入 zotero.sqlite 的完整路径"
+            aria-label="Zotero 数据库路径"
+            disabled={loading}
+            autoComplete="off"
+            spellCheck={false}
+            className="h-9 flex-1 rounded-lg bg-card font-mono text-sm shadow-sm"
+          />
+          <Button
+            type="button"
+            disabled={loading || !sourcePath.trim()}
+            onClick={() => onScan(sourcePath.trim())}
+            aria-label="扫描 Zotero 数据库"
+            className="h-9 shrink-0 rounded-lg px-4 shadow-sm"
+          >
+            {loading ? (
+              <>
+                <Icon name="refresh" className="size-4 animate-spin" />
+                扫描中…
+              </>
+            ) : (
+              <>
+                <Icon name="search" className="size-4" />
+                扫描
+              </>
+            )}
+          </Button>
         </div>
-      )}
-    </div>
+
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="常见默认路径">
+          <span className="text-xs font-medium text-muted-foreground">常见路径</span>
+          {suggestions.map((suggestion) => {
+            const isPrimary = suggestion.os === detectedOs
+            return (
+              <button
+                key={suggestion.os}
+                type="button"
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors hover:border-blue-500/50 hover:bg-blue-500/5 disabled:opacity-50',
+                  isPrimary
+                    ? 'border-blue-500/50 bg-blue-500/5'
+                    : 'border-border bg-card',
+                )}
+                onClick={() => setSourcePath(suggestion.path)}
+                disabled={loading}
+                title={`填入 ${suggestion.label} 默认路径`}
+              >
+                <span className="font-semibold text-muted-foreground">{suggestion.label}</span>
+                <code className="max-w-[240px] truncate font-mono text-[0.68rem] text-muted-foreground">
+                  {suggestion.path}
+                </code>
+                {isPrimary && (
+                  <Badge className="h-4 rounded-full px-1.5 text-[0.6rem] font-medium tracking-wide">
+                    推荐
+                  </Badge>
+                )}
+              </button>
+            )
+          })}
+        </div>
+
+        {error && (
+          <div
+            className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
+            role="alert"
+          >
+            <Icon name="warning" className="size-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

@@ -33,7 +33,7 @@ export function PrioritySection({ papers, onReadPaper, onViewAll, onAddToProject
       </div>
 
       {/* Paper cards — vertical list in a container */}
-      <div className="rounded-[20px] bg-white p-4 space-y-2" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.03)' }}>
+      <div className="dash-priority-list rounded-[20px] bg-white p-4 space-y-2" style={{ boxShadow: '0 4px 20px rgba(15,23,42,0.03)' }}>
         {displayPapers.map((paper, index) => (
           <PriorityPaperCard
             key={`priority-${paper.rank}`}

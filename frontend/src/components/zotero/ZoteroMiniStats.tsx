@@ -1,4 +1,7 @@
+import { Card, CardContent } from '../ui/card'
 import { Icon } from '../UiIcon'
+import type { IconName } from '../UiIcon'
+import { cn } from '../../lib/utils'
 import type { ZoteroHistoryEntry } from './zoteroHistory'
 
 interface Props {
@@ -22,11 +25,17 @@ function formatShortTime(iso: string): string {
   return date.toLocaleDateString()
 }
 
+const metricToneClasses = [
+  'bg-sky-500/10 text-sky-600',
+  'bg-blue-500/10 text-blue-600',
+  'bg-emerald-500/10 text-emerald-600',
+]
+
 export function ZoteroMiniStats({ zoteroPaperCount, history }: Props) {
   const lastScan = history[0]
   const totalImported = history.reduce((sum, entry) => sum + entry.imported_count, 0)
 
-  const stats: Array<{ icon: React.ComponentProps<typeof Icon>['name']; label: string; value: string; hint?: string }> = [
+  const stats: Array<{ icon: IconName; label: string; value: string; hint?: string }> = [
     {
       icon: 'library',
       label: '来自 Zotero 的论文',
@@ -48,19 +57,37 @@ export function ZoteroMiniStats({ zoteroPaperCount, history }: Props) {
   ]
 
   return (
-    <div className="zotero-mini-stats" role="group" aria-label="Zotero 导入概览">
-      {stats.map((stat) => (
-        <div key={stat.label} className="zotero-mini-stat">
-          <div className="zotero-mini-stat-icon" aria-hidden="true">
-            <Icon name={stat.icon} />
+    <Card className="zotero-mini-stats overflow-hidden rounded-lg border-border/70 bg-card shadow-sm">
+      <CardContent
+        className="grid gap-0 p-0 sm:grid-cols-3"
+        role="group"
+        aria-label="Zotero 导入概览"
+      >
+        {stats.map((stat, index) => (
+          <div
+            key={stat.label}
+            className="flex items-center gap-3 border-border/70 px-5 py-4 first:border-l-0 sm:border-l"
+          >
+            <div
+              className={cn(
+                'flex size-9 shrink-0 items-center justify-center rounded-full',
+                metricToneClasses[index % metricToneClasses.length],
+              )}
+            >
+              <Icon name={stat.icon} className="size-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-muted-foreground">{stat.label}</p>
+              <strong className="mt-1 block text-xl font-semibold leading-none text-foreground">
+                {stat.value}
+              </strong>
+              {stat.hint && (
+                <p className="mt-1 text-xs font-medium text-muted-foreground">{stat.hint}</p>
+              )}
+            </div>
           </div>
-          <div className="zotero-mini-stat-body">
-            <span className="zotero-mini-stat-value">{stat.value}</span>
-            <span className="zotero-mini-stat-label">{stat.label}</span>
-            {stat.hint && <span className="zotero-mini-stat-hint">{stat.hint}</span>}
-          </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </CardContent>
+    </Card>
   )
 }

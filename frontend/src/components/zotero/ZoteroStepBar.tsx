@@ -1,5 +1,7 @@
+import { Card, CardContent } from '../ui/card'
 import { Icon } from '../UiIcon'
 import type { IconName } from '../UiIcon'
+import { cn } from '../../lib/utils'
 
 export type ZoteroStep = 'source' | 'review' | 'confirm'
 
@@ -46,24 +48,50 @@ export function ZoteroStepBar({ current, completed = [] }: Props) {
   const activeIndex = STEPS.find((s) => s.id === current)?.index ?? 1
 
   return (
-    <ol className="zotero-step-bar" aria-label="Zotero 导入流程">
-      {STEPS.map((step) => {
-        const isCurrent = step.id === current
-        const isCompleted = completed.includes(step.id) || step.index < activeIndex
-        const state = isCompleted ? 'completed' : isCurrent ? 'current' : 'upcoming'
-        return (
-          <li key={step.id} className={`zotero-step zotero-step-${state}`} aria-current={isCurrent ? 'step' : undefined}>
-            <div className="zotero-step-marker" aria-hidden="true">
-              {isCompleted ? <Icon name="check" /> : <Icon name={step.icon} />}
-            </div>
-            <div className="zotero-step-body">
-              <span className="zotero-step-index">第 {step.index} 步</span>
-              <strong className="zotero-step-title">{step.title}</strong>
-              <span className="zotero-step-desc">{step.description}</span>
-            </div>
-          </li>
-        )
-      })}
-    </ol>
+    <Card className="zotero-step-bar rounded-lg border-border/70 bg-card shadow-sm">
+      <CardContent className="p-0">
+        <ol
+          className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3"
+          aria-label="Zotero 导入流程"
+        >
+          {STEPS.map((step) => {
+            const isCurrent = step.id === current
+            const isCompleted = completed.includes(step.id) || step.index < activeIndex
+            const state = isCompleted ? 'completed' : isCurrent ? 'current' : 'upcoming'
+            return (
+              <li
+                key={step.id}
+                className={cn(
+                  'flex items-start gap-3 rounded-lg border p-3 transition-colors',
+                  state === 'current' && 'border-blue-500/50 bg-blue-500/5',
+                  state === 'completed' && 'border-border/70 bg-muted/30',
+                  state === 'upcoming' && 'border-border/70 bg-card opacity-70',
+                )}
+                aria-current={isCurrent ? 'step' : undefined}
+              >
+                <div
+                  className={cn(
+                    'flex size-8 shrink-0 items-center justify-center rounded-full border transition-colors',
+                    state === 'current' && 'border-transparent bg-blue-500 text-white shadow-[0_0_0_4px_rgba(59,130,246,0.2)]',
+                    state === 'completed' && 'border-transparent bg-emerald-500 text-white',
+                    state === 'upcoming' && 'border-border bg-muted/30 text-muted-foreground',
+                  )}
+                  aria-hidden="true"
+                >
+                  {isCompleted ? <Icon name="check" className="size-4" /> : <Icon name={step.icon} className="size-4" />}
+                </div>
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-[0.68rem] font-medium uppercase tracking-wide text-muted-foreground">
+                    第 {step.index} 步
+                  </span>
+                  <strong className="text-sm font-semibold text-foreground">{step.title}</strong>
+                  <span className="text-xs leading-5 text-muted-foreground">{step.description}</span>
+                </div>
+              </li>
+            )
+          })}
+        </ol>
+      </CardContent>
+    </Card>
   )
 }

@@ -218,7 +218,7 @@ export function RecommendationShell({ papers }: { papers: Paper[] }) {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col gap-4 bg-background text-foreground">
-      <header className="flex flex-col gap-4 2xl:flex-row 2xl:items-end 2xl:justify-between">
+      <header className="reco-header flex flex-col gap-4 2xl:flex-row 2xl:items-end 2xl:justify-between">
         <div className="space-y-1.5">
           <h2 className="text-2xl font-semibold leading-8 tracking-normal text-foreground">
             AI 智能推荐
@@ -277,7 +277,7 @@ export function RecommendationShell({ papers }: { papers: Paper[] }) {
         </div>
       </header>
 
-      <Card className="rounded-lg border-border/70 bg-card shadow-sm">
+      <Card className="reco-metrics rounded-lg border-border/70 bg-card shadow-sm">
         <CardContent className="grid gap-0 p-0 sm:grid-cols-2 xl:grid-cols-5" aria-label="推荐概览">
           <DashboardMetric
             icon="fileText"
@@ -324,7 +324,7 @@ export function RecommendationShell({ papers }: { papers: Paper[] }) {
       ) : null}
 
       {viewItems.length === 0 ? (
-        <Card className="rounded-lg border-dashed border-border/70 bg-card">
+        <Card className="reco-empty-state rounded-lg border-dashed border-border/70 bg-card">
           <CardContent className="flex min-h-[260px] flex-col items-center justify-center gap-2 text-center">
             <Icon name="fileText" className="size-8 text-muted-foreground" />
             <h3 className="text-base font-semibold text-foreground">暂无可推荐论文</h3>
@@ -334,7 +334,7 @@ export function RecommendationShell({ papers }: { papers: Paper[] }) {
       ) : (
         <div className="grid min-h-0 gap-4 2xl:grid-cols-[minmax(720px,1fr)_minmax(360px,520px)]">
           <div className="flex min-h-0 flex-col gap-4">
-            <Card className="overflow-hidden rounded-lg border-border/70 bg-card shadow-sm">
+            <Card className="reco-list-card overflow-hidden rounded-lg border-border/70 bg-card shadow-sm">
               <CardHeader className="flex flex-col gap-3 border-b border-border/70 pb-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <CardTitle className="text-lg font-semibold text-foreground">为你推荐的论文</CardTitle>
@@ -399,7 +399,7 @@ export function RecommendationShell({ papers }: { papers: Paper[] }) {
               </CardContent>
             </Card>
 
-            <Card className="rounded-lg border-border/70 bg-card shadow-sm">
+            <Card className="reco-route-card rounded-lg border-border/70 bg-card shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg font-semibold text-foreground">个性化阅读路线图</CardTitle>
                 <CardDescription>按当前推荐列表的可用信息组织处理路径</CardDescription>
@@ -419,7 +419,7 @@ export function RecommendationShell({ papers }: { papers: Paper[] }) {
           </div>
 
           <aside className="grid min-h-0 gap-4 lg:grid-cols-3 2xl:flex 2xl:max-h-[calc(100vh-260px)] 2xl:flex-col">
-            <Card className="overflow-hidden rounded-lg border-border/70 bg-card shadow-sm lg:min-h-[260px] 2xl:min-h-0">
+            <Card className="reco-topic-card overflow-hidden rounded-lg border-border/70 bg-card shadow-sm lg:min-h-[260px] 2xl:min-h-0">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg font-semibold text-foreground">研究方向推荐</CardTitle>
                 <CardDescription>仅从当前推荐论文的真实标签和 AI 标签字段提取</CardDescription>
@@ -435,7 +435,7 @@ export function RecommendationShell({ papers }: { papers: Paper[] }) {
               </CardContent>
             </Card>
 
-            <Card className="overflow-hidden rounded-lg border-border/70 bg-card shadow-sm lg:min-h-[260px] 2xl:min-h-0">
+            <Card className="reco-author-card overflow-hidden rounded-lg border-border/70 bg-card shadow-sm lg:min-h-[260px] 2xl:min-h-0">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg font-semibold text-foreground">相关作者</CardTitle>
                 <CardDescription>仅展示当前推荐论文作者字段，不生成示例姓名</CardDescription>
@@ -451,7 +451,7 @@ export function RecommendationShell({ papers }: { papers: Paper[] }) {
               </CardContent>
             </Card>
 
-            <Card className="overflow-hidden rounded-lg border-border/70 bg-card shadow-sm lg:min-h-[260px] 2xl:min-h-0">
+            <Card className="reco-reason-card overflow-hidden rounded-lg border-border/70 bg-card shadow-sm lg:min-h-[260px] 2xl:min-h-0">
               <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
                 <CardTitle className="text-lg font-semibold text-foreground">推荐理由</CardTitle>
                 {selectedItem ? (

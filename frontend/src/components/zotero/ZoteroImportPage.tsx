@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
+import { Button } from '../ui/button'
+import { Badge } from '../ui/badge'
 import type { ZoteroRunResponse, ZoteroCandidateResponse } from '../../types'
 import {
   scanZotero,
@@ -22,6 +25,9 @@ import {
   clearZoteroHistory,
   type ZoteroHistoryEntry,
 } from './zoteroHistory'
+
+const selectClassName =
+  'h-8 rounded-lg border border-input bg-card px-2.5 text-xs text-foreground shadow-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50'
 
 export function ZoteroImportPage() {
   const [loading, setLoading] = useState(false)
@@ -114,7 +120,7 @@ export function ZoteroImportPage() {
 
   function handleReplayHistory(path: string) {
     setFormOverride(path)
-    // 允许同一路径被多次“重新扫描”
+    // 允许同一路径被多次"重新扫描"
     handleScan(path)
   }
 
@@ -147,7 +153,10 @@ export function ZoteroImportPage() {
   }
 
   return (
-    <div className="zotero-import-page" data-testid="zotero-import-page">
+    <div
+      className="flex min-h-0 flex-1 flex-col gap-4"
+      data-testid="zotero-import-page"
+    >
       <ZoteroMiniStats zoteroPaperCount={zoteroPaperCount} history={history} />
 
       <ZoteroStepBar current={currentStep} completed={completedSteps} />
@@ -171,83 +180,105 @@ export function ZoteroImportPage() {
 
       {candidates.length > 0 && (
         <>
-          <div className="zotero-filter-bar" role="search" aria-label="候选过滤">
-            <select
-              value={filterCollection}
-              onChange={(e) => setFilterCollection(e.target.value)}
-              aria-label="按分类过滤"
-            >
-              <option value="">所有分类</option>
-              {allCollections.map((col) => (
-                <option key={col} value={col}>{col}</option>
-              ))}
-            </select>
-            <select
-              value={filterTag}
-              onChange={(e) => setFilterTag(e.target.value)}
-              aria-label="按标签过滤"
-            >
-              <option value="">所有标签</option>
-              {allTags.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-            <select
-              value={filterAttachmentStatus}
-              onChange={(e) => setFilterAttachmentStatus(e.target.value)}
-              aria-label="按附件状态过滤"
-            >
-              <option value="">全部附件状态</option>
-              <option value="with_attachment">有附件</option>
-              <option value="without_attachment">仅元数据</option>
-            </select>
-            <select
-              value={filterDuplicateStatus}
-              onChange={(e) => setFilterDuplicateStatus(e.target.value)}
-              aria-label="按重复状态过滤"
-            >
-              <option value="">全部</option>
-              <option value="unique">不重复</option>
-              <option value="duplicate">重复</option>
-            </select>
-            <select
-              value={filterWarningStatus}
-              onChange={(e) => setFilterWarningStatus(e.target.value)}
-              aria-label="按警告状态过滤"
-            >
-              <option value="">全部警告状态</option>
-              <option value="no_warning">无警告</option>
-              <option value="warning">有警告</option>
-            </select>
-            <span style={{ fontSize: '0.8rem', marginLeft: 'auto', alignSelf: 'center' }}>
-              共 {candidates.length} 候选，{filteredCandidates.length} 显示，{selectedCount} 已选
-            </span>
-          </div>
+          <Card className="zotero-filter-bar rounded-lg border-border/70 bg-card shadow-sm">
+            <CardHeader className="border-b border-border/70 pb-3">
+              <CardTitle className="flex items-center justify-between gap-3 text-sm font-semibold text-foreground">
+                <span>候选筛选</span>
+                <Badge variant="secondary" className="h-5 rounded-md px-2 text-[0.7rem] font-medium text-muted-foreground">
+                  共 {candidates.length} 候选 · {filteredCandidates.length} 显示 · {selectedCount} 已选
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3">
+              <div
+                className="flex flex-wrap items-center gap-2"
+                role="search"
+                aria-label="候选过滤"
+              >
+                <select
+                  value={filterCollection}
+                  onChange={(e) => setFilterCollection(e.target.value)}
+                  aria-label="按分类过滤"
+                  className={selectClassName}
+                >
+                  <option value="">所有分类</option>
+                  {allCollections.map((col) => (
+                    <option key={col} value={col}>{col}</option>
+                  ))}
+                </select>
+                <select
+                  value={filterTag}
+                  onChange={(e) => setFilterTag(e.target.value)}
+                  aria-label="按标签过滤"
+                  className={selectClassName}
+                >
+                  <option value="">所有标签</option>
+                  {allTags.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+                <select
+                  value={filterAttachmentStatus}
+                  onChange={(e) => setFilterAttachmentStatus(e.target.value)}
+                  aria-label="按附件状态过滤"
+                  className={selectClassName}
+                >
+                  <option value="">全部附件状态</option>
+                  <option value="with_attachment">有附件</option>
+                  <option value="without_attachment">仅元数据</option>
+                </select>
+                <select
+                  value={filterDuplicateStatus}
+                  onChange={(e) => setFilterDuplicateStatus(e.target.value)}
+                  aria-label="按重复状态过滤"
+                  className={selectClassName}
+                >
+                  <option value="">全部</option>
+                  <option value="unique">不重复</option>
+                  <option value="duplicate">重复</option>
+                </select>
+                <select
+                  value={filterWarningStatus}
+                  onChange={(e) => setFilterWarningStatus(e.target.value)}
+                  aria-label="按警告状态过滤"
+                  className={selectClassName}
+                >
+                  <option value="">全部警告状态</option>
+                  <option value="no_warning">无警告</option>
+                  <option value="warning">有警告</option>
+                </select>
+              </div>
+            </CardContent>
+          </Card>
 
           <ZoteroCandidateTable
             candidates={filteredCandidates}
             onSelectionChange={handleSelectionChange}
           />
 
-          <div className="zotero-import-confirm">
-            <label>
-              <input
-                type="checkbox"
-                checked={allowMetadataOnly}
-                onChange={(e) => setAllowMetadataOnly(e.target.checked)}
-                aria-label="允许仅导入元数据"
-              />
-              {' '}允许导入仅有元数据的论文（无PDF附件）
-            </label>
-            <button
-              type="button"
-              disabled={importing || selectedCount === 0}
-              onClick={handleImport}
-              aria-label="确认导入选中的候选"
-            >
-              {importing ? '导入中...' : `确认导入 (${selectedCount})`}
-            </button>
-          </div>
+          <Card className="zotero-import-confirm rounded-lg border-border/70 bg-card shadow-sm">
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+              <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={allowMetadataOnly}
+                  onChange={(e) => setAllowMetadataOnly(e.target.checked)}
+                  aria-label="允许仅导入元数据"
+                  className="size-4 cursor-pointer rounded border-border"
+                />
+                允许导入仅有元数据的论文（无PDF附件）
+              </label>
+              <Button
+                type="button"
+                disabled={importing || selectedCount === 0}
+                onClick={handleImport}
+                aria-label="确认导入选中的候选"
+                className="h-9 rounded-lg bg-blue-600 px-4 text-white shadow-sm hover:bg-blue-700"
+              >
+                {importing ? '导入中...' : `确认导入 (${selectedCount})`}
+              </Button>
+            </CardContent>
+          </Card>
         </>
       )}
 
@@ -255,8 +286,8 @@ export function ZoteroImportPage() {
 
       {/* 保留 sourcePath 以便 run 结束后展示「刚刚扫描了什么」 */}
       {sourcePath && run && candidates.length > 0 && (
-        <p className="zotero-source-echo" aria-hidden="true">
-          已扫描：<code>{sourcePath}</code>
+        <p className="text-xs text-muted-foreground" aria-hidden="true">
+          已扫描：<code className="rounded bg-muted px-1 py-0.5 font-mono">{sourcePath}</code>
         </p>
       )}
     </div>
