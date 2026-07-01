@@ -22,6 +22,7 @@ from app.api.routes.settings import router as settings_router
 from app.api.routes.stats import router as stats_router
 from app.api.routes.subscriptions import router as subscriptions_router
 from app.api.routes.tasks import router as tasks_router
+from app.api.routes.users import router as users_router
 from app.api.routes.zotero import router as zotero_router
 from app.core.auth import get_current_user
 from app.core.config import settings
@@ -154,6 +155,7 @@ app.include_router(agent_router, dependencies=protected_dependencies)
 app.include_router(categories_router, dependencies=protected_dependencies)
 app.include_router(zotero_router, dependencies=protected_dependencies)
 app.include_router(settings_router, dependencies=protected_dependencies)
+app.include_router(users_router, dependencies=protected_dependencies)
 
 storage_path = Path(settings.effective_storage_root)
 storage_path.mkdir(parents=True, exist_ok=True)

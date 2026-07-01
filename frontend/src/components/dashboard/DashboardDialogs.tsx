@@ -3,21 +3,27 @@
  * Uses shadcn/ui Dialog with the dashboard's light design system.
  */
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { useAuth } from '../AuthContext'
 import { showToast } from './DashboardToast'
 import {
   fetchAiProviderModels,
   fetchAiProviderSettings,
   fetchAutomationSettings,
   fetchEasyScholarSettings,
+  fetchUserProfile,
   fetchVenueRanksStatus,
+  changePassword,
   refreshVenueRanks,
   updateAiProviderSettings,
   updateAutomationSettings,
   updateEasyScholarSettings,
+  updateUserProfile,
 } from '../../lib/api'
 import { notifyAiProviderSettingsChanged } from '../../lib/aiModels'
-import type { AiProviderSettings, AutomationSettings, EasyScholarSettings } from '../../types'
+import { notifyUserProfileChanged } from '../../lib/userProfile'
+import type { AiProviderSettings, AutomationSettings, EasyScholarSettings, UserProfile } from '../../types'
 import type { VenueRanksStatus } from '../../lib/api'
 
 // ─── Automation Settings Dialog ─────────────────────────────────────
@@ -745,6 +751,226 @@ export function AddToProjectDialog({ open, onOpenChange, paperTitle }: AddToProj
         <div className="border-t border-[#F1F5F9] px-6 py-3 flex justify-end gap-2">
           <button onClick={() => onOpenChange(false)} className="rounded-lg px-4 py-2 text-[13px] text-[#64748B] hover:bg-[#F8FAFC]">取消</button>
           <button onClick={handleConfirm} className="rounded-lg bg-[#2563EB] px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1d4ed8]">确认</button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── User Profile Dialog ────────────────────────────────────────────
+
+type UserProfileDialogProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+export function UserProfileDialog({ open, onOpenChange }: UserProfileDialogProps) {
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [profile, setProfile] = useState<UserProfile>({ username: '', display_name: '', badge_text: '' })
+  const [displayName, setDisplayName] = useState('')
+  const [badgeText, setBadgeText] = useState('')
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    setLoading(true)
+    fetchUserProfile()
+      .then((data) => {
+        if (cancelled) return
+        setProfile(data)
+        setDisplayName(data.display_name)
+        setBadgeText(data.badge_text)
+      })
+      .catch(() => showToast('加载个人资料失败', 'error'))
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [open])
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      const next = await updateUserProfile({
+        display_name: displayName,
+        badge_text: badgeText,
+      })
+      setProfile(next)
+      setDisplayName(next.display_name)
+      setBadgeText(next.badge_text)
+      notifyUserProfileChanged()
+      showToast('个人资料已保存', 'success')
+      onOpenChange(false)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '保存个人资料失败', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="!max-w-[480px] !rounded-2xl !p-0 !bg-white !text-[#0F172A] !ring-[#E2E8F0]" style={{ background: '#FFFFFF', color: '#0F172A' }}>
+          <DialogHeader className="px-6 pt-5 pb-0">
+            <DialogTitle className="!text-[16px] !font-semibold !text-[#0F172A]">个人资料</DialogTitle>
+            <DialogDescription className="!text-[13px] !text-[#64748B]">设置显示名称与徽章文案</DialogDescription>
+          </DialogHeader>
+          <div className="px-6 py-4 space-y-4">
+            {loading ? (
+              <div className="py-8 text-center text-[13px] text-[#94A3B8]">加载中...</div>
+            ) : (
+              <section className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 space-y-3">
+                <label className="block">
+                  <span className="mb-1 block text-[12px] font-medium text-[#334155]">登录账号</span>
+                  <input
+                    value={profile.username}
+                    readOnly
+                    style={{ background: '#F1F5F9', color: '#94A3B8', borderColor: '#E2E8F0' }}
+                    className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-[13px] outline-none"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-[12px] font-medium text-[#334155]">显示名称</span>
+                  <input
+                    value={displayName}
+                    onChange={(event) => setDisplayName(event.target.value)}
+                    placeholder="留空则显示登录账号"
+                    style={{ background: '#FFFFFF', color: '#334155', borderColor: '#E2E8F0' }}
+                    className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-[13px] outline-none placeholder:text-[#94A3B8] focus:border-[#2563EB]"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-[12px] font-medium text-[#334155]">徽章文案</span>
+                  <input
+                    value={badgeText}
+                    onChange={(event) => setBadgeText(event.target.value)}
+                    placeholder="留空则隐藏徽章"
+                    style={{ background: '#FFFFFF', color: '#334155', borderColor: '#E2E8F0' }}
+                    className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-[13px] outline-none placeholder:text-[#94A3B8] focus:border-[#2563EB]"
+                  />
+                </label>
+              </section>
+            )}
+          </div>
+          <div className="border-t border-[#F1F5F9] px-6 py-3 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setChangePasswordOpen(true)}
+              disabled={loading}
+              className="rounded-lg border border-[#CBD5E1] bg-white px-4 py-2 text-[13px] font-medium text-[#334155] hover:bg-[#F8FAFC] disabled:opacity-50"
+            >
+              修改密码
+            </button>
+            <div className="flex gap-2">
+              <button onClick={() => onOpenChange(false)} className="rounded-lg px-4 py-2 text-[13px] text-[#64748B] hover:bg-[#F8FAFC]">取消</button>
+              <button onClick={handleSave} disabled={loading || saving} className="rounded-lg bg-[#2563EB] px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-50">
+                {saving ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
+    </>
+  )
+}
+
+// ─── Change Password Dialog ─────────────────────────────────────────
+
+type ChangePasswordDialogProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+export function ChangePasswordDialog({ open, onOpenChange }: ChangePasswordDialogProps) {
+  const { logout } = useAuth()
+  const navigate = useNavigate()
+  const [oldPassword, setOldPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!open) {
+      setOldPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    }
+  }, [open])
+
+  async function handleSubmit() {
+    if (newPassword.trim().length < 6) {
+      showToast('新密码长度至少 6 位', 'error')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      showToast('两次输入的新密码不一致', 'error')
+      return
+    }
+    setSubmitting(true)
+    try {
+      await changePassword({ old_password: oldPassword, new_password: newPassword })
+      showToast('密码已修改，请重新登录', 'success')
+      onOpenChange(false)
+      logout()
+      navigate('/')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '修改密码失败', 'error')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="!max-w-[400px] !rounded-2xl !p-0 !bg-white !text-[#0F172A] !ring-[#E2E8F0]" style={{ background: '#FFFFFF', color: '#0F172A' }}>
+        <DialogHeader className="px-6 pt-5 pb-0">
+          <DialogTitle className="!text-[16px] !font-semibold !text-[#0F172A]">修改密码</DialogTitle>
+          <DialogDescription className="!text-[13px] !text-[#64748B]">修改成功后将自动退出，请用新密码重新登录</DialogDescription>
+        </DialogHeader>
+        <div className="px-6 py-4 space-y-3">
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-medium text-[#334155]">旧密码</span>
+            <input
+              type="password"
+              value={oldPassword}
+              onChange={(event) => setOldPassword(event.target.value)}
+              style={{ background: '#FFFFFF', color: '#334155', borderColor: '#E2E8F0' }}
+              className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-[13px] outline-none focus:border-[#2563EB]"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-medium text-[#334155]">新密码</span>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              placeholder="至少 6 位"
+              style={{ background: '#FFFFFF', color: '#334155', borderColor: '#E2E8F0' }}
+              className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-[13px] outline-none placeholder:text-[#94A3B8] focus:border-[#2563EB]"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-medium text-[#334155]">确认新密码</span>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              style={{ background: '#FFFFFF', color: '#334155', borderColor: '#E2E8F0' }}
+              className="w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-[13px] outline-none focus:border-[#2563EB]"
+            />
+          </label>
+        </div>
+        <div className="border-t border-[#F1F5F9] px-6 py-3 flex justify-end gap-2">
+          <button onClick={() => onOpenChange(false)} className="rounded-lg px-4 py-2 text-[13px] text-[#64748B] hover:bg-[#F8FAFC]">取消</button>
+          <button onClick={handleSubmit} disabled={submitting} className="rounded-lg bg-[#2563EB] px-4 py-2 text-[13px] font-medium text-white hover:bg-[#1d4ed8] disabled:opacity-50">
+            {submitting ? '提交中...' : '确认修改'}
+          </button>
         </div>
       </DialogContent>
     </Dialog>

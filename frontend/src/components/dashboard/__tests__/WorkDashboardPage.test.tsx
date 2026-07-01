@@ -71,6 +71,16 @@ vi.mock('recharts', () => ({
   Cell: () => null,
 }))
 
+vi.mock('../../AuthContext', () => ({
+  useAuth: () => ({
+    logout: vi.fn(),
+    isAuthenticated: true,
+    requiresPassword: false,
+    isLoading: false,
+    error: '',
+  }),
+}))
+
 vi.mock('../../../lib/api', () => apiMocks)
 
 const testPapers: Paper[] = [

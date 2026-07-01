@@ -25,6 +25,9 @@ import type {
   AiProviderSettingsUpdate,
   EasyScholarSettings,
   EasyScholarSettingsUpdate,
+  UserProfile,
+  UserProfileUpdate,
+  ChangePasswordPayload,
 } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000'
@@ -552,6 +555,29 @@ export async function updateEasyScholarSettings(payload: EasyScholarSettingsUpda
   return readJson<EasyScholarSettings>(response)
 }
 
+export async function fetchUserProfile(): Promise<UserProfile> {
+  const response = await fetch(`${API_BASE}/users/me`, { headers: getAuthHeaders() })
+  return readJson<UserProfile>(response)
+}
+
+export async function updateUserProfile(payload: UserProfileUpdate): Promise<UserProfile> {
+  const response = await fetch(`${API_BASE}/users/me`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(payload),
+  })
+  return readJson<UserProfile>(response)
+}
+
+export async function changePassword(payload: ChangePasswordPayload): Promise<void> {
+  const response = await fetch(`${API_BASE}/users/me/password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(payload),
+  })
+  await readJson<{ message: string }>(response)
+}
+
 export async function refreshVenueRanks(): Promise<{ message: string; total_venues: number }> {
   const response = await fetch(`${API_BASE}/papers/refresh-venue-ranks`, {
     method: 'POST',
@@ -729,12 +755,20 @@ export async function checkHealth(): Promise<HealthResponse> {
 }
 
 // ─── Agent ──────────────────────────────────────────────────
-export async function createAgentRun(payload: AgentRunCreatePayload): Promise<AgentRunResponse> {
-  const response = await fetch(`${API_BASE}/agent/runs`, {
+export async function createAgentRun(
+  payload: AgentRunCreatePayload,
+  options: { signal?: AbortSignal } = {},
+): Promise<AgentRunResponse> {
+  const init: RequestInit = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(payload),
-  })
+  }
+  if (options.signal) {
+    init.signal = options.signal
+  }
+
+  const response = await fetch(`${API_BASE}/agent/runs`, init)
   return readJson<AgentRunResponse>(response)
 }
 

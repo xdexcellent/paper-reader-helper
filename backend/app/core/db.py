@@ -124,6 +124,8 @@ def _migrate_add_columns() -> None:
         ("automation_settings", "research_keywords", "TEXT DEFAULT ''"),
         ("ai_provider_settings", "available_models_json", "TEXT DEFAULT '[]'"),
         ("papercontent", "block_extraction_error", "TEXT DEFAULT ''"),
+        ("user", "display_name", "TEXT DEFAULT ''"),
+        ("user", "badge_text", "TEXT DEFAULT ''"),
     ]
     with engine.connect() as conn:
         for table, column, col_type in migrations:

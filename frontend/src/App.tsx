@@ -17,6 +17,7 @@ import { SubscriptionPage } from './components/SubscriptionPage'
 import { ZoteroImportPage } from './components/zotero/ZoteroImportPage'
 import { TooltipProvider } from './components/ui/tooltip'
 import { fetchCategories, fetchPapers } from './lib/api'
+import { resolveSidebarBadge, resolveSidebarName, useUserProfile } from './lib/userProfile'
 import type { Category, Paper } from './types'
 
 export default function App() {
@@ -32,6 +33,11 @@ export default function App() {
   const researchProgress = useMemo(
     () => buildResearchProgress(papers),
     [papers],
+  )
+  const { profile } = useUserProfile(isAuthenticated)
+  const sidebarUser = useMemo(
+    () => ({ name: resolveSidebarName(profile), badge: resolveSidebarBadge(profile) }),
+    [profile],
   )
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', 'light')
@@ -77,7 +83,7 @@ export default function App() {
               navigationItems={navigationItems}
               activeItemId=""
               researchProgress={researchProgress}
-              user={{ name: '研究者', badge: '专业版' }}
+              user={sidebarUser}
             />
 
             <div className="workspace-area">
@@ -156,14 +162,14 @@ export default function App() {
                 } />
                 <Route path="/agent" element={
                   <>
-                    <header className="workspace-header">
+                    <header className="workspace-header agent-workspace-header">
                       <div className="workspace-title-block">
                         <h1>文库 Agent</h1>
                         <p>AI 辅助整理你的论文库。选择范围，描述需求，Agent 会建议操作。</p>
                       </div>
                     </header>
                     <div className="workspace-panel">
-                      <AgentWorkspace />
+                      <AgentWorkspace papers={papers} categories={categories} />
                     </div>
                   </>
                 } />

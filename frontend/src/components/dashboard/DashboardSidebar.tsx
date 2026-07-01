@@ -13,14 +13,11 @@ import {
   Download,
   User,
   Settings,
-  Palette,
-  RefreshCw,
   LogOut,
   type LucideIcon,
 } from 'lucide-react'
 import type { NavigationItemData } from './mockData'
-import { showToast } from './DashboardToast'
-import { LiteratureSettingsDialog, PreferencesDialog, UserPreferencesDialog } from './DashboardDialogs'
+import { LiteratureSettingsDialog, PreferencesDialog, UserPreferencesDialog, UserProfileDialog } from './DashboardDialogs'
 
 // --- Types ---
 
@@ -206,6 +203,7 @@ function UserInfoBlock({ name, badge }: { name: string; badge: string }) {
   const [preferencesOpen, setPreferencesOpen] = useState(false)
   const [literatureSettingsOpen, setLiteratureSettingsOpen] = useState(false)
   const [userPreferencesOpen, setUserPreferencesOpen] = useState(false)
+  const [userProfileOpen, setUserProfileOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -229,14 +227,16 @@ function UserInfoBlock({ name, badge }: { name: string; badge: string }) {
         </div>
         <div className="min-w-0">
           <p className="text-sm font-medium text-[#0F172A]">{name}</p>
-          <span className="inline-block rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[10px] font-medium text-[#4F46E5]">
-            {badge}
-          </span>
+          {badge && (
+            <span className="inline-block rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[10px] font-medium text-[#4F46E5]">
+              {badge}
+            </span>
+          )}
         </div>
       </button>
       {menuOpen && (
         <div className="absolute bottom-full left-4 mb-1 w-44 rounded-xl border border-[#E2E8F0] bg-white py-1 shadow-lg z-50">
-          <button onClick={() => { setMenuOpen(false); showToast('个人资料功能开发中', 'info') }} className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[#334155] hover:bg-[#F8FAFC]">
+          <button onClick={() => { setMenuOpen(false); setUserProfileOpen(true) }} className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[#334155] hover:bg-[#F8FAFC]">
             <User size={13} />个人资料
           </button>
           <button onClick={() => { setMenuOpen(false); setPreferencesOpen(true) }} className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[#334155] hover:bg-[#F8FAFC]">
@@ -248,12 +248,6 @@ function UserInfoBlock({ name, badge }: { name: string; badge: string }) {
           <button onClick={() => { setMenuOpen(false); setUserPreferencesOpen(true) }} className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[#334155] hover:bg-[#F8FAFC]">
             <User size={13} />偏好设置
           </button>
-          <button onClick={() => { setMenuOpen(false); showToast('主题切换功能开发中', 'info') }} className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[#334155] hover:bg-[#F8FAFC]">
-            <Palette size={13} />主题设置
-          </button>
-          <button onClick={() => { setMenuOpen(false); showToast('数据同步功能开发中', 'info') }} className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[#334155] hover:bg-[#F8FAFC]">
-            <RefreshCw size={13} />数据同步
-          </button>
           <div className="my-1 border-t border-[#F1F5F9]" />
           <button onClick={() => { setMenuOpen(false); logout(); navigate('/') }} className="flex w-full items-center gap-2 px-3 py-2 text-[12px] text-[#EF4444] hover:bg-red-50">
             <LogOut size={13} />退出登录
@@ -263,6 +257,7 @@ function UserInfoBlock({ name, badge }: { name: string; badge: string }) {
       <PreferencesDialog open={preferencesOpen} onOpenChange={setPreferencesOpen} />
       <LiteratureSettingsDialog open={literatureSettingsOpen} onOpenChange={setLiteratureSettingsOpen} />
       <UserPreferencesDialog open={userPreferencesOpen} onOpenChange={setUserPreferencesOpen} />
+      <UserProfileDialog open={userProfileOpen} onOpenChange={setUserProfileOpen} />
     </div>
   )
 }

@@ -73,6 +73,9 @@ const apiMocks = vi.hoisted(() => ({
   fetchZoteroCandidates: vi.fn(),
   updateCandidateSelection: vi.fn(),
   importZoteroCandidates: vi.fn(),
+  fetchUserProfile: vi.fn(),
+  updateUserProfile: vi.fn(),
+  changePassword: vi.fn(),
 }))
 
 vi.mock('./lib/api', () => apiMocks)
@@ -138,6 +141,11 @@ beforeEach(() => {
     fallback_briefing_date: null,
   })
   apiMocks.fetchBriefingHistory.mockResolvedValue([])
+  apiMocks.fetchUserProfile.mockResolvedValue({
+    username: 'testuser',
+    display_name: '研究者',
+    badge_text: '专业版',
+  })
   apiMocks.updateAutomationSettings.mockResolvedValue({
     enabled: true,
     schedule_time: '12:00',
@@ -401,7 +409,8 @@ test('可以从左下角偏好设置配置系统 AI 供应商', async () => {
   renderApp()
 
   expect(await screen.findByRole('heading', { name: '论文管理' })).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: /研究者/ }))
+  const userButton = await screen.findByRole('button', { name: /研究者/ })
+  fireEvent.click(userButton)
   fireEvent.click(screen.getByRole('button', { name: 'AI 供应商配置' }))
 
   expect(await screen.findByRole('heading', { name: 'AI 供应商配置' })).toBeInTheDocument()

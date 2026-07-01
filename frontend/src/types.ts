@@ -300,6 +300,7 @@ export interface DailyBriefingHistoryItem {
 export type AgentScopeConfig = {
   scope_type: 'whole_library' | 'category' | 'papers' | 'reader_paper'
   category_id?: number | null
+  paper_id?: number | null
   paper_ids?: number[]
 }
 
@@ -416,4 +417,20 @@ export function effectiveRank(paper: Pick<Paper, 'ccf_rank' | 'sci_zone' | 'impa
     sciZone: paper.sci_zone_override?.trim() || paper.sci_zone || '',
     impactFactor: paper.impact_factor_override?.trim() || paper.impact_factor || '',
   }
+}
+
+export type UserProfile = {
+  username: string
+  display_name: string
+  badge_text: string
+}
+
+export type UserProfileUpdate = {
+  display_name?: string
+  badge_text?: string
+}
+
+export type ChangePasswordPayload = {
+  old_password: string
+  new_password: string
 }
