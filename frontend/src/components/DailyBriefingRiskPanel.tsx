@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { AutomationSubscriptionIssue, BriefingFailedItem } from '../types'
+import { isFailedItemRescueEligible, spisStatusLabel } from '../lib/spisRescue'
 import { classifyIssueMessage } from './DailyBriefingShell.helpers'
 import type { FriendlyIssue } from './DailyBriefingShell.helpers'
 import { Icon } from './UiIcon'
@@ -12,6 +13,8 @@ interface RiskPanelBodyProps {
   error: string
   subscriptionIssues: AutomationSubscriptionIssue[]
   failedItems: BriefingFailedItem[]
+  onSpisRescue?: (item: BriefingFailedItem) => void | Promise<void>
+  rescuingPaperId?: number | null
 }
 
 interface GroupedIssue {
@@ -32,7 +35,13 @@ function getIssueCategoryIcon(category: FriendlyIssue['category']): IconName {
   return map[category]
 }
 
-export function DailyBriefingRiskPanel({ error, subscriptionIssues, failedItems }: RiskPanelBodyProps) {
+export function DailyBriefingRiskPanel({
+  error,
+  subscriptionIssues,
+  failedItems,
+  onSpisRescue,
+  rescuingPaperId = null,
+}: RiskPanelBodyProps) {
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
 
   const groupedSubIssues = useMemo<GroupedIssue[]>(() => {
@@ -140,22 +149,37 @@ export function DailyBriefingRiskPanel({ error, subscriptionIssues, failedItems 
               ? failedItems[0].title
               : `今日有 ${failedItems.length} 篇论文下载或解析失败`}
           </p>
-          {failedItems.length > 1 ? (
-            <details className="risk-failed-details">
-              <summary>查看详情</summary>
-              <ul className="risk-source-list">
-                {failedItems.map((item, index) => (
-                  <li key={`${item.title}-${index}`}>
-                    <span className="risk-source-name">{item.title}</span>
+          <details className="risk-failed-details" open={failedItems.length === 1}>
+            <summary>{failedItems.length > 1 ? '查看详情' : '失败详情'}</summary>
+            <ul className="risk-source-list">
+              {failedItems.map((item, index) => {
+                const canRescue = isFailedItemRescueEligible(item)
+                const busy = item.paper_id != null && rescuingPaperId === item.paper_id
+                return (
+                  <li key={`${item.title}-${index}`} className="space-y-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="risk-source-name">{item.title}</span>
+                      {item.spis_status ? (
+                        <Badge variant="outline">{spisStatusLabel(item.spis_status)}</Badge>
+                      ) : null}
+                    </div>
+                    <p className="risk-suggestion">{item.reason || item.spis_reason || '可以在论文库中重试处理'}</p>
+                    {canRescue && onSpisRescue ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={busy || item.paper_id == null}
+                        onClick={() => void onSpisRescue(item)}
+                      >
+                        {busy ? '提交中...' : 'SPIS 补救'}
+                      </Button>
+                    ) : null}
                   </li>
-                ))}
-              </ul>
-            </details>
-          ) : (
-            <p className="risk-suggestion">
-              {failedItems[0].reason || '可以在论文库中重试处理'}
-            </p>
-          )}
+                )
+              })}
+            </ul>
+          </details>
         </li>
       ) : null}
     </ul>

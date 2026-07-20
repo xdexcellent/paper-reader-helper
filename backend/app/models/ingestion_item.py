@@ -29,5 +29,8 @@ class IngestionItem(SQLModel, table=True):
     paper_id: Optional[int] = Field(default=None, foreign_key="paper.id", index=True)
     error_message: Optional[str] = None
     metadata_json: str = "{}"
+    spis_status: str = ""
+    spis_reason: str = ""
+    spis_attempted_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 
 import { effectiveRank, type Category, type PaperDetail, type PaperUpdatePayload, type ReadingStatus } from '../../types'
 import type { AiModelOption } from '../../lib/aiModels'
+import { isMetadataOnlyPaper, isPaperRescueEligible, sourcePdfStatusLabel, spisStatusLabel } from '../../lib/spisRescue'
 import { RankBadge, VenueRankBadges } from '../RankBadge'
 import { StatusBadge } from '../StatusBadge'
 import { Icon } from '../UiIcon'
@@ -15,11 +16,13 @@ type PaperMetadataPanelProps = {
   isRunningParse: boolean
   isRunningSummarize: boolean
   isRunningEmbed: boolean
+  isRunningSpisRescue?: boolean
   selectedModel: string
   modelOptions: AiModelOption[]
   onCategoryChange: (categoryId: number) => Promise<void> | void
   onTagsChange?: (tags: string[]) => Promise<void> | void
   onOpenReader?: (paper: PaperDetail) => void
+  onSpisRescue?: (paper: PaperDetail) => Promise<void> | void
   onMetadataSave?: (payload: PaperUpdatePayload) => Promise<void> | void
   onFavoriteChange?: (favorite: boolean) => Promise<void> | void
   onReadingStateChange?: (payload: {
@@ -110,11 +113,13 @@ export function PaperMetadataPanel({
   isRunningParse,
   isRunningSummarize,
   isRunningEmbed,
+  isRunningSpisRescue = false,
   selectedModel,
   modelOptions,
   onCategoryChange,
   onTagsChange,
   onOpenReader,
+  onSpisRescue,
   onMetadataSave,
   onFavoriteChange,
   onReadingStateChange,
@@ -210,10 +215,13 @@ export function PaperMetadataPanel({
     setMetadata((current) => ({ ...current, [field]: value }))
   }
 
-  const isBusy = isRunningParse || isRunningSummarize || isRunningEmbed
+  const isBusy = isRunningParse || isRunningSummarize || isRunningEmbed || isRunningSpisRescue
   const parseDone = !paper.parse_status || paper.parse_status === 'completed' || paper.parse_status === 'done'
   const summaryDone = !paper.summary_status || paper.summary_status === 'completed' || paper.summary_status === 'done'
   const embedDone = !paper.embedding_status || paper.embedding_status === 'completed' || paper.embedding_status === 'done' || paper.embedding_status === 'unavailable'
+  const metadataOnly = isMetadataOnlyPaper(paper)
+  const canRescue = isPaperRescueEligible(paper)
+  const readerDisabled = metadataOnly || !(paper.local_pdf_path || '').trim()
 
   return (
     <section className="paper-metadata-panel" aria-label="论文详情">
@@ -231,7 +239,15 @@ export function PaperMetadataPanel({
           {paper.parse_status && <StatusBadge value={paper.parse_status} />}
           {paper.summary_status && <StatusBadge value={paper.summary_status} />}
           {paper.embedding_status && <StatusBadge value={paper.embedding_status} />}
+          {paper.source_pdf_status && paper.source_pdf_status !== 'available' ? (
+            <span className="status-badge">{sourcePdfStatusLabel(paper.source_pdf_status)}</span>
+          ) : null}
+          {paper.spis_status ? <span className="status-badge">SPIS {spisStatusLabel(paper.spis_status)}</span> : null}
         </div>
+
+        {paper.spis_reason ? (
+          <p className="mt-2 text-[12px] leading-5 text-[#64748B]">SPIS：{paper.spis_reason}</p>
+        ) : null}
 
         <div className="paper-detail-actions">
           <button
@@ -239,10 +255,23 @@ export function PaperMetadataPanel({
             className="btn btn-primary"
             onClick={() => onOpenReader?.(paper)}
             type="button"
+            disabled={readerDisabled}
+            title={readerDisabled ? '仅元数据条目暂无 PDF，无法打开阅读器' : '打开阅读器'}
           >
             <Icon name="book" />
-            打开阅读器
+            {readerDisabled ? '暂无 PDF' : '打开阅读器'}
           </button>
+          {canRescue ? (
+            <button
+              aria-label="SPIS 补救"
+              className="btn btn-secondary"
+              onClick={() => void onSpisRescue?.(paper)}
+              type="button"
+              disabled={isRunningSpisRescue}
+            >
+              {isRunningSpisRescue ? '提交中...' : 'SPIS 补救'}
+            </button>
+          ) : null}
           <button
             aria-label={paper.favorite ? '取消收藏' : '收藏论文'}
             aria-pressed={paper.favorite ?? false}

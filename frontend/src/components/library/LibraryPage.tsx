@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
-import { createCategory, deletePaper, embedPaper, fetchPaperDetail, parsePaper, summarizePaper, updatePaperCategory, updatePaperTags, uploadPaper, waitForTaskCompletion } from '../../lib/api'
+import { createCategory, deletePaper, embedPaper, fetchPaperDetail, parsePaper, requestSpisRescue, summarizePaper, updatePaperCategory, updatePaperTags, uploadPaper, waitForTaskCompletion } from '../../lib/api'
 import { SYSTEM_DEFAULT_MODEL_VALUE, useAiModelOptions } from '../../lib/aiModels'
 import type { Category, Paper, PaperDetail } from '../../types'
 import { runBulkPaperAction } from './libraryBulkActions'
@@ -44,6 +44,7 @@ export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibra
   const [isRunningParse, setIsRunningParse] = useState(false)
   const [isRunningSummarize, setIsRunningSummarize] = useState(false)
   const [isRunningEmbed, setIsRunningEmbed] = useState(false)
+  const [isRunningSpisRescue, setIsRunningSpisRescue] = useState(false)
   const [isUpdatingCategory, setIsUpdatingCategory] = useState(false)
   const [isRetryingParseFailed, setIsRetryingParseFailed] = useState(false)
   const [isDeletingParseFailed, setIsDeletingParseFailed] = useState(false)
@@ -214,6 +215,34 @@ export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibra
     }
   }
 
+  async function handleSpisRescue(target?: Paper | PaperDetail) {
+    const paper = target ?? detail
+    if (!paper) return
+    setIsRunningSpisRescue(true)
+    setErrorMessage('')
+    try {
+      const result = await requestSpisRescue(paper.id)
+      setFeedbackMessage(result.message || '已提交 SPIS 补救任务')
+      void waitForTaskCompletion(result.task_id, 600000, 2000)
+        .then(async () => {
+          await refreshLibrary()
+          if (selectedPaperId === paper.id || detail?.id === paper.id) {
+            await loadPaperDetail(paper.id, { reset: false, loading: false })
+          }
+          setFeedbackMessage('SPIS 补救任务已完成')
+        })
+        .catch((error) => {
+          setErrorMessage(error instanceof Error ? error.message : 'SPIS 补救任务失败')
+        })
+        .finally(() => {
+          setIsRunningSpisRescue(false)
+        })
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '提交 SPIS 补救失败')
+      setIsRunningSpisRescue(false)
+    }
+  }
+
   async function handleRetryAllParseFailed() {
     setIsRetryingParseFailed(true)
     const { succeeded, failed } = await runBulkPaperAction(parseFailedPapers, (paper) => parsePaper(paper.id))
@@ -264,6 +293,7 @@ export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibra
         isRunningParse={isRunningParse}
         isRunningSummarize={isRunningSummarize}
         isRunningEmbed={isRunningEmbed}
+        isRunningSpisRescue={isRunningSpisRescue}
         selectedModel={selectedModel}
         modelOptions={modelOptions}
         isRetryingParseFailed={isRetryingParseFailed}
@@ -301,7 +331,14 @@ export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibra
         onRefreshDetail={() => detail ? loadPaperDetail(detail.id) : Promise.resolve()}
         onCategoryChange={handlePrimaryCategoryChange}
         onTagsChange={handleTagsChange}
-        onOpenReader={(paper) => navigate(`/paper/${paper.id}/reader`)}
+        onOpenReader={(paper) => {
+          if (!(paper.local_pdf_path || '').trim()) {
+            setErrorMessage('仅元数据 / 待补救条目暂无 PDF，无法打开阅读器')
+            return
+          }
+          navigate(`/paper/${paper.id}/reader`)
+        }}
+        onSpisRescue={handleSpisRescue}
         onMetadataSave={metadataActions.handleMetadataSave}
         onFavoriteChange={metadataActions.handleFavoriteChange}
         onReadingStateChange={metadataActions.handleReadingStateChange}

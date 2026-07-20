@@ -456,6 +456,64 @@ def get_paper(
     )
 
 
+@router.post("/{paper_id}/spis-rescue", status_code=202)
+def rescue_paper_via_spis(paper_id: int, session: Session = Depends(get_session)) -> dict:
+    from app.services.spis_fallback_service import (
+        SpisFallbackService,
+        is_spis_rescue_eligible,
+        SPIS_QUEUED,
+    )
+
+    paper = session.get(Paper, paper_id)
+    if paper is None:
+        raise HTTPException(status_code=404, detail="论文不存在")
+
+    if not is_spis_rescue_eligible(paper):
+        raise HTTPException(
+            status_code=400,
+            detail="当前论文不支持 SPIS 补救（可能已有 PDF，或缺少标题/DOI）",
+        )
+
+    queue = BackgroundTaskQueue()
+    if queue.has_active_task("spis_rescue", paper_id):
+        raise HTTPException(status_code=409, detail="该论文的 SPIS 补救任务正在进行中")
+
+    paper.spis_status = SPIS_QUEUED
+    paper.spis_reason = "已提交 SPIS 补救任务"
+    paper.spis_last_attempt_at = datetime.now(timezone.utc)
+    session.add(paper)
+    session.commit()
+
+    def run_spis_rescue() -> None:
+        from app.core.db import engine
+        from sqlmodel import Session as SyncSession
+        from sqlmodel import select as sync_select
+
+        with SyncSession(engine) as db:
+            p = db.get(Paper, paper_id)
+            if p is None:
+                return
+            item = db.exec(
+                sync_select(IngestionItem)
+                .where(IngestionItem.paper_id == paper_id)
+                .order_by(IngestionItem.id.desc())
+            ).first()
+            try:
+                SpisFallbackService().attempt_for_paper(
+                    db,
+                    p,
+                    item=item,
+                    run_pipeline_on_success=True,
+                    force=True,
+                )
+            except Exception:
+                logger.exception("Background SPIS rescue failed for paper %s", paper_id)
+                raise
+
+    task_id = queue.submit("spis_rescue", run_spis_rescue, paper_id=paper_id)
+    return {"task_id": task_id, "message": "已提交 SPIS 补救任务"}
+
+
 @router.post("/{paper_id}/parse", status_code=202)
 def parse_paper(paper_id: int, session: Session = Depends(get_session)) -> dict:
     paper = session.get(Paper, paper_id)

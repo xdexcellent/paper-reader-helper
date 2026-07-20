@@ -14,6 +14,7 @@ type LibraryDetailStackProps = {
   isRunningParse: boolean
   isRunningSummarize: boolean
   isRunningEmbed: boolean
+  isRunningSpisRescue?: boolean
   selectedModel: string
   modelOptions: AiModelOption[]
   onModelChange: (model: string) => void
@@ -24,6 +25,7 @@ type LibraryDetailStackProps = {
   onCategoryChange: (categoryId: number) => Promise<void> | void
   onTagsChange: (tags: string[]) => Promise<void> | void
   onOpenReader: (paper: PaperDetail) => void
+  onSpisRescue?: (paper: PaperDetail) => Promise<void> | void
   onMetadataSave: (payload: PaperUpdatePayload) => Promise<void> | void
   onFavoriteChange: (favorite: boolean) => Promise<void> | void
   onReadingStateChange: (payload: { reading_status: ReadingStatus; reading_progress: number }) => Promise<void> | void
@@ -40,6 +42,7 @@ export function LibraryDetailStack({
   isRunningParse,
   isRunningSummarize,
   isRunningEmbed,
+  isRunningSpisRescue = false,
   selectedModel,
   modelOptions,
   onModelChange,
@@ -50,6 +53,7 @@ export function LibraryDetailStack({
   onCategoryChange,
   onTagsChange,
   onOpenReader,
+  onSpisRescue,
   onMetadataSave,
   onFavoriteChange,
   onReadingStateChange,
@@ -66,11 +70,13 @@ export function LibraryDetailStack({
         isRunningParse={isRunningParse || detail?.parse_status === 'processing'}
         isRunningSummarize={isRunningSummarize || detail?.summary_status === 'processing'}
         isRunningEmbed={isRunningEmbed || detail?.embedding_status === 'processing'}
+        isRunningSpisRescue={isRunningSpisRescue}
         selectedModel={selectedModel}
         modelOptions={modelOptions}
         onCategoryChange={onCategoryChange}
         onTagsChange={onTagsChange}
         onOpenReader={onOpenReader}
+        onSpisRescue={onSpisRescue}
         onMetadataSave={onMetadataSave}
         onFavoriteChange={onFavoriteChange}
         onReadingStateChange={onReadingStateChange}

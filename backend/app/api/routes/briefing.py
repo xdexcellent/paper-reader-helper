@@ -7,7 +7,6 @@ from app.core.db import get_session
 from app.core.timezone import get_local_today
 from app.models.automation_settings import AutomationSettings
 from app.schemas.briefing import (
-    BriefingFailedItem,
     BriefingPaperItem,
     BriefingProjectItem,
     DailyBriefingHistoryItem,
@@ -85,13 +84,7 @@ def _to_response(
             for item in projects
         ],
         failed_items=[
-            BriefingFailedItem(
-                title=item.title or item.external_id or "未命名候选",
-                source_kind=item.source_kind,
-                canonical_url=item.canonical_url or "",
-                pdf_url=item.pdf_url or "",
-                reason=service.friendly_failure_reason(item.error_message),
-            )
+            service.build_failed_item_response(session, item)
             for item in failed
         ],
     )

@@ -25,6 +25,8 @@ import type {
   AiProviderSettingsUpdate,
   EasyScholarSettings,
   EasyScholarSettingsUpdate,
+  SpisSettings,
+  SpisSettingsUpdate,
   UserProfile,
   UserProfileUpdate,
   ChangePasswordPayload,
@@ -553,6 +555,28 @@ export async function updateEasyScholarSettings(payload: EasyScholarSettingsUpda
     body: JSON.stringify(payload),
   })
   return readJson<EasyScholarSettings>(response)
+}
+
+export async function fetchSpisSettings(): Promise<SpisSettings> {
+  const response = await fetch(`${API_BASE}/automation/spis-settings`, { headers: getAuthHeaders() })
+  return readJson<SpisSettings>(response)
+}
+
+export async function updateSpisSettings(payload: SpisSettingsUpdate): Promise<SpisSettings> {
+  const response = await fetch(`${API_BASE}/automation/spis-settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(payload),
+  })
+  return readJson<SpisSettings>(response)
+}
+
+export async function requestSpisRescue(paperId: number): Promise<{ task_id: string; message: string }> {
+  const response = await fetch(`${API_BASE}/papers/${paperId}/spis-rescue`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  })
+  return readJson<{ task_id: string; message: string }>(response)
 }
 
 export async function fetchUserProfile(): Promise<UserProfile> {

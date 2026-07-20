@@ -450,10 +450,23 @@ class DailyBriefingService:
             return "已完成解析"
         if item is not None and item.status == "deduplicated":
             return "复用已有论文"
+        if paper is not None and (getattr(paper, "spis_status", "") or "") == "recovered":
+            return "SPIS 已补救"
+        if paper is not None and (getattr(paper, "spis_status", "") or "") == "manual_required":
+            return "需人工确认文献求助"
+        if paper is not None and (getattr(paper, "source_pdf_status", "") or "") in {
+            "metadata_only",
+            "restricted",
+        }:
+            if (getattr(paper, "spis_status", "") or "") == "failed":
+                return "SPIS 补救失败"
+            if (getattr(paper, "source_pdf_status", "") or "") == "restricted":
+                return "PDF 受限 / 待补救"
+            return "仅元数据 / 待补救"
         if item is not None and item.status == "skipped_no_pdf":
-            return "仅元数据"
+            return "仅元数据 / 待补救"
         if item is not None and item.status == "skipped_restricted_pdf":
-            return "PDF 受限"
+            return "PDF 受限 / 待补救"
         if item is not None and item.status == "failed":
             return "处理失败"
         if item is not None and item.status == "pending":
@@ -476,10 +489,14 @@ class DailyBriefingService:
             return "论文已完成解析，但中文摘要生成失败，可稍后重试摘要。"
         if paper is not None and paper.parse_status == PipelineStatus.COMPLETED:
             return "论文已完成解析，正在等待摘要生成。"
+        if paper is not None and (getattr(paper, "spis_reason", "") or "").strip():
+            return paper.spis_reason
+        if item is not None and (getattr(item, "spis_reason", "") or "").strip():
+            return item.spis_reason
         if item is not None and item.status == "skipped_no_pdf":
-            return "源站未提供可下载 PDF，暂时无法进入解析流程。"
+            return "源站未提供可下载 PDF，已保留待 SPIS 补救条目。"
         if item is not None and item.status == "skipped_restricted_pdf":
-            return "源站限制直接下载 PDF，已保留候选信息，可通过原文链接手动查看。"
+            return "源站限制直接下载 PDF，已保留待 SPIS 补救条目。"
         if item is not None and item.status == "failed":
             return self._friendly_failure_reason(item.error_message)
         return "该论文已纳入今日订阅结果，供你统一查看。"
@@ -506,7 +523,7 @@ class DailyBriefingService:
             return "抓取或处理过程中出现错误，当前仅保留候选信息。"
         lower = error_message.lower()
         if "no pdf_url" in lower or "no pdf url" in lower:
-            return "源站未提供可下载 PDF，暂时无法进入解析流程。"
+            return "源站未提供可下载 PDF，已保留待 SPIS 补救条目。"
         if (
             "403 forbidden" in lower
             or "401 unauthorized" in lower
@@ -516,7 +533,7 @@ class DailyBriefingService:
             or "http 451" in lower
             or "限制直接下载 pdf" in lower
         ):
-            return "源站限制直接下载 PDF，已保留候选信息，可通过原文链接手动查看。"
+            return "源站限制直接下载 PDF，已保留待 SPIS 补救条目。"
         if "mineru" in lower or "failed to read file" in lower:
             return "PDF 已抓取，但解析服务返回失败，可在论文库中重试解析。"
         if "10061" in error_message or "connecterror" in lower:
@@ -986,27 +1003,90 @@ class DailyBriefingService:
         session: Session,
         daily_run_id: int | None,
     ) -> list[IngestionItem]:
-        """Return all failed paper-type ingestion items for a daily run, sorted by id asc."""
+        """Return failed / rescue-needed paper items for a daily run.
+
+        Includes:
+        - traditional failed items (excluding pure restricted-pdf download errors that
+          already have a dedicated restricted status)
+        - skipped_no_pdf / skipped_restricted_pdf that still need SPIS rescue
+        - items with SPIS manual_required / failed / blocked_global
+        Excludes items already recovered via SPIS.
+        """
         if daily_run_id is None:
             return []
         items = list(
             session.exec(
                 select(IngestionItem)
                 .where(IngestionItem.daily_run_id == daily_run_id)
-                .where(IngestionItem.status == "failed")
                 .where(IngestionItem.artifact_type == "paper")
                 .order_by(IngestionItem.id.asc())
             ).all()
         )
-        return [
-            item
-            for item in items
-            if not _is_restricted_pdf_error(item.error_message)
-        ]
+        result: list[IngestionItem] = []
+        for item in items:
+            spis_status = (getattr(item, "spis_status", "") or "").strip()
+            if spis_status == "recovered":
+                continue
+            if item.status == "failed":
+                if _is_restricted_pdf_error(item.error_message) and not spis_status:
+                    # legacy path without explicit restricted status
+                    result.append(item)
+                    continue
+                if not _is_restricted_pdf_error(item.error_message):
+                    result.append(item)
+                elif spis_status:
+                    result.append(item)
+                continue
+            if item.status in {"skipped_no_pdf", "skipped_restricted_pdf"}:
+                result.append(item)
+                continue
+            if spis_status in {
+                "manual_required",
+                "failed",
+                "blocked_global",
+                "available_for_rescue",
+                "queued",
+                "running",
+            }:
+                result.append(item)
+        return result
 
     def friendly_failure_reason(self, error_message: str | None) -> str:
         """Public wrapper for _friendly_failure_reason so route handlers can format reasons."""
         return self._friendly_failure_reason(error_message)
+
+    def build_failed_item_response(self, session: Session, item: IngestionItem):
+        from app.schemas.briefing import BriefingFailedItem
+        from app.services.spis_fallback_service import is_spis_rescue_eligible
+
+        paper = session.get(Paper, item.paper_id) if item.paper_id is not None else None
+        spis_status = (
+            (getattr(paper, "spis_status", None) or getattr(item, "spis_status", "") or "")
+        ).strip()
+        spis_reason = (
+            (getattr(paper, "spis_reason", None) or getattr(item, "spis_reason", "") or "")
+        ).strip()
+        reason = spis_reason or self._friendly_failure_reason(item.error_message)
+        if item.status == "skipped_no_pdf" and not spis_reason:
+            reason = "源站未提供可下载 PDF，已保留待 SPIS 补救条目。"
+        elif item.status == "skipped_restricted_pdf" and not spis_reason:
+            reason = "源站限制直接下载 PDF，已保留待 SPIS 补救条目。"
+        elif spis_status == "manual_required" and spis_reason:
+            reason = spis_reason
+        elif spis_status == "blocked_global" and spis_reason:
+            reason = spis_reason
+        rescue_eligible = is_spis_rescue_eligible(paper) if paper is not None else False
+        return BriefingFailedItem(
+            title=item.title or item.external_id or "未命名候选",
+            source_kind=item.source_kind,
+            canonical_url=item.canonical_url or "",
+            pdf_url=item.pdf_url or "",
+            reason=reason,
+            paper_id=item.paper_id,
+            spis_status=spis_status,
+            spis_reason=spis_reason,
+            rescue_eligible=rescue_eligible,
+        )
 
 
 def _is_restricted_pdf_error(error_message: str | None) -> bool:

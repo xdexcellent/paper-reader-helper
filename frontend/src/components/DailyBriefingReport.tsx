@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm'
 
 import { Card, CardContent } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import type { DailyBriefingSnapshot } from '../types'
+import type { BriefingFailedItem, DailyBriefingSnapshot } from '../types'
 import {
   cleanMarkdownSummaryLine,
   getHeadingId,
@@ -21,6 +21,8 @@ export function DailyBriefingReport({
   isTodaySelected,
   keywordSummary,
   onOpenPaper,
+  onSpisRescue,
+  rescuingPaperId = null,
   outlineForDisplay,
   outlineItems,
   readOrderText,
@@ -34,6 +36,8 @@ export function DailyBriefingReport({
   isTodaySelected: boolean
   keywordSummary: string
   onOpenPaper: (paperId: number) => void
+  onSpisRescue?: (item: BriefingFailedItem) => void | Promise<void>
+  rescuingPaperId?: number | null
   outlineForDisplay: BriefingOutlineItem[]
   outlineItems: BriefingOutlineItem[]
   readOrderText: string
@@ -150,6 +154,21 @@ export function DailyBriefingReport({
                         <span className="briefing-failed-source">{item.source_kind}</span>
                       </div>
                       <div className="briefing-failed-reason">{item.reason}</div>
+                      {item.spis_status ? (
+                        <div className="briefing-failed-reason">SPIS 状态：{item.spis_status}{item.spis_reason ? ` — ${item.spis_reason}` : ''}</div>
+                      ) : null}
+                      {item.paper_id && (item.rescue_eligible || !item.spis_status || !['recovered', 'queued', 'running'].includes(item.spis_status)) ? (
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            disabled={rescuingPaperId === item.paper_id}
+                            onClick={() => onSpisRescue?.(item)}
+                          >
+                            {rescuingPaperId === item.paper_id ? '提交中...' : 'SPIS 补救'}
+                          </button>
+                        </div>
+                      ) : null}
                     </li>
                   ))}
                 </ul>

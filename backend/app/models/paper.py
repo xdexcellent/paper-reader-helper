@@ -63,6 +63,10 @@ class Paper(SQLModel, table=True):
     category_status: str = CategoryStatus.PENDING_REVIEW
     category_reason: str = ""
     tags_json: str = "[]"
+    source_pdf_status: str = "available"
+    spis_status: str = ""
+    spis_reason: str = ""
+    spis_last_attempt_at: Optional[datetime] = None
     ready_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

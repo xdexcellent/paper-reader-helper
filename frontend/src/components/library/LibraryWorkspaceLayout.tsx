@@ -35,6 +35,7 @@ type LibraryWorkspaceLayoutProps = {
   isRunningParse: boolean
   isRunningSummarize: boolean
   isRunningEmbed: boolean
+  isRunningSpisRescue?: boolean
   selectedModel: string
   modelOptions: AiModelOption[]
   isRetryingParseFailed: boolean
@@ -67,6 +68,7 @@ type LibraryWorkspaceLayoutProps = {
   onCategoryChange: (categoryId: number) => Promise<void>
   onTagsChange: (tags: string[]) => Promise<void>
   onOpenReader: (paper: Paper) => void
+  onSpisRescue?: (paper: Paper | PaperDetail) => Promise<void> | void
   onMetadataSave: (payload: PaperUpdatePayload) => Promise<void> | void
   onFavoriteChange: (favorite: boolean) => Promise<void> | void
   onReadingStateChange: (payload: { reading_status: ReadingStatus; reading_progress: number }) => Promise<void> | void
@@ -98,6 +100,7 @@ export function LibraryWorkspaceLayout({
   isRunningParse,
   isRunningSummarize,
   isRunningEmbed,
+  isRunningSpisRescue = false,
   selectedModel,
   modelOptions,
   isRetryingParseFailed,
@@ -130,6 +133,7 @@ export function LibraryWorkspaceLayout({
   onCategoryChange,
   onTagsChange,
   onOpenReader,
+  onSpisRescue,
   onMetadataSave,
   onFavoriteChange,
   onReadingStateChange,
@@ -192,6 +196,8 @@ export function LibraryWorkspaceLayout({
             onClearSelection={onClearPaperSelection}
             onOpenAgentForSelected={onOpenAgentForSelected}
             onDelete={onDeletePaper}
+            onSpisRescue={onSpisRescue}
+            isRunningSpisRescue={isRunningSpisRescue}
           />
           <LibraryDetailStack
             detail={detail}
@@ -203,6 +209,7 @@ export function LibraryWorkspaceLayout({
             isRunningParse={isRunningParse}
             isRunningSummarize={isRunningSummarize}
             isRunningEmbed={isRunningEmbed}
+            isRunningSpisRescue={isRunningSpisRescue}
             selectedModel={selectedModel}
             modelOptions={modelOptions}
             onModelChange={onModelChange}
@@ -213,6 +220,7 @@ export function LibraryWorkspaceLayout({
             onCategoryChange={onCategoryChange}
             onTagsChange={onTagsChange}
             onOpenReader={onOpenReader}
+            onSpisRescue={onSpisRescue}
             onMetadataSave={onMetadataSave}
             onFavoriteChange={onFavoriteChange}
             onReadingStateChange={onReadingStateChange}

@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Drawer, DrawerContent, DrawerClose } from '@/components/ui/drawer'
 import { FileText, Clock, Zap, AlertTriangle, ChevronDown, ChevronUp, ExternalLink, X, RefreshCw, BookOpen } from 'lucide-react'
-import type { DailyBriefingSnapshot, Paper } from '../../types'
+import type { BriefingFailedItem, DailyBriefingSnapshot, Paper } from '../../types'
 import {
   getBriefingHighlights,
   getBriefingKeywords,
@@ -14,6 +14,8 @@ import {
   getBriefingGeneratedTime,
   cleanMarkdownSummaryLine,
 } from '../DailyBriefingShell.helpers'
+import { requestSpisRescue, waitForTaskCompletion } from '../../lib/api'
+import { isFailedItemRescueEligible, spisStatusLabel } from '../../lib/spisRescue'
 import { showToast } from './DashboardToast'
 
 type DailyReportDrawerProps = {
@@ -25,6 +27,7 @@ type DailyReportDrawerProps = {
   error: string
   onGenerateReport: () => void
   runningToday: boolean
+  onRescueSubmitted?: () => void
 }
 
 /** Extract structured sections from the briefing markdown */
@@ -83,9 +86,11 @@ export function DailyReportDrawer({
   error,
   onGenerateReport,
   runningToday,
+  onRescueSubmitted,
 }: DailyReportDrawerProps) {
   const navigate = useNavigate()
   const [expandedPapers, setExpandedPapers] = useState<Set<number>>(new Set())
+  const [rescuingPaperId, setRescuingPaperId] = useState<number | null>(null)
 
   const highlights = useMemo(() => {
     if (!briefing) return []
@@ -125,6 +130,28 @@ export function DailyReportDrawer({
     }
     navigate(`/paper/${paperId}`)
     onOpenChange(false)
+  }
+
+  async function handleSpisRescue(item: BriefingFailedItem) {
+    if (!item.paper_id || rescuingPaperId != null) return
+    setRescuingPaperId(item.paper_id)
+    try {
+      const result = await requestSpisRescue(item.paper_id)
+      showToast(result.message || '已提交 SPIS 补救任务', 'success')
+      onRescueSubmitted?.()
+      void waitForTaskCompletion(result.task_id, 600000, 2000)
+        .then(() => {
+          showToast('SPIS 补救任务已完成', 'success')
+          onRescueSubmitted?.()
+        })
+        .catch((err) => {
+          showToast(err instanceof Error ? err.message : 'SPIS 补救任务失败', 'error')
+        })
+        .finally(() => setRescuingPaperId(null))
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '提交 SPIS 补救失败', 'error')
+      setRescuingPaperId(null)
+    }
   }
 
   return (
@@ -371,13 +398,32 @@ export function DailyReportDrawer({
                       <AlertTriangle size={14} className="text-[#F97316]" />
                       风险提示
                     </h3>
-                    <ul className="space-y-1.5">
-                      {briefing.failed_items.map((item, index) => (
-                        <li key={index} className="text-[12px] text-[#64748B]">
-                          <span className="font-medium text-[#334155]">{item.title}</span>
-                          {item.reason && <span className="ml-2 text-[#94A3B8]">— {item.reason}</span>}
-                        </li>
-                      ))}
+                    <ul className="space-y-2">
+                      {briefing.failed_items.map((item, index) => {
+                        const canRescue = isFailedItemRescueEligible(item)
+                        const busy = item.paper_id != null && rescuingPaperId === item.paper_id
+                        return (
+                          <li key={index} className="rounded-lg border border-orange-100 bg-white/70 px-3 py-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="text-[12px] font-medium text-[#334155]">{item.title}</span>
+                              {item.spis_status ? (
+                                <span className="shrink-0 text-[11px] text-[#F97316]">{spisStatusLabel(item.spis_status)}</span>
+                              ) : null}
+                            </div>
+                            {item.reason && <div className="mt-1 text-[12px] text-[#94A3B8]">{item.reason}</div>}
+                            {canRescue ? (
+                              <button
+                                type="button"
+                                className="mt-2 rounded-md border border-[#FDBA74] px-2.5 py-1 text-[11px] text-[#C2410C] hover:bg-[#FFF7ED] disabled:opacity-50"
+                                disabled={busy || item.paper_id == null}
+                                onClick={() => void handleSpisRescue(item)}
+                              >
+                                {busy ? '提交中...' : 'SPIS 补救'}
+                              </button>
+                            ) : null}
+                          </li>
+                        )
+                      })}
                     </ul>
                   </section>
                 )}

@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import logging
+import os
 import re
 from datetime import date, datetime, time, timezone
 from pathlib import Path
@@ -18,7 +19,7 @@ from app.services.http_client_factory import get_http_client
 from app.core.timezone import get_timezone
 from app.models.daily_run import DailyRun
 from app.models.ingestion_item import IngestionItem
-from app.models.paper import Paper
+from app.models.paper import Paper, PaperStatus, PipelineStatus
 from app.models.subscription import Subscription
 from app.services.automation_settings_service import AutomationSettingsService
 from app.services.category_service import initialize_pending_category
@@ -26,6 +27,19 @@ from app.services.daily_briefing_service import DailyBriefingService
 from app.services.pipeline import PaperPipelineService
 from app.services.source_adapters.base import SourceCandidate
 from app.services.source_adapters.registry import get_adapter
+from app.services.spis_fallback_service import (
+    SOURCE_PDF_AVAILABLE,
+    SOURCE_PDF_METADATA_ONLY,
+    SOURCE_PDF_RESTRICTED,
+    SPIS_AVAILABLE_FOR_RESCUE,
+    SPIS_BLOCKED_GLOBAL,
+    SPIS_FAILED,
+    SPIS_MANUAL_REQUIRED,
+    SPIS_RECOVERED,
+    SpisFallbackService,
+    is_metadata_only_paper,
+)
+from app.services.spis_settings_service import SpisSettingsService
 from app.services.storage import StorageService
 from app.services.venue_enrichment_service import batch_backfill_missing_venues
 from app.services.venue_rank_service import apply_system_rank
@@ -124,25 +138,31 @@ def _filter_candidates_with_pdf(
     raw_candidates: list,
     fetch_limit: int,
 ) -> list:
-    """硬过滤：论文类候选必须有 pdf_url，否则直接丢弃不参与后续处理。
+    """过滤候选：项目原样保留；论文优先保留有 pdf_url 的条目。
 
-    DBLP / Crossref / 部分 RSS 源只提供元数据，没有可下载 PDF 链接；之前会建立
-    IngestionItem 并进入处理流程再失败，污染"论文处理失败"面板。这里在入口处就
-    把它们过滤掉，不计入 candidates_total、不建 IngestionItem，也不做去重匹配。
-
-    项目类候选 (artifact_type == "project") 不依赖 pdf_url，原样保留。
+    无 pdf_url 但具备标题/DOI 的论文候选仍保留，供后续 SPIS fallback / 元数据占位。
+    既无 pdf_url 又无标题/DOI 的论文候选直接丢弃。
     """
     projects: list = []
     papers_with_pdf: list = []
+    papers_metadata_only: list = []
 
     for candidate in raw_candidates:
         if candidate.artifact_type == "project":
             projects.append(candidate)
-        elif candidate.pdf_url:
+            continue
+        if candidate.pdf_url:
             papers_with_pdf.append(candidate)
+            continue
+        doi = str((candidate.metadata or {}).get("doi") or "").strip()
+        title = (candidate.title or "").strip()
+        if title or doi:
+            papers_metadata_only.append(candidate)
 
     paper_slots = max(fetch_limit - len(projects), 0)
-    return projects[:fetch_limit] + papers_with_pdf[:paper_slots]
+    # Prefer downloadable PDFs, then metadata-only rescue candidates.
+    selected_papers = (papers_with_pdf + papers_metadata_only)[:paper_slots]
+    return projects[:fetch_limit] + selected_papers
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -174,6 +194,8 @@ class DailyIngestionService:
         pipeline_service: PaperPipelineService | None = None,
         settings_loader: Callable[[Session], object] | None = None,
         storage_service: StorageService | None = None,
+        spis_service: SpisFallbackService | None = None,
+        spis_service_factory: Callable[[], SpisFallbackService] | None = None,
     ) -> None:
         self.session = session
         self.adapter_resolver = adapter_resolver or get_adapter
@@ -182,6 +204,9 @@ class DailyIngestionService:
         self._pipeline_service = pipeline_service
         self.settings_loader = settings_loader or AutomationSettingsService.get_settings
         self.storage_service = storage_service or StorageService()
+        self._spis_service = spis_service
+        self.spis_service_factory = spis_service_factory or SpisFallbackService
+        self._spis_global_blocker_recorded = False
 
     def run_for_date(self, run_date: date, trigger_type: str = "scheduled") -> DailyRun:
         if self.session is not None:
@@ -247,6 +272,8 @@ class DailyIngestionService:
 
     def _execute_pipeline(self, run: DailyRun, settings: object, stats: dict[str, int]) -> DailyRun:
         try:
+            self._spis().reset_run_state()
+            self._spis_global_blocker_recorded = False
             self._update_progress(run, 5, "正在加载订阅列表...")
             subscriptions = list(
                 self.session.exec(
@@ -426,13 +453,22 @@ class DailyIngestionService:
             self._save(progress_run, refresh=True)
 
         candidates = _filter_candidates_with_pdf(raw_candidates, subscription.fetch_limit)
-        dropped_no_pdf = len(raw_candidates) - len(candidates)
-        if dropped_no_pdf > 0:
-            stats["skipped_no_pdf_url"] = stats.get("skipped_no_pdf_url", 0) + dropped_no_pdf
+        dropped_no_signal = 0
+        for candidate in raw_candidates:
+            if candidate.artifact_type == "project":
+                continue
+            if candidate.pdf_url:
+                continue
+            doi = str((candidate.metadata or {}).get("doi") or "").strip()
+            title = (candidate.title or "").strip()
+            if not title and not doi:
+                dropped_no_signal += 1
+        if dropped_no_signal > 0:
+            stats["skipped_no_pdf_url"] = stats.get("skipped_no_pdf_url", 0) + dropped_no_signal
             logger.info(
-                "Subscription '%s': dropped %d candidate(s) without pdf_url, kept %d",
+                "Subscription '%s': dropped %d candidate(s) without pdf_url/title/doi, kept %d",
                 subscription.name,
-                dropped_no_pdf,
+                dropped_no_signal,
                 len(candidates),
             )
 
@@ -476,12 +512,13 @@ class DailyIngestionService:
             self._write_item_status(item, "processed")
             return
         existing = self._find_existing_paper(candidate)
-        if existing is not None:
+        if existing is not None and not is_metadata_only_paper(existing):
             stats["deduplicated"] += 1
             item.paper_id = existing.id
             _emit("已存在，跳过")
             self._write_item_status(item, "deduplicated")
             return
+        placeholder = existing if is_metadata_only_paper(existing) else None
         if not candidate.pdf_url:
             doi = (candidate.metadata or {}).get("doi", "")
             if doi:
@@ -493,8 +530,17 @@ class DailyIngestionService:
 
         if not candidate.pdf_url:
             stats["skipped_no_pdf_url"] += 1
-            _emit("源站未提供 PDF，跳过")
-            self._write_item_status(item, "skipped_no_pdf", "No pdf_url available for candidate.")
+            _emit("源站未提供 PDF，尝试 SPIS 补救")
+            self._handle_pdf_unavailable(
+                item,
+                candidate,
+                stats,
+                status="skipped_no_pdf",
+                error_message="No pdf_url available for candidate.",
+                source_pdf_status=SOURCE_PDF_METADATA_ONLY,
+                existing_placeholder=placeholder,
+                progress_emit=_emit,
+            )
             return
         paper: Paper | None = None
         try:
@@ -502,11 +548,23 @@ class DailyIngestionService:
 
             def skip_restricted_pdf(exc: Exception) -> None:
                 stats["skipped_restricted_pdf"] = stats.get("skipped_restricted_pdf", 0) + 1
-                _emit("源站限制 PDF，跳过解析")
-                self._write_item_status(item, "skipped_restricted_pdf", str(exc))
+                _emit("源站限制 PDF，尝试 SPIS 补救")
+                self._handle_pdf_unavailable(
+                    item,
+                    candidate,
+                    stats,
+                    status="skipped_restricted_pdf",
+                    error_message=str(exc),
+                    source_pdf_status=SOURCE_PDF_RESTRICTED,
+                    existing_placeholder=placeholder,
+                    progress_emit=_emit,
+                )
 
             try:
-                paper = self._create_paper_from_candidate(candidate)
+                if placeholder is not None:
+                    paper = self._hydrate_placeholder_with_pdf(placeholder, candidate)
+                else:
+                    paper = self._create_paper_from_candidate(candidate)
             except RestrictedPdfError as restricted_exc:
                 skip_restricted_pdf(restricted_exc)
                 return
@@ -519,7 +577,10 @@ class DailyIngestionService:
                     if alt_pdf and alt_pdf != candidate.pdf_url:
                         candidate.pdf_url = alt_pdf
                         try:
-                            paper = self._create_paper_from_candidate(candidate)
+                            if placeholder is not None:
+                                paper = self._hydrate_placeholder_with_pdf(placeholder, candidate)
+                            else:
+                                paper = self._create_paper_from_candidate(candidate)
                         except Exception as alt_download_exc:
                             if _is_restricted_pdf_exception(alt_download_exc):
                                 skip_restricted_pdf(alt_download_exc)
@@ -536,7 +597,13 @@ class DailyIngestionService:
                 else:
                     raise download_exc
 
-            stats["papers_imported"] += 1
+            if placeholder is None:
+                stats["papers_imported"] += 1
+            paper.source_pdf_status = SOURCE_PDF_AVAILABLE
+            paper.spis_status = ""
+            paper.spis_reason = ""
+            self.session.add(paper)
+            self.session.commit()
             item.paper_id = paper.id
             self._write_item_status(item, "pending")
             _emit("MinerU 解析中")
@@ -554,6 +621,158 @@ class DailyIngestionService:
             _emit(f"失败: {str(exc)[:50]}")
             self._write_item_status(item, "failed", str(exc))
 
+    def _handle_pdf_unavailable(
+        self,
+        item: IngestionItem,
+        candidate: SourceCandidate,
+        stats: dict[str, int],
+        *,
+        status: str,
+        error_message: str,
+        source_pdf_status: str,
+        existing_placeholder: Paper | None = None,
+        progress_emit: Callable[[str], None] | None = None,
+    ) -> None:
+        def _emit(label: str) -> None:
+            if progress_emit is not None:
+                progress_emit(label)
+
+        metadata = candidate.metadata or {}
+        doi = str(metadata.get("doi") or "").strip()
+        title = (candidate.title or "").strip()
+        if not doi and not title:
+            self._write_item_status(item, status, error_message)
+            return
+
+        paper = existing_placeholder
+        if paper is None:
+            paper = self._create_placeholder_paper(
+                candidate,
+                source_pdf_status=source_pdf_status,
+            )
+            stats["papers_imported"] = stats.get("papers_imported", 0) + 1
+        else:
+            paper.source_pdf_status = source_pdf_status or paper.source_pdf_status or SOURCE_PDF_METADATA_ONLY
+            if not paper.spis_status:
+                paper.spis_status = SPIS_AVAILABLE_FOR_RESCUE
+            paper.spis_reason = paper.spis_reason or "待 SPIS 补救"
+            self.session.add(paper)
+            self.session.commit()
+            self.session.refresh(paper)
+
+        item.paper_id = paper.id
+        self._write_item_status(item, status, error_message)
+
+        spis_settings = SpisSettingsService.get_settings(self.session)
+        if not spis_settings.enabled:
+            paper.spis_status = SPIS_AVAILABLE_FOR_RESCUE
+            paper.spis_reason = "SPIS fallback 未启用，已保留待补救条目"
+            item.spis_status = SPIS_AVAILABLE_FOR_RESCUE
+            item.spis_reason = paper.spis_reason
+            self.session.add(paper)
+            self.session.add(item)
+            self.session.commit()
+            return
+
+        spis = self._spis()
+        if spis.global_blocker is not None:
+            self._record_spis_global_blocker(stats, spis.global_blocker.reason)
+            paper.spis_status = SPIS_BLOCKED_GLOBAL
+            paper.spis_reason = spis.global_blocker.reason
+            item.spis_status = SPIS_BLOCKED_GLOBAL
+            item.spis_reason = spis.global_blocker.reason
+            self.session.add(paper)
+            self.session.add(item)
+            self.session.commit()
+            return
+
+        _emit("SPIS 补救中")
+        year = None
+        if candidate.published_at is not None:
+            year = candidate.published_at.year
+        result = spis.attempt_for_candidate(
+            self.session,
+            title=title,
+            authors=candidate.authors or "",
+            year=year,
+            doi=doi,
+            paper=paper,
+            item=item,
+            run_pipeline_on_success=True,
+        )
+        if result.global_blocker:
+            self._record_spis_global_blocker(stats, result.reason)
+            _emit(f"SPIS 全局阻塞: {result.reason[:40]}")
+            return
+        if result.status == SPIS_RECOVERED:
+            stats["processed_papers"] = stats.get("processed_papers", 0) + 1
+            stats["spis_recovered"] = stats.get("spis_recovered", 0) + 1
+            _emit("SPIS 补救成功")
+            return
+        if result.status == SPIS_MANUAL_REQUIRED:
+            stats["spis_manual_required"] = stats.get("spis_manual_required", 0) + 1
+            _emit("SPIS 需人工确认文献求助")
+            return
+        if result.status == SPIS_FAILED:
+            stats["spis_failed"] = stats.get("spis_failed", 0) + 1
+            _emit(f"SPIS 失败: {result.reason[:40]}")
+            return
+        _emit(f"SPIS: {result.reason[:40]}")
+
+    def _create_placeholder_paper(
+        self,
+        candidate: SourceCandidate,
+        *,
+        source_pdf_status: str,
+    ) -> Paper:
+        metadata = candidate.metadata or {}
+        venue = (
+            metadata.get("venue")
+            or metadata.get("journal")
+            or metadata.get("publication_title")
+            or ""
+        )
+        doi = str(metadata.get("doi") or "").strip()
+        year = None
+        if candidate.published_at is not None:
+            year = candidate.published_at.year
+        return self._spis().create_placeholder_paper(
+            self.session,
+            title=candidate.title or candidate.external_id or "Untitled",
+            authors=candidate.authors or "",
+            abstract_raw=candidate.abstract_raw or "",
+            source=candidate.source_kind,
+            source_id=candidate.external_id or None,
+            pdf_url=candidate.pdf_url or "",
+            canonical_url=candidate.canonical_url or "",
+            published_at=candidate.published_at,
+            doi=doi,
+            venue=venue,
+            year=year,
+            source_pdf_status=source_pdf_status,
+            spis_status=SPIS_AVAILABLE_FOR_RESCUE,
+            spis_reason="待 SPIS 补救",
+        )
+
+    def _record_spis_global_blocker(self, stats: dict, reason: str) -> None:
+        if self._spis_global_blocker_recorded:
+            return
+        self._spis_global_blocker_recorded = True
+        issues = stats.setdefault("subscription_issues", [])
+        if not isinstance(issues, list):
+            issues = []
+            stats["subscription_issues"] = issues
+        issues.append(
+            {
+                "subscription_id": 0,
+                "subscription_name": "SPIS fallback",
+                "source_kind": "spis",
+                "severity": "error",
+                "message": f"SPIS 全局前置条件失败，已停止本轮剩余候选的 SPIS 尝试：{reason}",
+            }
+        )
+        stats["spis_blocked_global"] = True
+
     def _compute_scheduled_for(self, run_date: date, schedule_time: str, timezone_name: str) -> datetime:
         hour_text, minute_text = schedule_time.split(":", maxsplit=1)
         local_dt = datetime.combine(
@@ -562,6 +781,9 @@ class DailyIngestionService:
         return local_dt.astimezone(timezone.utc)
 
     def _find_existing_paper(self, candidate: SourceCandidate) -> Paper | None:
+        """Find an existing paper. Metadata-only placeholders are returned so callers
+        can reuse them instead of treating them as terminal dedup hits.
+        """
         if candidate.external_id:
             paper = self.session.exec(
                 select(Paper).where(Paper.source == candidate.source_kind, Paper.source_id == candidate.external_id)
@@ -578,7 +800,15 @@ class DailyIngestionService:
             paper = self._paper_from_items(pdf_url=candidate.pdf_url)
             if paper is not None:
                 return paper
+        doi = str((candidate.metadata or {}).get("doi") or "").strip()
+        if doi:
+            paper = self.session.exec(select(Paper).where(Paper.doi == doi)).first()
+            if paper is not None:
+                return paper
         if candidate.canonical_url:
+            paper = self.session.exec(select(Paper).where(Paper.url == candidate.canonical_url)).first()
+            if paper is not None:
+                return paper
             paper = self._paper_from_items(canonical_url=candidate.canonical_url)
             if paper is not None:
                 return paper
@@ -612,17 +842,20 @@ class DailyIngestionService:
 
     def _try_unpaywall_pdf(self, doi: str) -> str:
         email = os.environ.get("UNPAYWALL_EMAIL") or os.environ.get("OPENALEX_EMAIL") or "user@example.com"
+        client = None
         try:
-            client = get_http_client(follow_redirects=True, timeout=15.0)
+            client = get_http_client(follow_redirects=True, timeout=5.0)
             response = client.get(f"https://api.unpaywall.org/v2/{doi}", params={"email": email})
             response.raise_for_status()
             data = response.json()
-            client.close()
             best_oa = data.get("best_oa_location") or {}
             return best_oa.get("url_for_pdf") or best_oa.get("url") or ""
         except Exception as exc:
             logger.debug("Unpaywall lookup failed for %s: %s", doi, exc)
             return ""
+        finally:
+            if client is not None:
+                client.close()
 
     def _download_pdf_bytes(self, pdf_url: str) -> bytes:
         _BLOCKED = ('dl.acm.org', 'ieeexplore.ieee.org', 'onlinelibrary.wiley.com',
@@ -663,12 +896,56 @@ class DailyIngestionService:
             published_at=candidate.published_at,
             local_pdf_path=local_pdf_path,
             venue=venue,
+            source_pdf_status=SOURCE_PDF_AVAILABLE,
         )
         if venue:
             paper.venue_resolution_status = "resolved"
             paper.venue_resolution_note = "source_metadata"
         apply_system_rank(paper, self.session)
         initialize_pending_category(self.session, paper, reason=PENDING_REASON)
+        self._save(paper, refresh=True)
+        return paper
+
+    def _hydrate_placeholder_with_pdf(self, paper: Paper, candidate: SourceCandidate) -> Paper:
+        """Reuse a metadata-only placeholder when a PDF later becomes available."""
+        local_pdf_path = self.storage_service.import_uploaded_pdf(
+            _build_storage_filename(candidate), io.BytesIO(self.pdf_downloader(candidate.pdf_url))
+        )
+        metadata = candidate.metadata or {}
+        venue = (
+            metadata.get("venue")
+            or metadata.get("journal")
+            or metadata.get("publication_title")
+            or paper.venue
+            or ""
+        )
+        paper.local_pdf_path = local_pdf_path
+        paper.pdf_url = candidate.pdf_url or paper.pdf_url
+        paper.source_pdf_status = SOURCE_PDF_AVAILABLE
+        # 源站/Unpaywall 直接补齐 PDF 时，清空待补救标记。
+        paper.spis_status = ""
+        paper.spis_reason = ""
+        if candidate.title:
+            paper.title = candidate.title
+        if candidate.authors:
+            paper.authors = candidate.authors
+        if candidate.abstract_raw:
+            paper.abstract_raw = candidate.abstract_raw
+        if candidate.published_at is not None:
+            paper.published_at = candidate.published_at
+            paper.year = candidate.published_at.year
+        doi = str(metadata.get("doi") or "").strip()
+        if doi:
+            paper.doi = doi
+        if candidate.canonical_url:
+            paper.url = candidate.canonical_url
+        if venue and not paper.venue:
+            paper.venue = venue
+            paper.venue_resolution_status = "resolved"
+            paper.venue_resolution_note = "source_metadata"
+        paper.status = PaperStatus.QUEUED
+        paper.parse_status = PipelineStatus.PENDING
+        paper.summary_status = PipelineStatus.PENDING
         self._save(paper, refresh=True)
         return paper
 
@@ -707,5 +984,10 @@ class DailyIngestionService:
         if self._pipeline_service is None:
             self._pipeline_service = self.pipeline_factory()
         return self._pipeline_service
+
+    def _spis(self) -> SpisFallbackService:
+        if self._spis_service is None:
+            self._spis_service = self.spis_service_factory()
+        return self._spis_service
 
 

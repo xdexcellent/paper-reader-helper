@@ -19,9 +19,11 @@ from app.schemas.automation import (
     AutomationSettingsUpdate,
     AutomationTodayStatusResponse,
 )
+from app.schemas.spis_settings import SpisSettingsResponse, SpisSettingsUpdate
 from app.services.automation_settings_service import AutomationSettingsService
 from app.services.daily_briefing_service import DailyBriefingService
 from app.services.daily_ingestion import DailyIngestionService
+from app.services.spis_settings_service import SpisSettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +85,22 @@ def update_automation_settings(
         payload.model_dump(exclude_unset=True),
     )
     return AutomationSettingsResponse.model_validate(settings)
+
+
+@router.get("/spis-settings", response_model=SpisSettingsResponse)
+def get_spis_settings(
+    db: Session = Depends(get_session),
+) -> SpisSettingsResponse:
+    return SpisSettingsResponse(**SpisSettingsService.to_response(db))
+
+
+@router.put("/spis-settings", response_model=SpisSettingsResponse)
+def update_spis_settings(
+    payload: SpisSettingsUpdate,
+    db: Session = Depends(get_session),
+) -> SpisSettingsResponse:
+    SpisSettingsService.update_settings(db, payload.model_dump(exclude_unset=True))
+    return SpisSettingsResponse(**SpisSettingsService.to_response(db))
 
 
 @router.post("/runs/today", response_model=AutomationRunResponse, status_code=202)

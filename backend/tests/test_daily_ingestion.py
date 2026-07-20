@@ -19,6 +19,8 @@ from app.services.category_service import ensure_default_categories
 from app.services.daily_briefing_service import DailyBriefingService
 from app.services.daily_ingestion import DailyIngestionService
 from app.services.source_adapters.base import SourceCandidate
+from app.services.spis_fallback_service import SpisFallbackResult, SpisFallbackService
+from app.services.spis_settings_service import SpisSettingsService
 from app.services.storage import StorageService
 
 
@@ -70,6 +72,63 @@ def session_factory():
     with Session(engine) as session:
         ensure_default_categories(session)
     yield engine
+
+
+@pytest.fixture(autouse=True)
+def _stub_network_side_effects(monkeypatch):
+    """Avoid real network during daily ingestion tests (Unpaywall / venue backfill / ranks / LLM)."""
+    monkeypatch.setattr(DailyIngestionService, "_try_unpaywall_pdf", lambda self, doi: "")
+    monkeypatch.setattr(
+        "app.services.daily_ingestion.batch_backfill_missing_venues",
+        lambda *args, **kwargs: {"total": 0, "resolved": 0, "no_source": 0, "no_match": 0, "error": 0},
+    )
+    monkeypatch.setattr(
+        DailyIngestionService,
+        "_try_resume_pending_venue_ranks",
+        lambda self: None,
+    )
+
+    def _fast_briefing(self, session, run, **kwargs):
+        from app.models.daily_briefing import DailyBriefing, DailyBriefingPaperItem
+        from app.models.paper import Paper
+        from sqlmodel import select as sql_select
+
+        papers = list(session.exec(sql_select(Paper)).all())
+        briefing = DailyBriefing(
+            daily_run_id=run.id,
+            briefing_date=run.run_date,
+            status="completed",
+            generated_at=datetime.now(timezone.utc),
+            top_n=kwargs.get("top_n") or 5,
+            summary_markdown="# 测试日报\n",
+            paper_count=len(papers),
+            project_count=0,
+            source_count=kwargs.get("source_count_override") or 0,
+            fallback_used=False,
+        )
+        session.add(briefing)
+        session.commit()
+        session.refresh(briefing)
+        for index, paper in enumerate(papers, start=1):
+            session.add(
+                DailyBriefingPaperItem(
+                    briefing_id=briefing.id,
+                    daily_briefing_id=briefing.id,
+                    paper_id=paper.id,
+                    rank=index,
+                    rank_order=index,
+                    score=float(100 - index),
+                    reason="测试候选",
+                    summary_text=paper.title or "",
+                    source_kind=paper.source or "",
+                    title=paper.title or "",
+                )
+            )
+        session.commit()
+        session.refresh(briefing)
+        return briefing
+
+    monkeypatch.setattr(DailyBriefingService, "generate_for_run", _fast_briefing)
 
 
 def _configure_settings(
@@ -232,10 +291,19 @@ def test_run_for_date_backfills_new_paper_venue_after_completion(monkeypatch, se
         published_at=datetime(2026, 4, 18, 8, 0, tzinfo=timezone.utc),
     )
 
-    monkeypatch.setattr(
-        "app.services.venue_enrichment_service.fetch_arxiv_paper",
-        lambda _arxiv_id, raise_on_error=True: {"journal_ref": "Nature"},
-    )
+    def fake_backfill(session, paper_ids=None, **kwargs):
+        for paper_id in paper_ids or []:
+            paper = session.get(Paper, paper_id)
+            if paper is None:
+                continue
+            paper.venue = "Nature"
+            paper.venue_resolution_status = "resolved"
+            paper.venue_resolution_note = "resolved_from_arxiv_journal_ref"
+            session.add(paper)
+        session.commit()
+        return {"total": len(paper_ids or []), "resolved": len(paper_ids or []), "no_source": 0, "no_match": 0, "error": 0}
+
+    monkeypatch.setattr("app.services.daily_ingestion.batch_backfill_missing_venues", fake_backfill)
 
     with Session(session_factory) as session:
         _configure_settings(session)
@@ -262,13 +330,23 @@ def test_run_for_date_resumes_pending_venue_ranks_after_backfill(monkeypatch, se
     )
     resumed: list[str] = []
 
+    def fake_backfill(session, paper_ids=None, **kwargs):
+        for paper_id in paper_ids or []:
+            paper = session.get(Paper, paper_id)
+            if paper is None:
+                continue
+            paper.venue = "Cell"
+            paper.venue_resolution_status = "resolved"
+            paper.venue_resolution_note = "resolved_from_arxiv_journal_ref"
+            session.add(paper)
+        session.commit()
+        return {"total": len(paper_ids or []), "resolved": len(paper_ids or []), "no_source": 0, "no_match": 0, "error": 0}
+
+    monkeypatch.setattr("app.services.daily_ingestion.batch_backfill_missing_venues", fake_backfill)
     monkeypatch.setattr(
-        "app.services.venue_enrichment_service.fetch_arxiv_paper",
-        lambda _arxiv_id, raise_on_error=True: {"journal_ref": "Cell"},
-    )
-    monkeypatch.setattr(
-        "app.services.venue_rank_service.batch_refresh_venue_ranks",
-        lambda _session, _api_key: resumed.append(_api_key) or {"total": 1, "success": 1, "no_data": 0, "error": 0, "pending": 0, "stopped_reason": ""},
+        DailyIngestionService,
+        "_try_resume_pending_venue_ranks",
+        lambda self: resumed.append("k-test"),
     )
 
     with Session(session_factory) as session:
@@ -284,7 +362,7 @@ def test_run_for_date_resumes_pending_venue_ranks_after_backfill(monkeypatch, se
     assert resumed == ["k-test"]
 
 
-def test_run_for_date_drops_rss_candidate_without_pdf_url_even_if_title_matches_existing(
+def test_run_for_date_dedups_rss_candidate_without_pdf_url_when_existing_paper_matches(
     session_factory, tmp_path: Path
 ) -> None:
     candidate = SourceCandidate(
@@ -352,16 +430,19 @@ def test_run_for_date_drops_rss_candidate_without_pdf_url_even_if_title_matches_
 
     assert len(papers) == 1
     assert papers[0].id == existing_paper.id
-    assert items == []
+    assert len(items) == 1
+    assert items[0].status == "deduplicated"
+    assert items[0].paper_id == existing_paper.id
     stats = json.loads(run.stats_json)
-    assert stats["skipped_no_pdf_url"] == 1
-    assert stats["deduplicated"] == 0
-    assert stats["candidates_total"] == 0
+    assert stats["skipped_no_pdf_url"] == 0
+    assert stats["deduplicated"] == 1
+    assert stats["candidates_total"] == 1
 
 
-def test_run_for_date_drops_candidate_without_pdf_url_before_processing(
+def test_run_for_date_creates_metadata_placeholder_for_candidate_without_pdf_url(
     session_factory,
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
     candidate = SourceCandidate(
         artifact_type="paper",
@@ -371,7 +452,10 @@ def test_run_for_date_drops_candidate_without_pdf_url_before_processing(
         authors="Alice",
         abstract_raw="Missing PDF",
         canonical_url="https://openreview.net/forum?id=or-note-1",
+        metadata={"doi": "10.1234/no-pdf"},
     )
+
+    monkeypatch.setattr(DailyIngestionService, "_try_unpaywall_pdf", lambda self, doi: "")
 
     with Session(session_factory) as session:
         _configure_settings(session)
@@ -385,18 +469,27 @@ def test_run_for_date_drops_candidate_without_pdf_url_before_processing(
         run = service.run_for_date(date(2026, 4, 18))
         papers = session.exec(select(Paper)).all()
         items = session.exec(select(IngestionItem).where(IngestionItem.daily_run_id == run.id)).all()
+        failed_items = DailyBriefingService().get_failed_items_for_run(session, run.id)
 
-    assert papers == []
-    assert items == []
+    assert len(papers) == 1
+    assert papers[0].local_pdf_path == ""
+    assert papers[0].source_pdf_status == "metadata_only"
+    assert papers[0].spis_status == "available_for_rescue"
+    assert len(items) == 1
+    assert items[0].status == "skipped_no_pdf"
+    assert items[0].paper_id == papers[0].id
+    assert len(failed_items) == 1
+    assert failed_items[0].paper_id == papers[0].id
     stats = json.loads(run.stats_json)
     assert stats["failed_items"] == 0
     assert stats["skipped_no_pdf_url"] == 1
-    assert stats["candidates_total"] == 0
+    assert stats["candidates_total"] == 1
 
 
-def test_run_for_date_skips_restricted_pdf_without_failed_risk_item(
+def test_run_for_date_skips_restricted_pdf_and_creates_rescue_placeholder(
     session_factory,
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
     candidate = SourceCandidate(
         artifact_type="paper",
@@ -408,13 +501,13 @@ def test_run_for_date_skips_restricted_pdf_without_failed_risk_item(
         canonical_url="https://doi.org/10.1234/restricted",
         pdf_url="https://publisher.example.com/paper.pdf",
         published_at=datetime(2026, 4, 18, 8, 0, tzinfo=timezone.utc),
+        metadata={"doi": "10.1234/restricted"},
     )
 
     def restricted_download(url: str) -> bytes:
-        request = httpx.Request("GET", url)
-        response = httpx.Response(403, request=request)
-        response.raise_for_status()
-        return b""
+        raise daily_ingestion_module.RestrictedPdfError(f"源站限制直接下载 PDF：{url}")
+
+    monkeypatch.setattr(DailyIngestionService, "_try_unpaywall_pdf", lambda self, doi: "")
 
     with Session(session_factory) as session:
         _configure_settings(session)
@@ -427,26 +520,32 @@ def test_run_for_date_skips_restricted_pdf_without_failed_risk_item(
         )
 
         run = service.run_for_date(date(2026, 4, 18))
+        papers = session.exec(select(Paper)).all()
         items = session.exec(select(IngestionItem).where(IngestionItem.daily_run_id == run.id)).all()
         failed_items = DailyBriefingService().get_failed_items_for_run(session, run.id)
 
+    assert len(papers) == 1
+    assert papers[0].local_pdf_path == ""
+    assert papers[0].source_pdf_status == "restricted"
+    assert papers[0].spis_status == "available_for_rescue"
     assert len(items) == 1
     assert items[0].status == "skipped_restricted_pdf"
-    assert items[0].paper_id is None
-    assert failed_items == []
+    assert items[0].paper_id == papers[0].id
+    assert len(failed_items) == 1
+    assert failed_items[0].paper_id == papers[0].id
     stats = json.loads(run.stats_json)
     assert stats["failed_items"] == 0
     assert stats["skipped_restricted_pdf"] == 1
 
 
-def test_briefing_formats_restricted_pdf_http_errors_as_manual_view_hint() -> None:
+def test_briefing_formats_restricted_pdf_http_errors_as_rescue_hint() -> None:
     service = DailyBriefingService()
 
     assert service.friendly_failure_reason("Client error '401 Unauthorized' for url") == (
-        "源站限制直接下载 PDF，已保留候选信息，可通过原文链接手动查看。"
+        "源站限制直接下载 PDF，已保留待 SPIS 补救条目。"
     )
     assert service.friendly_failure_reason("源站返回 HTTP 451，限制直接下载 PDF：https://example.com/paper.pdf") == (
-        "源站限制直接下载 PDF，已保留候选信息，可通过原文链接手动查看。"
+        "源站限制直接下载 PDF，已保留待 SPIS 补救条目。"
     )
 
 
@@ -704,12 +803,12 @@ def test_run_for_date_populates_stats_json_with_major_counters(session_factory, 
     stats = json.loads(run.stats_json)
     assert stats == {
         "subscriptions_total": 1,
-        "candidates_total": 2,
+        "candidates_total": 4,
         "projects_found": 1,
-        "papers_imported": 1,
-        "deduplicated": 0,
+        "papers_imported": 2,
+        "deduplicated": 1,
         "failed_items": 0,
-        "skipped_no_pdf_url": 2,
+        "skipped_no_pdf_url": 1,
         "skipped_restricted_pdf": 0,
         "processed_papers": 1,
     }
@@ -762,3 +861,151 @@ def test_run_for_date_keeps_openalex_source_venue_metadata(session_factory, tmp_
     assert paper.venue == "Proceedings of the AAAI Conference on Artificial Intelligence"
     assert paper.venue_resolution_status == "resolved"
     assert paper.venue_resolution_note == "source_metadata"
+
+
+class _FakeSpisService:
+    def __init__(self, result: SpisFallbackResult) -> None:
+        self.result = result
+        self.calls: list[str] = []
+        self._global_blocker = None
+        self.reset_calls = 0
+
+    def reset_run_state(self) -> None:
+        self.reset_calls += 1
+        self._global_blocker = None
+
+    @property
+    def global_blocker(self):
+        return self._global_blocker
+
+    def create_placeholder_paper(self, session, **kwargs):
+        return SpisFallbackService().create_placeholder_paper(session, **kwargs)
+
+    def attempt_for_candidate(self, session, **kwargs):
+        title = kwargs.get("title") or ""
+        self.calls.append(title)
+        paper = kwargs.get("paper")
+        item = kwargs.get("item")
+        if self.result.global_blocker:
+            self._global_blocker = self.result
+        if paper is not None:
+            paper.spis_status = self.result.status
+            paper.spis_reason = self.result.reason
+            if self.result.status == "recovered":
+                paper.local_pdf_path = str(kwargs.get("_pdf_path") or "recovered.pdf")
+                paper.source_pdf_status = "available"
+            session.add(paper)
+        if item is not None:
+            item.spis_status = self.result.status
+            item.spis_reason = self.result.reason
+            if paper is not None:
+                item.paper_id = paper.id
+            if self.result.status == "recovered":
+                item.status = "processed"
+                item.error_message = None
+            session.add(item)
+        session.commit()
+        return self.result
+
+
+def test_run_for_date_auto_spis_when_enabled(session_factory, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(DailyIngestionService, "_try_unpaywall_pdf", lambda self, doi: "")
+    candidate = SourceCandidate(
+        artifact_type="paper",
+        source_kind="crossref",
+        external_id="10.1234/auto-spis",
+        title="Auto SPIS Paper",
+        authors="Alice",
+        abstract_raw="Need rescue",
+        canonical_url="https://doi.org/10.1234/auto-spis",
+        pdf_url="https://publisher.example.com/blocked.pdf",
+        published_at=datetime(2026, 4, 18, 8, 0, tzinfo=timezone.utc),
+        metadata={"doi": "10.1234/auto-spis"},
+    )
+
+    def restricted_download(url: str) -> bytes:
+        raise daily_ingestion_module.RestrictedPdfError(f"源站限制直接下载 PDF：{url}")
+
+    fake_spis = _FakeSpisService(
+        SpisFallbackResult(status="recovered", reason="已通过 SPIS 获取 PDF")
+    )
+
+    with Session(session_factory) as session:
+        _configure_settings(session)
+        settings = SpisSettingsService.get_settings(session)
+        settings.enabled = True
+        settings.account = "user"
+        settings.password = "pass"
+        session.add(settings)
+        session.commit()
+        _make_subscription(session, "crossref", query="auto")
+        service = _make_service(
+            session,
+            tmp_path,
+            {"crossref": _FakeAdapter([candidate])},
+            pdf_downloader=restricted_download,
+        )
+        service._spis_service = fake_spis
+        run = service.run_for_date(date(2026, 4, 18))
+        paper = session.exec(select(Paper)).one()
+        item = session.exec(select(IngestionItem).where(IngestionItem.daily_run_id == run.id)).one()
+
+    assert fake_spis.reset_calls == 1
+    assert fake_spis.calls == ["Auto SPIS Paper"]
+    assert paper.spis_status == "recovered"
+    assert item.spis_status == "recovered"
+    stats = json.loads(run.stats_json)
+    assert stats["spis_recovered"] == 1
+
+
+def test_run_for_date_spis_global_blocker_fail_fast(session_factory, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(DailyIngestionService, "_try_unpaywall_pdf", lambda self, doi: "")
+    candidates = [
+        SourceCandidate(
+            artifact_type="paper",
+            source_kind="crossref",
+            external_id=f"10.1/{idx}",
+            title=f"Blocked {idx}",
+            pdf_url=f"https://publisher.example.com/{idx}.pdf",
+            published_at=datetime(2026, 4, 18, 8, 0, tzinfo=timezone.utc),
+            metadata={"doi": f"10.1/{idx}"},
+        )
+        for idx in (1, 2)
+    ]
+
+    def restricted_download(url: str) -> bytes:
+        raise daily_ingestion_module.RestrictedPdfError(f"源站限制直接下载 PDF：{url}")
+
+    fake_spis = _FakeSpisService(
+        SpisFallbackResult(
+            status="blocked_global",
+            reason="SPIS 账号或密码错误，登录失败",
+            global_blocker=True,
+        )
+    )
+
+    with Session(session_factory) as session:
+        _configure_settings(session)
+        settings = SpisSettingsService.get_settings(session)
+        settings.enabled = True
+        settings.account = "bad"
+        settings.password = "bad"
+        session.add(settings)
+        session.commit()
+        _make_subscription(session, "crossref", query="blocked")
+        service = _make_service(
+            session,
+            tmp_path,
+            {"crossref": _FakeAdapter(candidates)},
+            pdf_downloader=restricted_download,
+        )
+        service._spis_service = fake_spis
+        run = service.run_for_date(date(2026, 4, 18))
+        papers = session.exec(select(Paper)).all()
+
+    assert len(fake_spis.calls) == 1
+    assert all(paper.spis_status == "blocked_global" for paper in papers)
+    stats = json.loads(run.stats_json)
+    assert stats.get("spis_blocked_global") is True
+    issues = stats.get("subscription_issues") or []
+    assert any(issue.get("source_kind") == "spis" for issue in issues)

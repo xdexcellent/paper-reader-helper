@@ -1,9 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { fetchAutomationStatusToday, fetchBriefing, fetchBriefingHistory, runTodayBriefing } from '../lib/api'
+import {
+  fetchAutomationStatusToday,
+  fetchBriefing,
+  fetchBriefingHistory,
+  requestSpisRescue,
+  runTodayBriefing,
+  waitForTaskCompletion,
+} from '../lib/api'
 import { Card, CardContent } from '@/components/ui/card'
-import type { AutomationSettings, AutomationTodayStatus, DailyBriefingHistoryItem, DailyBriefingSnapshot, Paper } from '../types'
+import type {
+  AutomationSettings,
+  AutomationTodayStatus,
+  BriefingFailedItem,
+  DailyBriefingHistoryItem,
+  DailyBriefingSnapshot,
+  Paper,
+} from '../types'
 import { DailyBriefingHero } from './DailyBriefingHero'
 import { DailyBriefingReport } from './DailyBriefingReport'
 import { DailyBriefingSidebar } from './DailyBriefingSidebar'
@@ -28,6 +42,8 @@ export function DailyBriefingShell({ papers, onOpenPaper }: {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [activeOutlineId, setActiveOutlineId] = useState('')
   const [isReviewed, setIsReviewed] = useState(false)
+  const [rescuingPaperId, setRescuingPaperId] = useState<number | null>(null)
+  const [rescueFeedback, setRescueFeedback] = useState('')
 
   const serverToday = automationStatus?.local_today ?? clientToday
   const isTodaySelected = selectedDate === serverToday
@@ -140,6 +156,30 @@ export function DailyBriefingShell({ papers, onOpenPaper }: {
       setRunStatus('自动运行完成')
     } else {
       await loadPage(serverToday, { silent: true, preserveCurrent: true })
+    }
+  }
+
+  async function handleSpisRescue(item: BriefingFailedItem) {
+    if (!item.paper_id || rescuingPaperId != null) return
+    setRescuingPaperId(item.paper_id)
+    setRescueFeedback('已提交 SPIS 补救任务')
+    try {
+      const result = await requestSpisRescue(item.paper_id)
+      setRescueFeedback(result.message || '已提交 SPIS 补救任务')
+      void waitForTaskCompletion(result.task_id, 600000, 2000)
+        .then(async () => {
+          setRescueFeedback('SPIS 补救任务已完成')
+          await loadPage(selectedDate, { silent: true, preserveCurrent: true })
+        })
+        .catch((error) => {
+          setRescueFeedback(getErrorMessage(error, 'SPIS 补救任务失败'))
+        })
+        .finally(() => {
+          setRescuingPaperId(null)
+        })
+    } catch (error) {
+      setRescueFeedback(getErrorMessage(error, '提交 SPIS 补救失败'))
+      setRescuingPaperId(null)
     }
   }
 
@@ -271,6 +311,8 @@ export function DailyBriefingShell({ papers, onOpenPaper }: {
           isTodaySelected={isTodaySelected}
           keywordSummary={getBriefingKeywords(briefing, papers).join(' / ')}
           onOpenPaper={openPaperDetail}
+          onSpisRescue={handleSpisRescue}
+          rescuingPaperId={rescuingPaperId}
           outlineForDisplay={outlineForDisplay}
           outlineItems={outlineItems}
           readOrderText={briefing.top_papers.length > 0 ? `先读 ${Math.min(3, briefing.top_papers.length)} 条关键建议，再处理风险` : '先浏览正文，再补充参考资料'}
@@ -286,6 +328,8 @@ export function DailyBriefingShell({ papers, onOpenPaper }: {
           onOpenPaper={openPaperDetail}
           onPrint={() => window.print?.()}
           onShowHistory={() => setIsHistoryOpen(true)}
+          onSpisRescue={handleSpisRescue}
+          rescuingPaperId={rescuingPaperId}
           onToggleReviewed={() => setIsReviewed(true)}
           papers={papers}
           referenceCount={briefing.projects.length}
@@ -293,6 +337,11 @@ export function DailyBriefingShell({ papers, onOpenPaper }: {
           subscriptionIssues={subscriptionIssues}
         />
       </div>
+      {rescueFeedback ? (
+        <div className="mt-3 rounded-lg border border-[#DBEAFE] bg-[#EFF6FF] px-3 py-2 text-[12px] text-[#1D4ED8]">
+          {rescueFeedback}
+        </div>
+      ) : null}
     </section>
   )
 }

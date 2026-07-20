@@ -17,7 +17,9 @@ import {
   fetchPaperBlocks,
   fetchPapers,
   fetchRecommendations,
+  fetchSpisSettings,
   rebuildPaperBlocks,
+  requestSpisRescue,
   runTodayBriefing,
   sendChatMessage,
   sendSessionMessage,
@@ -30,6 +32,7 @@ import {
   updatePaperFavorite,
   updatePaperNotes,
   updatePaperReadingState,
+  updateSpisSettings,
   uploadPaper,
 } from './api'
 
@@ -1017,4 +1020,61 @@ test('importZoteroCandidates sends POST with allow_metadata_only', async () => {
     body: JSON.stringify({ allow_metadata_only: true }),
   })
   expect(result.imported_count).toBe(3)
+})
+
+test('SPIS settings api reads and updates masked credentials', async () => {
+  vi.mocked(fetch)
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        account_set: true,
+        account_preview: 'ca••••er',
+        password_set: true,
+        password_preview: '••••••••',
+        enabled: false,
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        account_set: true,
+        account_preview: 'ca••••er',
+        password_set: true,
+        password_preview: '••••••••',
+        enabled: true,
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+  const current = await fetchSpisSettings()
+  const updated = await updateSpisSettings({ account: 'campus-user', enabled: true })
+
+  expect(fetch).toHaveBeenNthCalledWith(1, 'http://localhost:8000/automation/spis-settings', { headers: {} })
+  expect(fetch).toHaveBeenNthCalledWith(2, 'http://localhost:8000/automation/spis-settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ account: 'campus-user', enabled: true }),
+  })
+  expect(current.enabled).toBe(false)
+  expect(updated.enabled).toBe(true)
+})
+
+test('requestSpisRescue posts to paper rescue endpoint', async () => {
+  vi.mocked(fetch).mockResolvedValueOnce(
+    new Response(JSON.stringify({ task_id: 'abc123', message: '已提交 SPIS 补救任务' }), {
+      status: 202,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  )
+
+  const result = await requestSpisRescue(12)
+
+  expect(fetch).toHaveBeenCalledWith('http://localhost:8000/papers/12/spis-rescue', {
+    method: 'POST',
+    headers: {},
+  })
+  expect(result).toEqual({ task_id: 'abc123', message: '已提交 SPIS 补救任务' })
 })

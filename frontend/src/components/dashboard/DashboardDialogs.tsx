@@ -12,6 +12,7 @@ import {
   fetchAiProviderSettings,
   fetchAutomationSettings,
   fetchEasyScholarSettings,
+  fetchSpisSettings,
   fetchUserProfile,
   fetchVenueRanksStatus,
   changePassword,
@@ -19,11 +20,12 @@ import {
   updateAiProviderSettings,
   updateAutomationSettings,
   updateEasyScholarSettings,
+  updateSpisSettings,
   updateUserProfile,
 } from '../../lib/api'
 import { notifyAiProviderSettingsChanged } from '../../lib/aiModels'
 import { notifyUserProfileChanged } from '../../lib/userProfile'
-import type { AiProviderSettings, AutomationSettings, EasyScholarSettings, UserProfile } from '../../types'
+import type { AiProviderSettings, AutomationSettings, EasyScholarSettings, SpisSettings, UserProfile } from '../../types'
 import type { VenueRanksStatus } from '../../lib/api'
 
 // ─── Automation Settings Dialog ─────────────────────────────────────
@@ -43,6 +45,15 @@ export function AutomationSettingsDialog({ open, onOpenChange }: AutomationDialo
     briefing_enabled: true,
     project_sidebar_enabled: true,
   })
+  const [spisSettings, setSpisSettings] = useState<SpisSettings>({
+    account_set: false,
+    account_preview: '',
+    password_set: false,
+    password_preview: '',
+    enabled: false,
+  })
+  const [spisAccountInput, setSpisAccountInput] = useState('')
+  const [spisPasswordInput, setSpisPasswordInput] = useState('')
   const [loaded, setLoaded] = useState(false)
 
   // Load settings when dialog opens
@@ -50,8 +61,14 @@ export function AutomationSettingsDialog({ open, onOpenChange }: AutomationDialo
     if (loaded) return
     setLoading(true)
     try {
-      const data = await fetchAutomationSettings()
+      const [data, spis] = await Promise.all([
+        fetchAutomationSettings(),
+        fetchSpisSettings(),
+      ])
       setSettings(data)
+      setSpisSettings(spis)
+      setSpisAccountInput(spis.account_preview || '')
+      setSpisPasswordInput(spis.password_preview || '')
       setLoaded(true)
     } catch (e) {
       showToast('加载设置失败', 'error')
@@ -63,9 +80,19 @@ export function AutomationSettingsDialog({ open, onOpenChange }: AutomationDialo
   async function handleSave() {
     setLoading(true)
     try {
-      await updateAutomationSettings(settings)
+      const accountChanged = spisAccountInput.trim() && spisAccountInput.trim() !== spisSettings.account_preview
+      const passwordChanged = spisPasswordInput.trim() && spisPasswordInput.trim() !== spisSettings.password_preview
+      await Promise.all([
+        updateAutomationSettings(settings),
+        updateSpisSettings({
+          account: accountChanged ? spisAccountInput.trim() : undefined,
+          password: passwordChanged ? spisPasswordInput.trim() : undefined,
+          enabled: spisSettings.enabled,
+        }),
+      ])
       showToast('设置已保存', 'success')
       onOpenChange(false)
+      setLoaded(false)
     } catch (e) {
       showToast('保存失败', 'error')
     } finally {
@@ -80,12 +107,12 @@ export function AutomationSettingsDialog({ open, onOpenChange }: AutomationDialo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-[440px] !rounded-2xl !p-0 !bg-white !text-[#0F172A] !ring-[#E2E8F0]" style={{ background: '#FFFFFF', color: '#0F172A' }}>
+      <DialogContent className="!max-w-[480px] !rounded-2xl !p-0 !bg-white !text-[#0F172A] !ring-[#E2E8F0]" style={{ background: '#FFFFFF', color: '#0F172A' }}>
         <DialogHeader className="px-6 pt-5 pb-0">
           <DialogTitle className="!text-[16px] !font-semibold !text-[#0F172A]">自动化设置</DialogTitle>
-          <DialogDescription className="!text-[13px] !text-[#64748B]">配置日报自动生成规则</DialogDescription>
+          <DialogDescription className="!text-[13px] !text-[#64748B]">配置日报自动生成规则与 SPIS 补救</DialogDescription>
         </DialogHeader>
-        <div className="px-6 py-4 space-y-4">
+        <div className="px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
           {loading && !loaded ? (
             <div className="py-8 text-center text-[13px] text-[#94A3B8]">加载中...</div>
           ) : (
@@ -153,6 +180,52 @@ export function AutomationSettingsDialog({ open, onOpenChange }: AutomationDialo
                   className="h-4 w-4 rounded border-[#CBD5E1] text-[#2563EB] focus:ring-[#2563EB]/20"
                 />
               </label>
+
+              <div className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-3 space-y-3">
+                <div>
+                  <div className="text-[13px] font-medium text-[#0F172A]">SPIS fallback</div>
+                  <p className="mt-1 text-[12px] leading-5 text-[#64748B]">
+                    源站 PDF 受限或缺失时，后台可自动尝试 SPIS 补救。默认关闭；保存账号密码后不会自动开启。
+                    第一版不会自动提交文献求助 / 文献传递。
+                  </p>
+                </div>
+                <label className="flex items-center justify-between">
+                  <span className="text-[13px] text-[#334155]">启用后台 SPIS fallback</span>
+                  <input
+                    type="checkbox"
+                    checked={spisSettings.enabled}
+                    onChange={(e) => setSpisSettings({ ...spisSettings, enabled: e.target.checked })}
+                    className="h-4 w-4 rounded border-[#CBD5E1] text-[#2563EB] focus:ring-[#2563EB]/20"
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-[12px] text-[#64748B]">SPIS 账号</span>
+                  <input
+                    type="text"
+                    value={spisAccountInput}
+                    onChange={(e) => setSpisAccountInput(e.target.value)}
+                    placeholder={spisSettings.account_set ? '已保存账号，输入新值可替换' : '输入 SPIS 账号'}
+                    style={{ background: '#FFFFFF', color: '#334155', borderColor: '#E2E8F0' }}
+                    className="w-full rounded-lg border border-[#E2E8F0] px-3 py-1.5 text-[13px] text-[#334155] outline-none focus:border-[#2563EB]"
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-[12px] text-[#64748B]">SPIS 密码</span>
+                  <input
+                    type="password"
+                    value={spisPasswordInput}
+                    onChange={(e) => setSpisPasswordInput(e.target.value)}
+                    placeholder={spisSettings.password_set ? '已保存密码，输入新值可替换' : '输入 SPIS 密码'}
+                    style={{ background: '#FFFFFF', color: '#334155', borderColor: '#E2E8F0' }}
+                    className="w-full rounded-lg border border-[#E2E8F0] px-3 py-1.5 text-[13px] text-[#334155] outline-none focus:border-[#2563EB]"
+                  />
+                </label>
+                <div className="text-[11px] text-[#94A3B8]">
+                  {spisSettings.account_set || spisSettings.password_set
+                    ? `已保存状态：账号 ${spisSettings.account_set ? '已配置' : '未配置'} / 密码 ${spisSettings.password_set ? '已配置' : '未配置'}`
+                    : '尚未保存 SPIS 凭证'}
+                </div>
+              </div>
             </>
           )}
         </div>

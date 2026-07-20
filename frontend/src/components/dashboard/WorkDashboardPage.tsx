@@ -210,6 +210,12 @@ export function WorkDashboardPage({ papers = [], refreshLibrary }: WorkDashboard
         error={dashboard.error}
         onGenerateReport={handleGenerateReport}
         runningToday={dashboard.runningToday}
+        onRescueSubmitted={() => {
+          void dashboard.refresh()
+          if (refreshLibrary) {
+            void refreshLibrary()
+          }
+        }}
       />
 
       <AutomationSettingsDialog open={automationDialogOpen} onOpenChange={setAutomationDialogOpen} />

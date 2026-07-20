@@ -155,6 +155,10 @@ class PaperResponse(BaseModel):
     category_confidence: float = 0.0
     category_reason: str = ""
     tags: list[str] = []
+    source_pdf_status: str = "available"
+    spis_status: str = ""
+    spis_reason: str = ""
+    spis_last_attempt_at: str | None = None
     venue_rank: VenueRankInfo | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -189,9 +193,12 @@ class PaperResponse(BaseModel):
                 'primary_category_id', 'category_status', 'category_confidence',
                 'category_reason', 'ccf_rank', 'sci_zone', 'impact_factor',
                 'ccf_rank_override', 'sci_zone_override', 'impact_factor_override',
+                'source_pdf_status', 'spis_status', 'spis_reason',
             ]:
                 d[field] = getattr(data, field, '')
             d['tags'] = tags
+            spis_last = getattr(data, 'spis_last_attempt_at', None)
+            d['spis_last_attempt_at'] = spis_last.isoformat() if spis_last is not None else None
             d['representative_image_url'] = storage_file_url(
                 getattr(data, 'representative_image_path', ''),
             )
@@ -202,6 +209,8 @@ class PaperResponse(BaseModel):
                 data['representative_image_url'] = storage_file_url(
                     data.get('representative_image_path', ''),
                 )
+            if 'spis_last_attempt_at' in data and hasattr(data['spis_last_attempt_at'], 'isoformat'):
+                data['spis_last_attempt_at'] = data['spis_last_attempt_at'].isoformat()
             return data
 
 

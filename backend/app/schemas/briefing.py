@@ -27,6 +27,10 @@ class BriefingFailedItem(BaseModel):
     canonical_url: str = ""
     pdf_url: str = ""
     reason: str  # human-friendly failure reason
+    paper_id: int | None = None
+    spis_status: str = ""
+    spis_reason: str = ""
+    rescue_eligible: bool = False
 
 
 class DailyBriefingResponse(BaseModel):

@@ -47,6 +47,7 @@ from app.models.daily_run import DailyRun  # noqa: F401
 from app.models.easyscholar_settings import EasyScholarSettings  # noqa: F401
 from app.models.ingestion_item import IngestionItem  # noqa: F401
 from app.models.paper import Paper  # noqa: F401
+from app.models.spis_settings import SpisSettings  # noqa: F401
 from app.models.paper_block import PaperBlock  # noqa: F401
 from app.models.paper_block_translation import PaperBlockTranslation  # noqa: F401
 from app.models.paper_content import PaperContent  # noqa: F401

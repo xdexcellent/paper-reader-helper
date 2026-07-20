@@ -24,6 +24,8 @@ export function DailyBriefingSidebar({
   onOpenPaper,
   onPrint,
   onShowHistory,
+  onSpisRescue,
+  rescuingPaperId = null,
   onToggleReviewed,
   papers,
   referenceCount,
@@ -38,6 +40,8 @@ export function DailyBriefingSidebar({
   onOpenPaper: (paperId: number) => void
   onPrint: () => void
   onShowHistory: () => void
+  onSpisRescue?: (item: BriefingFailedItem) => void | Promise<void>
+  rescuingPaperId?: number | null
   onToggleReviewed: () => void
   papers: Paper[]
   referenceCount: number
@@ -88,7 +92,13 @@ export function DailyBriefingSidebar({
         </CardHeader>
         <CardContent>
           {riskCount > 0 ? (
-            <DailyBriefingRiskPanel error={error} subscriptionIssues={subscriptionIssues} failedItems={failedItems} />
+            <DailyBriefingRiskPanel
+              error={error}
+              subscriptionIssues={subscriptionIssues}
+              failedItems={failedItems}
+              onSpisRescue={onSpisRescue}
+              rescuingPaperId={rescuingPaperId}
+            />
           ) : (
             <p className="text-sm text-muted-foreground py-3 text-center">
               暂无阻断风险，继续按关键建议阅读即可。

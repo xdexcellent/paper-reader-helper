@@ -51,6 +51,10 @@ export type Paper = {
   category_reason?: string
   tags?: string[]
   venue_rank?: VenueRankInfo | null
+  source_pdf_status?: 'available' | 'metadata_only' | 'restricted' | string
+  spis_status?: string
+  spis_reason?: string
+  spis_last_attempt_at?: string | null
 }
 
 export interface VenueRankInfo {
@@ -88,6 +92,20 @@ export interface EasyScholarSettings {
 
 export interface EasyScholarSettingsUpdate {
   api_key?: string
+  enabled?: boolean
+}
+
+export interface SpisSettings {
+  account_set: boolean
+  account_preview: string
+  password_set: boolean
+  password_preview: string
+  enabled: boolean
+}
+
+export interface SpisSettingsUpdate {
+  account?: string
+  password?: string
   enabled?: boolean
 }
 
@@ -266,6 +284,10 @@ export interface BriefingFailedItem {
   canonical_url?: string
   pdf_url?: string
   reason: string
+  paper_id?: number | null
+  spis_status?: string
+  spis_reason?: string
+  rescue_eligible?: boolean
 }
 
 export interface DailyBriefingSnapshot {

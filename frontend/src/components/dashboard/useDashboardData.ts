@@ -199,6 +199,7 @@ export type DashboardData = {
   handleSelectDate: (date: string) => void
   setReadingPlan: (target: number, minutesPerPaper: number) => void
   openPaper: (paperId: number) => void
+  refresh: () => Promise<void>
 }
 
 export function useDashboardData(
@@ -232,45 +233,45 @@ export function useDashboardData(
   const serverToday = automationStatus?.local_today ?? clientToday
 
   // ─── Load data on mount and date change ───
+  async function loadDashboard(targetDate = selectedDate, options?: { silent?: boolean }) {
+    const silent = options?.silent ?? false
+    if (!silent) setLoading(true)
+    setError('')
+    try {
+      const statusData = await fetchAutomationStatusToday()
+      setAutomationStatus(statusData)
+
+      // If a run is currently active, resume polling
+      if (statusData.today_run && isActiveRunStatus(statusData.today_run.status)) {
+        setRunningToday(true)
+        void resumePolling()
+      }
+
+      const [historyResult, briefingResult] = await Promise.allSettled([
+        fetchBriefingHistory(),
+        fetchBriefing(targetDate === statusData.local_today ? undefined : targetDate),
+      ])
+
+      if (historyResult.status === 'fulfilled') setHistory(historyResult.value)
+      if (briefingResult.status === 'fulfilled') {
+        setBriefing(briefingResult.value)
+      } else {
+        setBriefing(null)
+        setError(briefingResult.reason instanceof Error ? briefingResult.reason.message : '加载日报失败')
+      }
+    } catch (e) {
+      setBriefing(null)
+      setError(e instanceof Error ? e.message : '加载失败')
+    } finally {
+      if (!silent) setLoading(false)
+    }
+  }
+
   useEffect(() => {
     let cancelled = false
-    async function load() {
-      setLoading(true)
-      setError('')
-      try {
-        const statusData = await fetchAutomationStatusToday()
-        if (cancelled) return
-        setAutomationStatus(statusData)
-
-        // If a run is currently active, resume polling
-        if (statusData.today_run && isActiveRunStatus(statusData.today_run.status)) {
-          setRunningToday(true)
-          void resumePolling()
-        }
-
-        const [historyResult, briefingResult] = await Promise.allSettled([
-          fetchBriefingHistory(),
-          fetchBriefing(selectedDate === statusData.local_today ? undefined : selectedDate),
-        ])
-
-        if (cancelled) return
-        if (historyResult.status === 'fulfilled') setHistory(historyResult.value)
-        if (briefingResult.status === 'fulfilled') {
-          setBriefing(briefingResult.value)
-        } else {
-          setBriefing(null)
-          setError(briefingResult.reason instanceof Error ? briefingResult.reason.message : '加载日报失败')
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setBriefing(null)
-          setError(e instanceof Error ? e.message : '加载失败')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    void load()
+    void (async () => {
+      if (!cancelled) await loadDashboard(selectedDate)
+    })()
     return () => { cancelled = true }
   }, [selectedDate])
 
@@ -444,5 +445,9 @@ export function useDashboardData(
       localStorage.setItem('dashboard_minutes_per_paper', String(nextMinutesPerPaper))
     },
     openPaper: onOpenPaper,
+    refresh: async () => {
+      await loadDashboard(selectedDate, { silent: true })
+      await refreshLibrary?.()
+    },
   }
 }

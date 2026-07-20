@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 import { FileText } from 'lucide-react'
 import { effectiveRank, type Paper, type ReadingStatus } from '../../types'
+import { isMetadataOnlyPaper, isPaperRescueEligible, sourcePdfStatusLabel, spisStatusLabel } from '../../lib/spisRescue'
 import { RankBadge } from '../RankBadge'
 import { StatusBadge } from '../StatusBadge'
 import { Icon } from '../UiIcon'
@@ -30,6 +31,8 @@ type PaperLibraryListProps = {
   onClearSelection: () => void
   onOpenAgentForSelected: () => void
   onDelete: (paper: Paper) => void | Promise<void>
+  onSpisRescue?: (paper: Paper) => void | Promise<void>
+  isRunningSpisRescue?: boolean
 }
 
 const statusOptions: { value: LibraryStatusFilter; label: string }[] = [
@@ -101,6 +104,8 @@ export function PaperLibraryList({
   onClearSelection,
   onOpenAgentForSelected,
   onDelete,
+  onSpisRescue,
+  isRunningSpisRescue = false,
 }: PaperLibraryListProps) {
   const tags = collectTags(papers)
   const [showAllTags, setShowAllTags] = useState(false)
@@ -313,6 +318,18 @@ export function PaperLibraryList({
                           </>
                         )}
                         <StatusBadge value={paper.status} />
+                        {isMetadataOnlyPaper(paper) ? (
+                          <>
+                            <span className="paper-meta-separator">·</span>
+                            <span className="paper-date">{sourcePdfStatusLabel(paper.source_pdf_status) || '仅元数据 / 待补救'}</span>
+                          </>
+                        ) : null}
+                        {paper.spis_status ? (
+                          <>
+                            <span className="paper-meta-separator">·</span>
+                            <span className="paper-date">SPIS {spisStatusLabel(paper.spis_status)}</span>
+                          </>
+                        ) : null}
                       </span>
                       <span className="paper-item-states" aria-label="论文管理状态">
                         {paper.favorite && (
@@ -339,6 +356,19 @@ export function PaperLibraryList({
                       )}
                     </span>
                   </button>
+                  {onSpisRescue && isPaperRescueEligible(paper) ? (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={isRunningSpisRescue}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        void onSpisRescue(paper)
+                      }}
+                    >
+                      {isRunningSpisRescue && selectedPaperId === paper.id ? '提交中...' : 'SPIS 补救'}
+                    </button>
+                  ) : null}
                   <button
                     aria-label={`删除 ${paper.title}`}
                     className="paper-delete-btn"
