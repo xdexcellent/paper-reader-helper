@@ -112,6 +112,7 @@ describe('reader components', () => {
         paper={paper}
         readingProgress={12}
         readingStatusLabel="阅读中"
+        onOpenAgent={vi.fn()}
       />,
     )
 
@@ -131,6 +132,7 @@ describe('reader components', () => {
       onParse: vi.fn(),
       onPdfRetry: vi.fn(),
       onDrawerToggle: vi.fn(),
+      onOpenAgent: vi.fn(),
     }
     const { rerender } = render(
       <ReaderShell
@@ -194,6 +196,7 @@ describe('reader components', () => {
         onNotesSave={vi.fn()}
         onParse={vi.fn()}
         onPdfRetry={vi.fn()}
+        onOpenAgent={vi.fn()}
         paper={paper}
         pdfError=""
         pdfUrl={null}

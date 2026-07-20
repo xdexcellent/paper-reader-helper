@@ -15,6 +15,7 @@ type LibraryWorkspaceLayoutProps = {
   categoryPapers: Paper[]
   categories: Category[]
   selectedPaperId: number | null
+  selectedPaperIds: number[]
   selectedCategoryId: number | null
   categoryScope: CategoryScope
   isLoadingLibrary: boolean
@@ -54,6 +55,9 @@ type LibraryWorkspaceLayoutProps = {
   onReadingStatusFilterChange: Dispatch<SetStateAction<ReadingStatusFilter>>
   onTagChange: Dispatch<SetStateAction<string | null>>
   onSelectPaper: (paper: Paper) => void
+  onTogglePaperSelection: (paper: Paper) => void
+  onClearPaperSelection: () => void
+  onOpenAgentForSelected: () => void
   onDeletePaper: (paper: Paper) => Promise<void>
   onModelChange: Dispatch<SetStateAction<string>>
   onParse: () => Promise<void>
@@ -74,6 +78,7 @@ export function LibraryWorkspaceLayout({
   categoryPapers,
   categories,
   selectedPaperId,
+  selectedPaperIds,
   selectedCategoryId,
   categoryScope,
   isLoadingLibrary,
@@ -113,6 +118,9 @@ export function LibraryWorkspaceLayout({
   onReadingStatusFilterChange,
   onTagChange,
   onSelectPaper,
+  onTogglePaperSelection,
+  onClearPaperSelection,
+  onOpenAgentForSelected,
   onDeletePaper,
   onModelChange,
   onParse,
@@ -167,6 +175,7 @@ export function LibraryWorkspaceLayout({
           <PaperLibraryList
             papers={categoryPapers}
             selectedPaperId={selectedPaperId}
+            selectedPaperIds={selectedPaperIds}
             isLoading={isLoadingLibrary}
             searchQuery={searchQuery}
             statusFilter={statusFilter}
@@ -179,6 +188,9 @@ export function LibraryWorkspaceLayout({
             onReadingStatusFilterChange={onReadingStatusFilterChange}
             onTagChange={onTagChange}
             onSelect={onSelectPaper}
+            onToggleSelection={onTogglePaperSelection}
+            onClearSelection={onClearPaperSelection}
+            onOpenAgentForSelected={onOpenAgentForSelected}
             onDelete={onDeletePaper}
           />
           <LibraryDetailStack

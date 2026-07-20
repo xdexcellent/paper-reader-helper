@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
-import type { AgentAction, AgentRunResponse, AgentScopeConfig } from '../../types'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
+import { useLocation } from 'react-router-dom'
+import type { AgentAction, AgentRunResponse, AgentScopeConfig, Category, Paper } from '../../types'
 import {
   approveAgentAction,
   batchApproveAgentActions,
+  checkHealth,
   createAgentRun,
   fetchAgentRunDetail,
   fetchAgentRuns,
@@ -14,6 +17,7 @@ import type { IconName } from '../UiIcon'
 import { AgentScopePicker } from './AgentScopePicker'
 import { AgentTracePanel } from './AgentTracePanel'
 import { AgentProposalList } from './AgentProposalList'
+import { normalizeAgentScope } from './agentUtils'
 
 type CapabilityCard = {
   icon: IconName
@@ -26,6 +30,9 @@ type ExamplePrompt = {
   prompt: string
   scope: AgentScopeConfig['scope_type']
 }
+
+const AGENT_REMOTE_AI_CONSENT_KEY = 'agent_remote_ai_consent_v1'
+const MAX_SCOPE_PAPERS = 50
 
 const CAPABILITIES: CapabilityCard[] = [
   {
@@ -46,7 +53,7 @@ const CAPABILITIES: CapabilityCard[] = [
   {
     icon: 'fileText',
     title: '只读访问论文',
-    desc: '不暴露本地 PDF 路径和密钥，不调用外部网络，数据不出本机。',
+    desc: '不暴露本地 PDF 路径和密钥；必要上下文会发送到你配置的 AI 服务。',
   },
 ]
 
@@ -113,6 +120,26 @@ function truncate(text: string, max = 48): string {
   return text.length > max ? `${text.slice(0, max)}…` : text
 }
 
+function getPaperMeta(paper: Paper): string {
+  const seen = new Set<string>()
+  const values = [
+    paper.venue?.trim(),
+    paper.year ? String(paper.year) : '',
+    paper.source?.trim(),
+  ].filter(Boolean) as string[]
+  const uniqueValues = values.filter((value) => {
+    const key = value.toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  return uniqueValues.length > 0 ? uniqueValues.join(' · ') : '暂无来源信息'
+}
+
+function getPaperTags(paper: Paper): string[] {
+  return (paper.tags ?? []).filter(Boolean).slice(0, 3)
+}
+
 function getRunErrorMessage(run: AgentRunResponse): string {
   const runnerError = run.tool_events
     .slice()
@@ -126,9 +153,46 @@ function getRunErrorMessage(run: AgentRunResponse): string {
   return anyError?.error_message ?? ''
 }
 
-export function AgentWorkspace() {
+function parseAgentScopeFromLocation(search: string): AgentScopeConfig {
+  const params = new URLSearchParams(search)
+  const scopeType = params.get('scope') as AgentScopeConfig['scope_type'] | null
+  const categoryId = params.get('category_id')
+  const paperId = params.get('paper_id')
+  const paperIds = params.get('paper_ids')
+
+  if (scopeType === 'category') {
+    return normalizeAgentScope({
+      scope_type: 'category',
+      category_id: categoryId ? Number(categoryId) : null,
+    })
+  }
+
+  if (scopeType === 'reader_paper') {
+    return normalizeAgentScope({
+      scope_type: 'reader_paper',
+      paper_id: paperId ? Number(paperId) : null,
+    })
+  }
+
+  if (scopeType === 'papers') {
+    const ids = (paperIds ?? '')
+      .split(',')
+      .map((value) => Number(value.trim()))
+      .filter((value) => Number.isFinite(value) && value > 0)
+      .slice(0, MAX_SCOPE_PAPERS)
+    return normalizeAgentScope({
+      scope_type: 'papers',
+      paper_ids: ids,
+    })
+  }
+
+  return normalizeAgentScope({ scope_type: 'whole_library' })
+}
+
+export function AgentWorkspace({ papers = [], categories = [] }: { papers?: Paper[]; categories?: Category[] }) {
+  const location = useLocation()
   const [prompt, setPrompt] = useState('')
-  const [scope, setScope] = useState<AgentScopeConfig>({ scope_type: 'whole_library' })
+  const [scope, setScope] = useState<AgentScopeConfig>(() => parseAgentScopeFromLocation(location.search))
   const [thinking, setThinking] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -137,6 +201,64 @@ export function AgentWorkspace() {
   const [history, setHistory] = useState<AgentRunResponse[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState('')
+  const [paperSearchQuery, setPaperSearchQuery] = useState('')
+  const [hasRemoteAiConsent, setHasRemoteAiConsent] = useState(false)
+  const [remoteAiDetailsOpen, setRemoteAiDetailsOpen] = useState(false)
+  const [statusMessage, setStatusMessage] = useState('')
+  const [embeddingAvailable, setEmbeddingAvailable] = useState<boolean | null>(null)
+  const runAbortControllerRef = useRef<AbortController | null>(null)
+  const locationScope = useMemo(() => parseAgentScopeFromLocation(location.search), [location.search])
+
+  const sortedPapers = useMemo(
+    () => [...papers].sort((a, b) => a.title.localeCompare(b.title, 'zh-CN')),
+    [papers],
+  )
+  const selectedPaperIds = scope.paper_ids ?? []
+  const selectedPapers = useMemo(
+    () => selectedPaperIds.map((paperId) => papers.find((paper) => paper.id === paperId)).filter(Boolean) as Paper[],
+    [papers, selectedPaperIds],
+  )
+  const currentReaderPaper = useMemo(
+    () => papers.find((paper) => paper.id === scope.paper_id) ?? null,
+    [papers, scope.paper_id],
+  )
+  const paperSearchResults = useMemo(() => {
+    const keyword = paperSearchQuery.trim().toLowerCase()
+    return sortedPapers
+      .filter((paper) => !selectedPaperIds.includes(paper.id))
+      .filter((paper) => {
+        if (!keyword) return true
+        return [paper.title, paper.source, paper.venue, paper.year ? String(paper.year) : '', ...(paper.tags ?? [])]
+          .some((value) => value?.toLowerCase().includes(keyword))
+      })
+      .slice(0, 10)
+  }, [paperSearchQuery, selectedPaperIds, sortedPapers])
+  const semanticWarning = useMemo(
+    () => run?.tool_events
+      .slice()
+      .reverse()
+      .find((event) => event.tool_name === 'semantic_search' && (event.status === 'warning' || event.status === 'error')) ?? null,
+    [run],
+  )
+  const scopeValidationError = useMemo(() => {
+    if (scope.scope_type === 'category' && !scope.category_id) {
+      return '请选择一个分类后再运行 Agent。'
+    }
+    if (scope.scope_type === 'papers' && selectedPaperIds.length === 0) {
+      return '请至少选择一篇论文；你可以从论文库多选带入，或在这里搜索后添加。'
+    }
+    if (scope.scope_type === 'reader_paper' && !scope.paper_id) {
+      return '当前阅读论文范围需要一篇目标论文；请从阅读器进入，或在下方手动选择。'
+    }
+    return ''
+  }, [scope, selectedPaperIds.length])
+
+  useEffect(() => {
+    setHasRemoteAiConsent(window.localStorage.getItem(AGENT_REMOTE_AI_CONSENT_KEY) === 'accepted')
+    checkHealth()
+      .then((health) => setEmbeddingAvailable(health.embedding_available))
+      .catch(() => setEmbeddingAvailable(null))
+  }, [])
 
   const refreshHistory = useCallback(async () => {
     setHistoryLoading(true)
@@ -155,30 +277,99 @@ export function AgentWorkspace() {
     void refreshHistory()
   }, [refreshHistory])
 
-  function applyExample(example: ExamplePrompt) {
-    setPrompt(example.prompt)
-    setScope((prev) => ({ ...prev, scope_type: example.scope }))
+  useEffect(() => {
+    setScope(locationScope)
+    setError('')
+    if (locationScope.scope_type !== 'papers') {
+      setPaperSearchQuery('')
+    }
+  }, [locationScope])
+
+  function updateScope(nextScope: AgentScopeConfig) {
+    const normalized = normalizeAgentScope(nextScope)
+    setScope(normalized)
+    setError('')
+    setStatusMessage('')
+    if (normalized.scope_type !== 'papers') {
+      setPaperSearchQuery('')
+    }
   }
 
-  async function handleSubmit() {
+  function applyExample(example: ExamplePrompt) {
+    setPrompt(example.prompt)
+    if (example.scope === 'category') {
+      updateScope({
+        scope_type: 'category',
+        category_id: scope.category_id ?? categories[0]?.id ?? null,
+      })
+      return
+    }
+
+    if (example.scope === 'reader_paper') {
+      // 不伪造“当前阅读论文”：仅保留已有绑定，或提示用户手动选择/从阅读器进入。
+      updateScope({
+        scope_type: 'reader_paper',
+        paper_id: scope.paper_id ?? null,
+      })
+      return
+    }
+
+    if (example.scope === 'papers') {
+      updateScope({
+        scope_type: 'papers',
+        paper_ids: scope.paper_ids ?? [],
+      })
+      return
+    }
+
+    updateScope({ scope_type: 'whole_library' })
+  }
+
+  async function submitRun() {
     if (!prompt.trim()) return
+    const abortController = new AbortController()
+    runAbortControllerRef.current = abortController
     setLoading(true)
     setError('')
+    setStatusMessage('')
     setRun(null)
     try {
       const payload: Parameters<typeof createAgentRun>[0] = {
         prompt: prompt.trim(),
-        scope,
+        scope: normalizeAgentScope(scope),
       }
       if (thinking) payload.thinking = thinking
-      const result = await createAgentRun(payload)
+      const result = await createAgentRun(payload, { signal: abortController.signal })
+      if (abortController.signal.aborted) return
       setRun(result)
       void refreshHistory()
     } catch (err) {
+      if (abortController.signal.aborted || (err instanceof Error && err.name === 'AbortError')) {
+        setStatusMessage('已停止等待本次运行结果。')
+        return
+      }
       setError(err instanceof Error ? err.message : 'Agent 运行失败')
     } finally {
+      if (runAbortControllerRef.current === abortController) {
+        runAbortControllerRef.current = null
+      }
       setLoading(false)
     }
+  }
+
+  async function handleSubmit() {
+    if (!hasRemoteAiConsent) return
+    await submitRun()
+  }
+
+  function handleStopRun() {
+    const abortController = runAbortControllerRef.current
+    if (!abortController) return
+    abortController.abort()
+    runAbortControllerRef.current = null
+    setLoading(false)
+    setError('')
+    setStatusMessage('已停止等待本次运行结果。')
   }
 
   async function handleSelectHistory(runId: number) {
@@ -212,10 +403,10 @@ export function AgentWorkspace() {
     }
   }
 
-  async function handleReject(actionId: number) {
+  async function handleReject(actionId: number, reason: string) {
     setActionLoading(true)
     try {
-      const updated = await rejectAgentAction(actionId)
+      const updated = await rejectAgentAction(actionId, reason)
       if (run) {
         setRun({
           ...run,
@@ -227,6 +418,40 @@ export function AgentWorkspace() {
     } finally {
       setActionLoading(false)
     }
+  }
+
+  function handleAddPaper(paperId: number) {
+    setError('')
+    setStatusMessage('')
+    const currentIds = scope.paper_ids ?? []
+    if (currentIds.includes(paperId)) return
+    if (currentIds.length >= MAX_SCOPE_PAPERS) {
+      setError(`指定论文范围最多支持 ${MAX_SCOPE_PAPERS} 篇论文，请缩小范围。`)
+      return
+    }
+    setScope(normalizeAgentScope({
+      scope_type: 'papers',
+      paper_ids: [...currentIds, paperId],
+    }))
+  }
+
+  function handleRemovePaper(paperId: number) {
+    setError('')
+    setScope((current) => normalizeAgentScope({
+      ...current,
+      paper_ids: (current.paper_ids ?? []).filter((id) => id !== paperId),
+    }))
+  }
+
+  function handleClearSelectedPapers() {
+    updateScope({ scope_type: 'papers', paper_ids: [] })
+  }
+
+  function handleRemoteAiConsentChange(event: ChangeEvent<HTMLInputElement>) {
+    if (!event.target.checked) return
+    window.localStorage.setItem(AGENT_REMOTE_AI_CONSENT_KEY, 'accepted')
+    setHasRemoteAiConsent(true)
+    setStatusMessage('')
   }
 
   async function handleRevert(actionId: number) {
@@ -294,6 +519,34 @@ export function AgentWorkspace() {
             </section>
           )}
 
+          <section className="agent-disclosure-card" aria-label="AI 服务使用边界">
+            <div className="agent-disclosure-head">
+              <strong>AI 服务使用边界</strong>
+              <button
+                type="button"
+                className="agent-disclosure-link"
+                onClick={() => setRemoteAiDetailsOpen((open) => !open)}
+                aria-expanded={remoteAiDetailsOpen}
+              >
+                {remoteAiDetailsOpen ? '收起说明' : '查看详情'}
+              </button>
+            </div>
+            <p>
+              运行 Agent 会调用你已配置的 AI 服务，只发送本次任务所需的论文摘要、标题、标签和分类等上下文；
+              本地 PDF 路径、密钥不会发送。所有写入仍需你确认。
+            </p>
+            {remoteAiDetailsOpen && (
+              <ul className="agent-disclosure-details">
+                <li>首次勾选会记录在当前浏览器和设备上，后续运行不再反复打断。</li>
+                <li>你可以在 AI 供应商设置中更换或停用远端服务。</li>
+                <li>Agent 只生成提案；标签、分类、元数据等写入都需要你批准。</li>
+              </ul>
+            )}
+            {embeddingAvailable === false && (
+              <p className="agent-disclosure-warning">当前向量化不可用，宽范围任务会自动降级为非语义分析，结果精度可能下降。</p>
+            )}
+          </section>
+
           <section className="agent-prompt-card" aria-label="Agent 输入区">
             <div className="agent-prompt-card-head">
               <h3>
@@ -306,7 +559,7 @@ export function AgentWorkspace() {
             </div>
 
             <div className="agent-prompt-controls">
-              <AgentScopePicker scope={scope} onChange={setScope} />
+              <AgentScopePicker categories={categories} scope={scope} onChange={updateScope} />
               <div className="agent-thinking-control">
                 <label htmlFor="agent-thinking">思考强度</label>
                 <select
@@ -322,6 +575,188 @@ export function AgentWorkspace() {
                 </select>
               </div>
             </div>
+
+            {scopeValidationError && (
+              <p className="agent-scope-validation" role="status">
+                <Icon name="warning" aria-hidden="true" />
+                <span>{scopeValidationError}</span>
+              </p>
+            )}
+
+            {scope.scope_type === 'papers' && (
+              <section className="agent-scope-panel" aria-label="指定论文范围编辑器">
+                <div className="agent-scope-panel-head">
+                  <div>
+                    <p className="agent-scope-eyebrow">操作范围</p>
+                    <h4>指定论文范围</h4>
+                  </div>
+                  <div className="agent-scope-head-actions">
+                    <span className="agent-scope-count">已选 {selectedPapers.length}/{MAX_SCOPE_PAPERS}</span>
+                    {selectedPapers.length > 0 && (
+                      <button type="button" className="agent-scope-ghost-btn" onClick={handleClearSelectedPapers}>
+                        清空
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="agent-paper-search">
+                  <label htmlFor="agent-paper-search-input">添加论文</label>
+                  <div className="agent-paper-search-input">
+                    <Icon name="search" aria-hidden="true" />
+                    <input
+                      id="agent-paper-search-input"
+                      type="search"
+                      value={paperSearchQuery}
+                      onChange={(event) => setPaperSearchQuery(event.target.value)}
+                      placeholder="搜索标题、来源、年份或标签"
+                      aria-label="搜索可添加论文"
+                    />
+                  </div>
+                </div>
+
+                <div className="agent-selected-paper-zone" aria-label="已选论文">
+                  {selectedPapers.length === 0 ? (
+                    <div className="agent-scope-empty">
+                      <Icon name="library" aria-hidden="true" />
+                      <div>
+                        <strong>尚未选择论文</strong>
+                        <p>从论文库带入多选结果，或在上方搜索后加入本次 Agent 范围。</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <ul className="agent-selected-paper-list">
+                      {selectedPapers.map((paper) => {
+                        const tags = getPaperTags(paper)
+                        return (
+                          <li key={paper.id} className="agent-selected-paper-row">
+                            <span className="agent-paper-row-icon" aria-hidden="true">
+                              <Icon name="fileText" />
+                            </span>
+                            <div className="agent-paper-row-body">
+                              <strong className="agent-paper-title">{paper.title}</strong>
+                              <span className="agent-paper-meta">{getPaperMeta(paper)}</span>
+                              {tags.length > 0 && (
+                                <span className="agent-paper-tags" aria-label={`${paper.title} 标签`}>
+                                  {tags.map((tag) => (
+                                    <span key={tag}>{tag}</span>
+                                  ))}
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              className="agent-paper-icon-btn"
+                              onClick={() => handleRemovePaper(paper.id)}
+                              aria-label={`移除 ${paper.title}`}
+                              title="移除"
+                            >
+                              <Icon name="close" aria-hidden="true" />
+                              <span className="visually-hidden">移除</span>
+                            </button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="agent-paper-candidate-block">
+                  <div className="agent-paper-candidate-head">
+                    <span>可添加论文</span>
+                    <small>{paperSearchQuery.trim() ? '最多显示 10 条匹配结果' : '论文库中未选中的论文'}</small>
+                  </div>
+                  {paperSearchResults.length > 0 ? (
+                    <ul className="agent-paper-candidate-list">
+                      {paperSearchResults.map((paper) => {
+                        const tags = getPaperTags(paper)
+                        return (
+                          <li key={paper.id} className="agent-paper-candidate">
+                            <div className="agent-paper-row-body">
+                              <strong className="agent-paper-title">{paper.title}</strong>
+                              <span className="agent-paper-meta">{getPaperMeta(paper)}</span>
+                              {tags.length > 0 && (
+                                <span className="agent-paper-tags" aria-label={`${paper.title} 标签`}>
+                                  {tags.map((tag) => (
+                                    <span key={tag}>{tag}</span>
+                                  ))}
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              className="agent-scope-action-btn"
+                              onClick={() => handleAddPaper(paper.id)}
+                              aria-label={`添加 ${paper.title} 到指定论文范围`}
+                            >
+                              添加
+                            </button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  ) : paperSearchQuery.trim() ? (
+                    <p className="agent-scope-search-empty">没有匹配的论文，可回到论文库重新多选或换个关键词。</p>
+                  ) : (
+                    <p className="agent-paper-candidate-empty">输入关键词后按标题、来源、年份或标签筛选。</p>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {scope.scope_type === 'reader_paper' && (
+              <section className="agent-scope-panel agent-reader-scope-panel" aria-label="当前阅读论文范围说明">
+                <div className="agent-scope-panel-head">
+                  <div>
+                    <p className="agent-scope-eyebrow">操作范围</p>
+                    <h4>当前阅读论文</h4>
+                  </div>
+                  <span className="agent-scope-count">单篇论文</span>
+                </div>
+
+                <div className={currentReaderPaper ? 'agent-reader-paper-summary' : 'agent-reader-paper-summary is-empty'}>
+                  <span className="agent-reader-paper-icon" aria-hidden="true">
+                    <Icon name={currentReaderPaper ? 'book' : 'warning'} />
+                  </span>
+                  <div className="agent-reader-paper-body">
+                    <span className="agent-reader-status">{currentReaderPaper ? '当前绑定论文' : '未绑定论文'}</span>
+                    <strong>
+                      {currentReaderPaper
+                        ? `当前绑定论文：${currentReaderPaper.title}`
+                        : '当前没有从阅读器带入论文'}
+                    </strong>
+                    <p>
+                      {currentReaderPaper
+                        ? getPaperMeta(currentReaderPaper)
+                        : '可以先从阅读器进入 Agent，或在下方手动选择一篇论文作为当前范围。'}
+                    </p>
+                    {currentReaderPaper && getPaperTags(currentReaderPaper).length > 0 && (
+                      <span className="agent-paper-tags" aria-label={`${currentReaderPaper.title} 标签`}>
+                        {getPaperTags(currentReaderPaper).map((tag) => (
+                          <span key={tag}>{tag}</span>
+                        ))}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <label className="agent-reader-switcher">
+                  <span>更换论文</span>
+                  <select
+                    value={scope.paper_id ?? ''}
+                    onChange={(event) => updateScope({ scope_type: 'reader_paper', paper_id: event.target.value ? Number(event.target.value) : null })}
+                    aria-label="当前阅读论文"
+                  >
+                    <option value="">选择论文</option>
+                    {sortedPapers.map((paper) => (
+                      <option key={paper.id} value={paper.id}>
+                        {paper.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </section>
+            )}
 
             <textarea
               value={prompt}
@@ -351,11 +786,21 @@ export function AgentWorkspace() {
               </div>
             )}
 
+            {!hasRemoteAiConsent && (
+              <label className="agent-inline-consent">
+                <input
+                  type="checkbox"
+                  onChange={handleRemoteAiConsentChange}
+                />
+                <span>我了解本次运行会调用已配置的 AI 服务，并只发送任务所需上下文。</span>
+              </label>
+            )}
+
             <div className="agent-submit-row">
               <button
                 type="button"
                 className="agent-submit-btn"
-                disabled={loading || !prompt.trim()}
+                disabled={loading || !prompt.trim() || Boolean(scopeValidationError) || !hasRemoteAiConsent}
                 onClick={handleSubmit}
                 aria-label="运行 Agent"
               >
@@ -371,12 +816,30 @@ export function AgentWorkspace() {
                   </>
                 )}
               </button>
+              {loading && (
+                <button
+                  type="button"
+                  className="agent-stop-btn"
+                  onClick={handleStopRun}
+                  aria-label="停止当前 Agent 运行"
+                >
+                  <Icon name="close" aria-hidden="true" />
+                  停止
+                </button>
+              )}
               <span className="agent-submit-note">
                 <Icon name="check" aria-hidden="true" />
-                所有变更需你确认后才会落盘
+                只生成待确认提案；运行会使用你配置的 AI 服务。
               </span>
             </div>
           </section>
+
+          {statusMessage && (
+            <div className="agent-status" role="status">
+              <Icon name="check" aria-hidden="true" />
+              <span>{statusMessage}</span>
+            </div>
+          )}
 
           {error && (
             <div className="agent-error" role="alert">
@@ -422,6 +885,13 @@ export function AgentWorkspace() {
                   试着缩小范围、换一种提问方式，或者换个思考强度再运行一次。
                 </p>
               </div>
+            </div>
+          )}
+
+          {semanticWarning && !runFailed && (
+            <div className="agent-error" role="status">
+              <Icon name="warning" aria-hidden="true" />
+              <span>{semanticWarning.error_message || '语义检索不可用，已退化为非语义分析。'}</span>
             </div>
           )}
 

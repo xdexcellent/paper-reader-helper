@@ -232,6 +232,15 @@ export function ReaderPage({ refreshLibrary }: ReaderPageProps) {
     navigate(Number.isFinite(targetPaperId) ? `/paper/${targetPaperId}` : '/')
   }
 
+  function handleOpenAgent() {
+    const targetPaperId = paper?.id ?? numericPaperId
+    if (!Number.isFinite(targetPaperId)) {
+      navigate('/agent')
+      return
+    }
+    navigate(`/agent?scope=reader_paper&paper_id=${targetPaperId}`)
+  }
+
   function handleModeChange(nextMode: ReaderMode) {
     setPdfPage(null)
     if (nextMode !== 'pdf') {
@@ -299,6 +308,7 @@ export function ReaderPage({ refreshLibrary }: ReaderPageProps) {
       isPdfLoading={isPdfLoading}
       isSavingNotes={isSavingNotes}
       mode={mode}
+      onOpenAgent={handleOpenAgent}
       onBack={handleBack}
       onBlockFiltersChange={blockShellProps.onBlockFiltersChange}
       onBlockForceRefreshTranslation={blockShellProps.onBlockForceRefreshTranslation}

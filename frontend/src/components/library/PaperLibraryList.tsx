@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 type PaperLibraryListProps = {
   papers: Paper[]
   selectedPaperId: number | null
+  selectedPaperIds: number[]
   isLoading: boolean
   searchQuery: string
   statusFilter: LibraryStatusFilter
@@ -25,6 +26,9 @@ type PaperLibraryListProps = {
   onReadingStatusFilterChange: (filter: ReadingStatusFilter) => void
   onTagChange: (tag: string | null) => void
   onSelect: (paper: Paper) => void
+  onToggleSelection: (paper: Paper) => void
+  onClearSelection: () => void
+  onOpenAgentForSelected: () => void
   onDelete: (paper: Paper) => void | Promise<void>
 }
 
@@ -80,6 +84,7 @@ function readingStateLabel(paper: Paper): string {
 export function PaperLibraryList({
   papers,
   selectedPaperId,
+  selectedPaperIds,
   isLoading,
   searchQuery,
   statusFilter,
@@ -92,6 +97,9 @@ export function PaperLibraryList({
   onReadingStatusFilterChange,
   onTagChange,
   onSelect,
+  onToggleSelection,
+  onClearSelection,
+  onOpenAgentForSelected,
   onDelete,
 }: PaperLibraryListProps) {
   const tags = collectTags(papers)
@@ -187,6 +195,18 @@ export function PaperLibraryList({
             </select>
           </label>
         </div>
+
+        {selectedPaperIds.length > 0 && (
+          <div className="library-filter-row" aria-label="已选论文操作">
+            <span className="paper-selection-summary">已选 {selectedPaperIds.length} 篇论文</span>
+            <button type="button" className="btn btn-secondary" onClick={onClearSelection}>
+              清空选择
+            </button>
+            <button type="button" className="btn btn-primary" onClick={onOpenAgentForSelected}>
+              发送到文库 Agent
+            </button>
+          </div>
+        )}
       </div>
 
       {tags.length > 0 && (
@@ -253,6 +273,15 @@ export function PaperLibraryList({
                   className={cn('paper-library-row', selectedPaperId === paper.id && 'selected')}
                   key={paper.id}
                 >
+                  <button
+                    type="button"
+                    className={cn('paper-selection-toggle', selectedPaperIds.includes(paper.id) && 'active')}
+                    aria-pressed={selectedPaperIds.includes(paper.id)}
+                    aria-label={`${selectedPaperIds.includes(paper.id) ? '取消选择' : '选择'} ${paper.title}`}
+                    onClick={() => onToggleSelection(paper)}
+                  >
+                    {selectedPaperIds.includes(paper.id) ? '已选' : '选择'}
+                  </button>
                   <button
                     aria-label={paperButtonLabel(paper)}
                     aria-pressed={selectedPaperId === paper.id}

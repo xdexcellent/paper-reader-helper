@@ -407,25 +407,38 @@ def test_semantic_search_empty_query(client):
     assert result["error"] is not None
 
 
-def test_semantic_search_no_embeddings(client):
+def test_semantic_search_no_embeddings(mocker, client):
     from sqlmodel import Session
     from app.core.db import engine
     from app.services.agent_tool_registry import AgentToolRegistry
-    from app.services.embedding_service import _EMBEDDING_AVAILABLE
 
     registry = AgentToolRegistry()
+    mocker.patch("app.services.agent_tool_registry.EmbeddingService.encode", return_value=[0.1] * 8)
     with Session(engine) as session:
         _seed_paper(session, title="No Embed Paper")
         result = registry.semantic_search(session, "search query")
 
-    if _EMBEDDING_AVAILABLE:
-        # sentence-transformers is installed: no embeddings in DB → empty results
-        assert result["error"] is None
-        assert result["data"]["results"] == []
-    else:
-        # sentence-transformers is not installed → embedding unavailable error
-        assert result["error"] is not None
-        assert "Embedding" in result["error"] or "不可用" in result["error"]
+    assert result["error"] is None
+    assert result["data"]["results"] == []
+    assert result["data"]["degraded"] is True
+    assert "非语义分析" in result["data"]["reason"]
+
+
+def test_semantic_search_encode_failure_degrades(mocker, client):
+    from sqlmodel import Session
+    from app.core.db import engine
+    from app.services.agent_tool_registry import AgentToolRegistry
+
+    registry = AgentToolRegistry()
+    mocker.patch("app.services.agent_tool_registry.EmbeddingService.encode", side_effect=RuntimeError("model unavailable"))
+    with Session(engine) as session:
+        _seed_paper(session, title="Encode Failure Paper")
+        result = registry.semantic_search(session, "search query")
+
+    assert result["error"] is None
+    assert result["data"]["results"] == []
+    assert result["data"]["degraded"] is True
+    assert "非语义分析" in result["data"]["reason"]
 
 
 def test_semantic_search_with_embeddings(mocker, client):
@@ -458,3 +471,35 @@ def test_semantic_search_with_embeddings(mocker, client):
     assert len(results) == 2
     assert results[0]["paper_id"] == p1["id"]  # highest similarity
     assert results[0]["similarity"] > results[1]["similarity"]
+
+
+def test_semantic_search_scoped_to_category(mocker, client):
+    from sqlmodel import Session
+    from app.core.db import engine
+    from app.models.paper_embedding import PaperEmbedding
+    from app.services.agent_tool_registry import AgentToolRegistry
+
+    mock_vec = [0.1] * 8
+    mocker.patch("app.services.agent_tool_registry.EmbeddingService.encode", return_value=mock_vec)
+
+    registry = AgentToolRegistry()
+    with Session(engine) as session:
+        cat_a = _seed_category(session, name="CatA", slug="cat-a")
+        cat_b = _seed_category(session, name="CatB", slug="cat-b")
+        p1 = _seed_paper(session, title="Paper In A", primary_category_id=cat_a["id"])
+        p2 = _seed_paper(session, title="Paper In B", primary_category_id=cat_b["id"])
+
+        session.add(PaperEmbedding(paper_id=p1["id"], embedding_json=json.dumps([0.1] * 8)))
+        session.add(PaperEmbedding(paper_id=p2["id"], embedding_json=json.dumps([0.1] * 8)))
+        session.commit()
+
+        result = registry.semantic_search(
+            session,
+            "test query",
+            scope_type="category",
+            scope_config={"category_id": cat_a["id"]},
+        )
+
+    assert result["error"] is None
+    assert [item["paper_id"] for item in result["data"]["results"]] == [p1["id"]]
+    assert result["data"]["degraded"] is False

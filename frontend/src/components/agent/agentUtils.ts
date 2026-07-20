@@ -15,6 +15,10 @@ export const ACTION_TYPE_LABELS: Record<string, string> = {
   assign_category: '分配分类',
 }
 
+export function isBatchApprovableRisk(level: string): boolean {
+  return level === 'low'
+}
+
 export function getRiskColor(level: string): string {
   switch (level) {
     case 'low': return 'var(--color-success, #10b981)'
@@ -25,12 +29,43 @@ export function getRiskColor(level: string): string {
   }
 }
 
+function normalizePositiveId(value: number | null | undefined): number | null {
+  return Number.isFinite(value) && (value ?? 0) > 0 ? Number(value) : null
+}
+
+export function normalizeAgentScope(scope: AgentScopeConfig): AgentScopeConfig {
+  switch (scope.scope_type) {
+    case 'category':
+      return {
+        scope_type: 'category',
+        category_id: normalizePositiveId(scope.category_id),
+      }
+    case 'papers': {
+      const paperIds = Array.from(new Set((scope.paper_ids ?? [])
+        .map((paperId) => Number(paperId))
+        .filter((paperId) => Number.isFinite(paperId) && paperId > 0)))
+      return {
+        scope_type: 'papers',
+        paper_ids: paperIds,
+      }
+    }
+    case 'reader_paper':
+      return {
+        scope_type: 'reader_paper',
+        paper_id: normalizePositiveId(scope.paper_id),
+      }
+    case 'whole_library':
+    default:
+      return { scope_type: 'whole_library' }
+  }
+}
+
 export function serializeScope(scope: AgentScopeConfig): string {
   switch (scope.scope_type) {
     case 'whole_library': return '全部论文库'
     case 'category': return `分类 #${scope.category_id ?? '?'}`
     case 'papers': return `${scope.paper_ids?.length ?? 0} 篇论文`
-    case 'reader_paper': return '当前阅读论文'
+    case 'reader_paper': return scope.paper_id ? `当前阅读论文 #${scope.paper_id}` : '当前阅读论文'
     default: return scope.scope_type
   }
 }

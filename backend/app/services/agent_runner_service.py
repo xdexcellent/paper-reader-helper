@@ -9,6 +9,7 @@ from sqlmodel import Session
 from app.models.agent_action import AgentAction
 from app.models.agent_run import AgentRun
 from app.models.agent_tool_event import AgentToolEvent
+from app.services.agent_policy import classify_action_risk, prompt_requests_metadata_correction, sanitize_metadata_updates
 from app.services.agent_tool_registry import AgentToolRegistry
 from app.services.deepseek_client import DeepSeekClient
 
@@ -37,6 +38,7 @@ AGENT_SYSTEM_ROLE = (
     "3. 只建议修改已有数据，不要编造论文ID。\n"
     "4. 创建新分类时，分类名称不能与已有分类重复。\n"
     "5. 仅返回 JSON，不要包含 markdown 标记、解释或其他文本。\n"
+    "6. 若用户未明确要求纠错/补全元数据，不要修改 title、authors、year、venue、doi、url。\n"
 )
 
 
@@ -86,6 +88,8 @@ class AgentRunnerService:
         except json.JSONDecodeError:
             pass
 
+        allow_metadata_corrections = prompt_requests_metadata_correction(run.prompt)
+
         try:
             # 1. Collect library context via read-only tools
             library_context_parts: list[str] = []
@@ -108,6 +112,47 @@ class AgentRunnerService:
             if tag_result.get("data"):
                 library_context_parts.append(f"## 现有标签\n{json.dumps(tag_result['data'], ensure_ascii=False)}")
 
+            if run.scope_type in ("whole_library", "category") and run.prompt.strip():
+                semantic_result = self.tools.semantic_search(
+                    session,
+                    run.prompt,
+                    top_k=10,
+                    scope_type=run.scope_type,
+                    scope_config=scope_config,
+                )
+                semantic_data = semantic_result.get("data") or {}
+                semantic_results = semantic_data.get("results", [])
+                semantic_degraded = bool(semantic_data.get("degraded"))
+                semantic_reason = semantic_data.get("reason", "")
+                if semantic_result.get("error"):
+                    self._record_tool_event(
+                        session,
+                        run.id,
+                        "semantic_search",
+                        semantic_result,
+                        tool_events,
+                        status_override="warning",
+                        error_message_override=semantic_result.get("error", ""),
+                    )
+                elif semantic_results:
+                    self._record_tool_event(session, run.id, "semantic_search", semantic_result, tool_events)
+                    library_context_parts.append(
+                        f"## 语义相关论文\n{json.dumps(semantic_results, ensure_ascii=False, indent=2)}"
+                    )
+                else:
+                    self._record_tool_event(
+                        session,
+                        run.id,
+                        "semantic_search",
+                        semantic_result,
+                        tool_events,
+                        status_override="warning",
+                        error_message_override=semantic_reason or (
+                            "语义检索已降级为非语义分析。" if semantic_degraded
+                            else "语义检索未命中结果，已回退为非语义分析。"
+                        ),
+                    )
+
             # If scope is a single paper, include detail + blocks + translations
             if run.scope_type == "reader_paper" and scope_config.get("paper_id"):
                 pid = scope_config["paper_id"]
@@ -118,15 +163,23 @@ class AgentRunnerService:
 
                 blocks_result = self.tools.get_paper_blocks(session, pid)
                 self._record_tool_event(session, run.id, "get_paper_blocks", blocks_result, tool_events)
+                if blocks_result.get("data"):
+                    library_context_parts.append(
+                        f"## 论文块摘要\n{json.dumps(blocks_result['data'], ensure_ascii=False, indent=2)}"
+                    )
 
                 trans_result = self.tools.get_paper_translations(session, pid)
                 self._record_tool_event(session, run.id, "get_paper_translations", trans_result, tool_events)
+                if trans_result.get("data"):
+                    library_context_parts.append(
+                        f"## 翻译状态\n{json.dumps(trans_result['data'], ensure_ascii=False, indent=2)}"
+                    )
 
             # 2. Composed library context
             library_context = "\n\n".join(library_context_parts)
 
             # 3. Build system prompt (server-composed, never from frontend)
-            system_prompt = self._build_system_prompt(library_context)
+            system_prompt = self._build_system_prompt(library_context, allow_metadata_corrections=allow_metadata_corrections)
 
             # 4. Call model
             messages = [
@@ -139,7 +192,12 @@ class AgentRunnerService:
                 raise RuntimeError(response_text)
 
             # 5. Parse response for proposals
-            actions = self._parse_response(session, run.id, response_text)
+            actions = self._parse_response(
+                session,
+                run.id,
+                response_text,
+                allow_metadata_corrections=allow_metadata_corrections,
+            )
 
             run.status = "completed"
             run.updated_at = datetime.now(timezone.utc)
@@ -176,6 +234,8 @@ class AgentRunnerService:
         tool_name: str,
         result: dict,
         events: list[AgentToolEvent],
+        status_override: str | None = None,
+        error_message_override: str | None = None,
     ) -> None:
         """Record a tool call as an AgentToolEvent."""
         input_summary = f"tool={tool_name}"
@@ -191,21 +251,32 @@ class AgentRunnerService:
             tool_name=tool_name,
             input_summary=input_summary,
             output_summary=output_summary,
-            status="error" if result.get("error") else "success",
-            error_message=result.get("error", ""),
+            status=status_override or ("error" if result.get("error") else "success"),
+            error_message=error_message_override if error_message_override is not None else result.get("error", ""),
         )
         session.add(event)
         session.commit()
         events.append(event)
 
-    def _build_system_prompt(self, library_context: str) -> str:
+    def _build_system_prompt(self, library_context: str, *, allow_metadata_corrections: bool) -> str:
         """Compose the full system prompt with role, library context, and tool results."""
         parts = [AGENT_SYSTEM_ROLE]
+        if allow_metadata_corrections:
+            parts.append("## 当前用户意图\n用户已明确请求纠错/补全元数据，可以谨慎生成相关提案，并将其标记为高风险。")
+        else:
+            parts.append("## 当前用户意图\n用户未明确请求纠错/补全元数据，不要修改 title、authors、year、venue、doi、url。")
         if library_context:
             parts.append(f"## 当前论文库信息\n{library_context}")
         return "\n\n".join(parts)
 
-    def _parse_response(self, session: Session, run_id: int, response_text: str) -> list[AgentAction]:
+    def _parse_response(
+        self,
+        session: Session,
+        run_id: int,
+        response_text: str,
+        *,
+        allow_metadata_corrections: bool,
+    ) -> list[AgentAction]:
         """Extract structured proposals from model response JSON."""
         actions: list[AgentAction] = []
 
@@ -254,6 +325,15 @@ class AgentRunnerService:
                 if not isinstance(after_values, dict):
                     after_values = {}
 
+                if action_type == "update_paper_metadata":
+                    after_values = sanitize_metadata_updates(
+                        after_values,
+                        allow_core_metadata=allow_metadata_corrections,
+                    )
+                    if not after_values:
+                        logger.info("Skipping metadata proposal without allowed fields for run %s", run_id)
+                        continue
+
                 action = AgentAction(
                     agent_run_id=run_id,
                     action_type=action_type,
@@ -262,7 +342,7 @@ class AgentRunnerService:
                     after_values_json=json.dumps(after_values, ensure_ascii=False),
                     rationale=str(raw.get("rationale", ""))[:200],
                     confidence=float(raw.get("confidence", 0.5)),
-                    risk_level=str(raw.get("risk_level", "low")),
+                    risk_level=classify_action_risk(action_type, after_values),
                     status="proposed",
                 )
                 session.add(action)

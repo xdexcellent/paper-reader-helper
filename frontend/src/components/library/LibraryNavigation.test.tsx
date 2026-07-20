@@ -177,6 +177,10 @@ describe('library navigation components', () => {
         searchQuery="arxiv"
         selectedPaperId={1}
         statusFilter="ready"
+        selectedPaperIds={[]}
+        onToggleSelection={vi.fn()}
+        onClearSelection={vi.fn()}
+        onOpenAgentForSelected={vi.fn()}
       />,
     )
 
@@ -218,6 +222,10 @@ describe('library navigation components', () => {
         searchQuery=""
         selectedPaperId={null}
         statusFilter="all"
+        selectedPaperIds={[]}
+        onToggleSelection={vi.fn()}
+        onClearSelection={vi.fn()}
+        onOpenAgentForSelected={vi.fn()}
       />,
     )
 
@@ -243,6 +251,10 @@ describe('library navigation components', () => {
         searchQuery=""
         selectedPaperId={null}
         statusFilter="all"
+        selectedPaperIds={[]}
+        onToggleSelection={vi.fn()}
+        onClearSelection={vi.fn()}
+        onOpenAgentForSelected={vi.fn()}
       />,
     )
 
@@ -266,6 +278,10 @@ describe('library navigation components', () => {
         searchQuery=""
         selectedPaperId={null}
         statusFilter="all"
+        selectedPaperIds={[]}
+        onToggleSelection={vi.fn()}
+        onClearSelection={vi.fn()}
+        onOpenAgentForSelected={vi.fn()}
       />,
     )
 

@@ -8,6 +8,7 @@ type ReaderToolbarProps = {
   readingStatusLabel: string
   readingProgress: number
   autoSaved: boolean
+  onOpenAgent: () => void
   onBack: () => void
   onModeChange: (mode: ReaderMode) => void
 }
@@ -18,6 +19,7 @@ export function ReaderToolbar({
   readingStatusLabel,
   readingProgress,
   autoSaved,
+  onOpenAgent,
   onBack,
   onModeChange,
 }: ReaderToolbarProps) {
@@ -27,6 +29,10 @@ export function ReaderToolbar({
         <button className="btn btn-secondary" onClick={onBack} type="button">
           <Icon name="library" />
           返回论文库
+        </button>
+        <button className="btn btn-secondary" onClick={onOpenAgent} type="button">
+          <Icon name="spark" />
+          发送到文库 Agent
         </button>
         <h1 className="reader-toolbar-title-v2">{paper.title}</h1>
         <div className="reader-mode-segmented" role="group" aria-label="阅读模式">

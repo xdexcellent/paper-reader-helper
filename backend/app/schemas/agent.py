@@ -1,11 +1,12 @@
 """Agent API request/response schemas."""
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class AgentScopeConfig(BaseModel):
     scope_type: str = "whole_library"
     category_id: int | None = None
-    paper_ids: list[int] = []
+    paper_id: int | None = None
+    paper_ids: list[int] = Field(default_factory=list)
 
 
 class AgentRunCreate(BaseModel):
@@ -31,8 +32,8 @@ class AgentActionResponse(BaseModel):
     action_type: str
     target_paper_id: int | None = None
     target_category_id: int | None = None
-    before_values: dict = {}
-    after_values: dict = {}
+    before_values: dict = Field(default_factory=dict)
+    after_values: dict = Field(default_factory=dict)
     rationale: str = ""
     confidence: float = 0.0
     risk_level: str = "low"
@@ -49,8 +50,8 @@ class AgentRunResponse(BaseModel):
     model: str
     status: str
     chat_session_id: int | None = None
-    actions: list[AgentActionResponse] = []
-    tool_events: list[AgentToolEventResponse] = []
+    actions: list[AgentActionResponse] = Field(default_factory=list)
+    tool_events: list[AgentToolEventResponse] = Field(default_factory=list)
     created_at: str = ""
     updated_at: str = ""
 

@@ -749,6 +749,34 @@ test('createAgentRun sends POST to /agent/runs with correct body', async () => {
   expect(result.status).toBe('completed')
 })
 
+test('createAgentRun forwards an abort signal when provided', async () => {
+  vi.mocked(fetch).mockResolvedValueOnce(
+    new Response(JSON.stringify({
+      id: 1,
+      prompt: '整理我的论文库',
+      scope: { scope_type: 'whole_library' },
+      model: 'gpt-5.4',
+      status: 'completed',
+      actions: [],
+      tool_events: [],
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  )
+  const controller = new AbortController()
+
+  await createAgentRun({
+    prompt: '整理我的论文库',
+    scope: { scope_type: 'whole_library' },
+  }, { signal: controller.signal })
+
+  expect(fetch).toHaveBeenCalledWith('http://localhost:8000/agent/runs', expect.objectContaining({
+    signal: controller.signal,
+  }))
+})
 test('fetchAgentRuns sends GET to /agent/runs', async () => {
   vi.mocked(fetch).mockResolvedValueOnce(
     new Response(JSON.stringify([{

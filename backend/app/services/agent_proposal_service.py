@@ -6,8 +6,15 @@ from datetime import datetime, timezone
 from sqlmodel import Session, select
 
 from app.models.agent_action import AgentAction
+from app.models.agent_run import AgentRun
 from app.models.category import Category
 from app.models.paper import Paper
+from app.services.agent_policy import (
+    CORE_METADATA_FIELDS,
+    classify_action_risk,
+    is_batch_approvable_risk,
+    prompt_requests_metadata_correction,
+)
 from app.services.category_service import create_category, update_paper_category
 
 logger = logging.getLogger(__name__)
@@ -65,6 +72,29 @@ class AgentProposalService:
             session.commit()
             session.refresh(action)
             return action
+
+        try:
+            after_values = json.loads(action.after_values_json) if action.after_values_json else {}
+        except json.JSONDecodeError:
+            after_values = {}
+
+        action.risk_level = classify_action_risk(action.action_type, after_values)
+
+        if action.action_type == "update_paper_metadata":
+            run = session.get(AgentRun, action.agent_run_id)
+            prompt = run.prompt if run is not None else ""
+            if not prompt_requests_metadata_correction(prompt):
+                blocked_fields = sorted(set(after_values).intersection(CORE_METADATA_FIELDS))
+                if blocked_fields:
+                    action.status = "failed"
+                    action.error_message = (
+                        "仅在用户明确要求纠错/补全时才允许修改核心书目信息。"
+                        f"当前字段: {', '.join(blocked_fields)}"
+                    )
+                    session.add(action)
+                    session.commit()
+                    session.refresh(action)
+                    return action
 
         # Validate target exists based on action type
         if action.action_type in ("update_paper_metadata", "update_tags", "update_category", "assign_category"):
@@ -391,6 +421,20 @@ class AgentProposalService:
         failed_action_ids: set[int] = set()
 
         for action in actions:
+            try:
+                after_values = json.loads(action.after_values_json) if action.after_values_json else {}
+            except json.JSONDecodeError:
+                after_values = {}
+
+            action.risk_level = classify_action_risk(action.action_type, after_values)
+            session.add(action)
+            session.commit()
+            session.refresh(action)
+
+            if not is_batch_approvable_risk(action.risk_level):
+                rejected += 1
+                continue
+
             # Skip if depends on a failed action (same target + category depends)
             if action.action_type in ("update_category", "assign_category"):
                 # Find sibling actions on same paper that failed

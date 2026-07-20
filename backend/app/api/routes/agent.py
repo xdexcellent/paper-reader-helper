@@ -25,6 +25,45 @@ from app.services.agent_runner_service import AgentRunnerService
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agent", tags=["agent"])
+MAX_SCOPE_PAPERS = 50
+
+
+def _normalize_scope(scope: AgentScopeConfig) -> AgentScopeConfig:
+    if scope.scope_type == "category":
+        return AgentScopeConfig(
+            scope_type="category",
+            category_id=scope.category_id,
+        )
+    if scope.scope_type == "papers":
+        paper_ids = []
+        seen: set[int] = set()
+        for paper_id in scope.paper_ids:
+            if paper_id <= 0 or paper_id in seen:
+                continue
+            seen.add(paper_id)
+            paper_ids.append(paper_id)
+        return AgentScopeConfig(
+            scope_type="papers",
+            paper_ids=paper_ids,
+        )
+    if scope.scope_type == "reader_paper":
+        return AgentScopeConfig(
+            scope_type="reader_paper",
+            paper_id=scope.paper_id,
+        )
+    return AgentScopeConfig(scope_type="whole_library")
+
+
+def _validate_scope(scope: AgentScopeConfig) -> None:
+    if scope.scope_type == "category" and scope.category_id is None:
+        raise HTTPException(status_code=400, detail="请选择分类范围")
+    if scope.scope_type == "papers":
+        if not scope.paper_ids:
+            raise HTTPException(status_code=400, detail="请选择至少一篇论文")
+        if len(scope.paper_ids) > MAX_SCOPE_PAPERS:
+            raise HTTPException(status_code=400, detail=f"指定论文范围最多支持 {MAX_SCOPE_PAPERS} 篇论文")
+    if scope.scope_type == "reader_paper" and scope.paper_id is None:
+        raise HTTPException(status_code=400, detail="当前阅读论文范围缺少论文上下文")
 
 
 # ── helpers ──────────────────────────────────────────────────
@@ -91,6 +130,7 @@ def _run_to_response(run: AgentRun, session: Session) -> AgentRunResponse:
         scope=AgentScopeConfig(
             scope_type=run.scope_type,
             category_id=scope_config.get("category_id"),
+            paper_id=scope_config.get("paper_id"),
             paper_ids=scope_config.get("paper_ids", []),
         ),
         model=run.model,
@@ -111,16 +151,19 @@ def create_agent_run(
     session: Session = Depends(get_session),
 ) -> AgentRunResponse:
     """Create a new Agent run with prompt and scope. Executes synchronously."""
+    normalized_scope = _normalize_scope(payload.scope)
+    _validate_scope(normalized_scope)
     runner = AgentRunnerService()
 
     scope_config = {
-        "category_id": payload.scope.category_id,
-        "paper_ids": payload.scope.paper_ids,
+        "category_id": normalized_scope.category_id,
+        "paper_id": normalized_scope.paper_id,
+        "paper_ids": normalized_scope.paper_ids,
     }
     run = runner.create_run(
         session,
         prompt=payload.prompt,
-        scope_type=payload.scope.scope_type,
+        scope_type=normalized_scope.scope_type,
         scope_config=scope_config,
         model=payload.model,
         chat_session_id=payload.chat_session_id,

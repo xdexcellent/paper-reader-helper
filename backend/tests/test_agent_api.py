@@ -91,6 +91,128 @@ def test_create_agent_run_with_valid_proposal(mocker, client):
     assert body["actions"][0]["action_type"] == "update_paper_metadata"
     assert body["actions"][0]["status"] == "proposed"
     assert body["actions"][0]["target_paper_id"] == 1
+    assert body["actions"][0]["after_values"] == {"favorite": True}
+
+
+def test_create_agent_run_strips_core_metadata_without_explicit_intent(mocker, client):
+    """F2: core bibliographic fields are dropped unless the prompt asks to correct them."""
+    mock_response = json.dumps({
+        "actions": [
+            {
+                "action_type": "update_paper_metadata",
+                "target_paper_id": 1,
+                "after_values": {"title": "新标题", "doi": "10.1/x", "favorite": True},
+                "rationale": "整理收藏",
+                "confidence": 0.9,
+                "risk_level": "low",
+            }
+        ]
+    }, ensure_ascii=False)
+    mocker.patch(
+        "app.services.agent_runner_service.DeepSeekClient.chat",
+        return_value=mock_response,
+    )
+
+    with Session(engine) as session:
+        _seed_paper(session, title="F2 Paper")
+
+    response = client.post(
+        "/agent/runs",
+        json={
+            "prompt": "把相关论文标记为收藏",
+            "scope": {"scope_type": "whole_library"},
+            "model": "gpt-5.4",
+        },
+    )
+
+    body = response.json()
+    assert response.status_code == 201
+    assert body["status"] == "completed"
+    assert len(body["actions"]) == 1
+    assert body["actions"][0]["after_values"] == {"favorite": True}
+    assert body["actions"][0]["risk_level"] == "low"
+
+
+def test_create_agent_run_allows_core_metadata_with_explicit_intent(mocker, client):
+    """F2: explicit correction intent keeps core metadata and marks it high risk."""
+    mock_response = json.dumps({
+        "actions": [
+            {
+                "action_type": "update_paper_metadata",
+                "target_paper_id": 1,
+                "after_values": {"title": "Corrected Title", "doi": "10.1/fixed"},
+                "rationale": "用户要求纠错",
+                "confidence": 0.95,
+                "risk_level": "high",
+            }
+        ]
+    }, ensure_ascii=False)
+    mocker.patch(
+        "app.services.agent_runner_service.DeepSeekClient.chat",
+        return_value=mock_response,
+    )
+
+    with Session(engine) as session:
+        _seed_paper(session, title="Broken Title")
+
+    response = client.post(
+        "/agent/runs",
+        json={
+            "prompt": "请纠错并补全这篇论文的标题和 DOI 元数据",
+            "scope": {"scope_type": "whole_library"},
+            "model": "gpt-5.4",
+        },
+    )
+
+    body = response.json()
+    assert response.status_code == 201
+    assert body["status"] == "completed"
+    assert len(body["actions"]) == 1
+    assert body["actions"][0]["after_values"] == {
+        "title": "Corrected Title",
+        "doi": "10.1/fixed",
+    }
+    assert body["actions"][0]["risk_level"] == "high"
+
+
+def test_create_agent_run_reader_paper_scope_roundtrip(mocker, client):
+    """Reader scope should round-trip paper_id through the API contract."""
+    mocker.patch(
+        "app.services.agent_runner_service.DeepSeekClient.chat",
+        return_value=json.dumps({"actions": []}, ensure_ascii=False),
+    )
+
+    with Session(engine) as session:
+        paper_id = _seed_paper(session, title="Reader Paper")
+
+    response = client.post(
+        "/agent/runs",
+        json={
+            "prompt": "总结当前阅读论文",
+            "scope": {"scope_type": "reader_paper", "paper_id": paper_id},
+            "model": "gpt-5.4",
+        },
+    )
+
+    body = response.json()
+    assert response.status_code == 201
+    assert body["scope"]["scope_type"] == "reader_paper"
+    assert body["scope"]["paper_id"] == paper_id
+
+
+def test_create_agent_run_requires_scope_target(client):
+    """Category/reader/papers scopes require explicit targets."""
+    response = client.post(
+        "/agent/runs",
+        json={
+            "prompt": "test",
+            "scope": {"scope_type": "reader_paper"},
+            "model": "gpt-5.4",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "当前阅读论文范围缺少论文上下文"
 
 
 def test_create_agent_run_model_failure(mocker, client):
@@ -318,6 +440,40 @@ def test_batch_approve_actions(mocker, client):
     result = batch_resp.json()
     assert result["applied"] == 2
     assert result["failed"] == 0
+
+
+def test_batch_approve_rejects_high_risk_actions(mocker, client):
+    """High-risk actions must not be batch approved."""
+    mock_response = json.dumps({
+        "actions": [
+            {"action_type": "update_tags", "target_paper_id": 1,
+             "after_values": {"tags": ["llm"]}, "rationale": "标签", "confidence": 0.9, "risk_level": "low"},
+            {"action_type": "create_category",
+             "after_values": {"name": "New Cat"}, "rationale": "创建分类", "confidence": 0.9, "risk_level": "high"},
+        ]
+    }, ensure_ascii=False)
+    mocker.patch(
+        "app.services.agent_runner_service.DeepSeekClient.chat",
+        return_value=mock_response,
+    )
+
+    with Session(engine) as session:
+        _seed_paper(session, title="Batch Risk")
+
+    create_resp = client.post("/agent/runs", json={
+        "prompt": "帮我整理论文标签和分类",
+        "scope": {"scope_type": "whole_library"},
+        "model": "gpt-5.4",
+    })
+    run_data = create_resp.json()
+    run_id = run_data["id"]
+    action_ids = [a["id"] for a in run_data["actions"]]
+
+    batch_resp = client.post(f"/agent/runs/{run_id}/approve-batch", json={"action_ids": action_ids})
+    assert batch_resp.status_code == 200
+    result = batch_resp.json()
+    assert result["applied"] == 1
+    assert result["rejected"] == 1
 
 
 # ── revert action ─────────────────────────────────────────────

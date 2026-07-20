@@ -306,22 +306,57 @@ class AgentToolRegistry:
             logger.exception("agent_tool_registry.get_paper_translations failed")
             return self._err(str(exc))
 
-    def semantic_search(self, session: Session, query: str, top_k: int = 10) -> dict:
-        """Semantic vector search across papers, bounded results with similarity scores."""
+    def semantic_search(
+        self,
+        session: Session,
+        query: str,
+        top_k: int = 10,
+        scope_type: str = "whole_library",
+        scope_config: dict | None = None,
+    ) -> dict:
+        """Semantic vector search across papers, bounded results with scope filtering."""
         try:
             if not query.strip():
                 return self._err("查询文本不能为空")
 
+            scope_config = scope_config or {}
+
             try:
                 query_vec = EmbeddingService.encode(query)
             except EmbeddingUnavailableError:
-                return self._err("Embedding 功能不可用：sentence-transformers 未安装。桌面版默认不包含此依赖，如需启用请安装后重启应用。")
+                return self._ok({
+                    "results": [],
+                    "degraded": True,
+                    "reason": "Embedding 功能不可用：sentence-transformers 未安装，已回退为非语义分析。",
+                })
             except Exception as e:
-                return self._err(f"Embedding模型不可用: {e}")
+                logger.warning("Agent semantic search degraded because embedding encode failed: %s", e)
+                return self._ok({
+                    "results": [],
+                    "degraded": True,
+                    "reason": "Embedding 模型不可用，已回退为非语义分析。",
+                })
 
             embeddings = list(session.exec(select(PaperEmbedding)).all())
+            allowed_paper_ids: set[int] | None = None
+            if scope_type == "category" and scope_config.get("category_id"):
+                allowed_paper_ids = set(session.exec(
+                    select(Paper.id).where(Paper.primary_category_id == scope_config["category_id"])
+                ).all())
+            elif scope_type == "papers" and scope_config.get("paper_ids"):
+                allowed_paper_ids = set(scope_config["paper_ids"])
+            elif scope_type == "reader_paper" and scope_config.get("paper_id"):
+                allowed_paper_ids = {scope_config["paper_id"]}
+
+            if allowed_paper_ids is not None:
+                embeddings = [embedding for embedding in embeddings if embedding.paper_id in allowed_paper_ids]
+
             if not embeddings:
-                return self._ok({"results": []})
+                return self._ok({
+                    "results": [],
+                    "degraded": True,
+                    "reason": "当前范围没有可用的向量数据，已回退为非语义分析。",
+                })
 
             def cosine_sim(a: list[float], b: list[float]) -> float:
                 dot = sum(x * y for x, y in zip(a, b))
@@ -354,7 +389,18 @@ class AgentToolRegistry:
                     "similarity": round(sim, 4),
                 })
 
-            return self._ok({"results": results})
+            if not results:
+                return self._ok({
+                    "results": [],
+                    "degraded": True,
+                    "reason": "语义检索未命中结果，已回退为非语义分析。",
+                })
+
+            return self._ok({
+                "results": results,
+                "degraded": False,
+                "reason": "",
+            })
         except Exception as exc:
             logger.exception("agent_tool_registry.semantic_search failed")
             return self._err(str(exc))

@@ -27,6 +27,7 @@ type ReaderShellProps = {
   readingStatusLabel: string
   readingProgress: number
   autoSaved: boolean
+  onOpenAgent: () => void
   onBack: () => void
   onBlockFiltersChange: (filters: ReaderBlockFilters) => void
   onBlockForceRefreshTranslation?: (block: PaperBlock) => void
@@ -61,6 +62,7 @@ export function ReaderShell({
   readingStatusLabel,
   readingProgress,
   autoSaved,
+  onOpenAgent,
   onBack,
   onBlockFiltersChange,
   onBlockForceRefreshTranslation,
@@ -97,6 +99,7 @@ export function ReaderShell({
       <ReaderToolbar
         autoSaved={autoSaved}
         mode={mode}
+        onOpenAgent={onOpenAgent}
         onBack={onBack}
         onModeChange={onModeChange}
         paper={paper}

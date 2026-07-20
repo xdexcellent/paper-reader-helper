@@ -22,6 +22,7 @@ export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibra
   const { paperId } = useParams()
   const navigate = useNavigate()
   const [selectedPaperId, setSelectedPaperId] = useState<number | null>(paperId ? Number(paperId) : null)
+  const [selectedPaperIds, setSelectedPaperIds] = useState<number[]>([])
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
   const [detail, setDetail] = useState<PaperDetail | null>(null)
   const [isLoadingDetail, setIsLoadingDetail] = useState(false)
@@ -115,6 +116,24 @@ export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibra
     setSelectedPaperId(paper.id)
     setDetail(null)
     navigate(`/paper/${paper.id}`)
+  }
+
+  function handleTogglePaperSelection(paper: Paper) {
+    setSelectedPaperIds((current) => {
+      if (current.includes(paper.id)) {
+        return current.filter((id) => id !== paper.id)
+      }
+      if (current.length >= 50) {
+        setErrorMessage('指定论文范围最多支持 50 篇论文，请缩小范围。')
+        return current
+      }
+      return [...current, paper.id]
+    })
+  }
+
+  function handleOpenAgentForSelected() {
+    if (selectedPaperIds.length === 0) return
+    navigate(`/agent?scope=papers&paper_ids=${selectedPaperIds.join(',')}`)
   }
 
   async function handleImport(payload: ImportConfirmPayload): Promise<boolean> {
@@ -265,9 +284,14 @@ export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibra
         onReadingStatusFilterChange={setReadingStatusFilter}
         onTagChange={setActiveTag}
         onSelectPaper={handleSelect}
+        onTogglePaperSelection={handleTogglePaperSelection}
+        onClearPaperSelection={() => setSelectedPaperIds([])}
+        onOpenAgentForSelected={handleOpenAgentForSelected}
+        selectedPaperIds={selectedPaperIds}
         onDeletePaper={async (paper) => {
           await deletePaper(paper.id)
           if (selectedPaperId === paper.id) clearSelection()
+          setSelectedPaperIds((current) => current.filter((id) => id !== paper.id))
           await refreshLibrary()
         }}
         onModelChange={setSelectedModel}

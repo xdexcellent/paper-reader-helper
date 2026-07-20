@@ -1,6 +1,8 @@
-import type { AgentScopeConfig } from '../../types'
+import type { AgentScopeConfig, Category } from '../../types'
+import { normalizeAgentScope } from './agentUtils'
 
 interface Props {
+  categories?: Category[]
   scope: AgentScopeConfig
   onChange: (scope: AgentScopeConfig) => void
 }
@@ -12,7 +14,9 @@ const SCOPE_OPTIONS: { value: AgentScopeConfig['scope_type']; label: string }[] 
   { value: 'reader_paper', label: '当前阅读论文' },
 ]
 
-export function AgentScopePicker({ scope, onChange }: Props) {
+export function AgentScopePicker({ categories = [], scope, onChange }: Props) {
+  const sortedCategories = [...categories].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+
   return (
     <div className="agent-scope-picker">
       <label htmlFor="agent-scope-type" style={{ fontWeight: 600, fontSize: '0.85rem' }}>
@@ -23,7 +27,7 @@ export function AgentScopePicker({ scope, onChange }: Props) {
         value={scope.scope_type}
         onChange={(e) => {
           const scopeType = e.target.value as AgentScopeConfig['scope_type']
-          onChange({ ...scope, scope_type: scopeType })
+          onChange(normalizeAgentScope({ ...scope, scope_type: scopeType }))
         }}
         aria-label="选择 Agent 操作范围"
       >
@@ -34,19 +38,24 @@ export function AgentScopePicker({ scope, onChange }: Props) {
         ))}
       </select>
       {scope.scope_type === 'category' && (
-        <input
-          type="number"
+        <select
           value={scope.category_id ?? ''}
           onChange={(e) =>
-            onChange({
+            onChange(normalizeAgentScope({
               ...scope,
               category_id: e.target.value ? Number(e.target.value) : null,
-            })
+            }))
           }
-          placeholder="分类 ID"
-          aria-label="分类 ID"
-          style={{ width: 80, padding: '0.25rem 0.5rem' }}
-        />
+          aria-label="分类"
+          style={{ minWidth: 180, padding: '0.25rem 0.5rem' }}
+        >
+          <option value="">选择分类</option>
+          {sortedCategories.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
+          ))}
+        </select>
       )}
     </div>
   )
