@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
-import { FileText } from 'lucide-react'
+import { FileText, LifeBuoy } from 'lucide-react'
 import { effectiveRank, type Paper, type ReadingStatus } from '../../types'
 import { isMetadataOnlyPaper, isPaperRescueEligible, sourcePdfStatusLabel, spisStatusLabel } from '../../lib/spisRescue'
 import { RankBadge } from '../RankBadge'
@@ -28,7 +28,10 @@ type PaperLibraryListProps = {
   onTagChange: (tag: string | null) => void
   onSelect: (paper: Paper) => void
   onToggleSelection: (paper: Paper) => void
+  onToggleSelectAllFiltered: (papers: Paper[]) => void
   onClearSelection: () => void
+  onDeleteSelected: () => void | Promise<void>
+  isDeletingSelected?: boolean
   onOpenAgentForSelected: () => void
   onDelete: (paper: Paper) => void | Promise<void>
   onSpisRescue?: (paper: Paper) => void | Promise<void>
@@ -101,7 +104,10 @@ export function PaperLibraryList({
   onTagChange,
   onSelect,
   onToggleSelection,
+  onToggleSelectAllFiltered,
   onClearSelection,
+  onDeleteSelected,
+  isDeletingSelected = false,
   onOpenAgentForSelected,
   onDelete,
   onSpisRescue,
@@ -123,6 +129,8 @@ export function PaperLibraryList({
     readingStatusFilter,
     activeTag,
   })
+  const allFilteredSelected =
+    visiblePapers.length > 0 && visiblePapers.every((paper) => selectedPaperIds.includes(paper.id))
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -201,17 +209,37 @@ export function PaperLibraryList({
           </label>
         </div>
 
-        {selectedPaperIds.length > 0 && (
-          <div className="library-filter-row" aria-label="已选论文操作">
-            <span className="paper-selection-summary">已选 {selectedPaperIds.length} 篇论文</span>
-            <button type="button" className="btn btn-secondary" onClick={onClearSelection}>
-              清空选择
+        <div className="library-selection-bar" aria-label="已选论文操作">
+          <span className="paper-selection-summary">已选 {selectedPaperIds.length} 篇</span>
+          <span className="library-selection-actions">
+            <button
+              type="button"
+              className="btn btn-ghost-sm"
+              disabled={isLoading || visiblePapers.length === 0}
+              onClick={() => onToggleSelectAllFiltered(visiblePapers)}
+            >
+              {allFilteredSelected ? '取消全选' : '全选筛选结果'}
             </button>
-            <button type="button" className="btn btn-primary" onClick={onOpenAgentForSelected}>
-              发送到文库 Agent
-            </button>
-          </div>
-        )}
+            {selectedPaperIds.length > 0 && (
+              <>
+                <button type="button" className="btn btn-ghost-sm" onClick={onClearSelection}>
+                  清空选择
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost-sm danger"
+                  disabled={isDeletingSelected}
+                  onClick={() => void onDeleteSelected()}
+                >
+                  {isDeletingSelected ? '删除中...' : '批量删除'}
+                </button>
+                <button type="button" className="btn btn-primary btn-primary-sm" onClick={onOpenAgentForSelected}>
+                  发送到文库 Agent
+                </button>
+              </>
+            )}
+          </span>
+        </div>
       </div>
 
       {tags.length > 0 && (
@@ -359,14 +387,17 @@ export function PaperLibraryList({
                   {onSpisRescue && isPaperRescueEligible(paper) ? (
                     <button
                       type="button"
-                      className="btn btn-secondary"
+                      className="paper-rescue-btn"
                       disabled={isRunningSpisRescue}
+                      title="SPIS 补救：尝试补全该论文的 PDF 与解析内容"
+                      aria-label={`SPIS 补救 ${paper.title}`}
                       onClick={(event) => {
                         event.stopPropagation()
                         void onSpisRescue(paper)
                       }}
                     >
-                      {isRunningSpisRescue && selectedPaperId === paper.id ? '提交中...' : 'SPIS 补救'}
+                      <LifeBuoy size={13} strokeWidth={2} />
+                      {isRunningSpisRescue && selectedPaperId === paper.id ? '补救中' : 'SPIS 补救'}
                     </button>
                   ) : null}
                   <button

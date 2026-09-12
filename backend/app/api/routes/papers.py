@@ -625,11 +625,13 @@ def translate_abstract(
         raise HTTPException(status_code=500, detail=f"翻译失败: {str(exc)}") from exc
 
 
-@router.delete("/{paper_id}")
-def delete_paper(paper_id: int, session: Session = Depends(get_session)) -> dict:
-    paper = session.get(Paper, paper_id)
-    if paper is None:
-        raise HTTPException(status_code=404, detail="论文不存在")
+class BulkDeleteRequest(BaseModel):
+    paper_ids: list[int]
+
+
+def _delete_paper_record(session: Session, paper: Paper) -> None:
+    """删除单篇论文及其关联数据（不 commit，由调用方统一提交）。"""
+    paper_id = paper.id
 
     chat_sessions = list(session.exec(select(ChatSession).where(ChatSession.paper_id == paper_id)).all())
     for cs in chat_sessions:
@@ -664,8 +666,36 @@ def delete_paper(paper_id: int, session: Session = Depends(get_session)) -> dict
             shutil.rmtree(storage_path.parent, ignore_errors=True)
 
     session.delete(paper)
+
+
+@router.delete("/{paper_id}")
+def delete_paper(paper_id: int, session: Session = Depends(get_session)) -> dict:
+    paper = session.get(Paper, paper_id)
+    if paper is None:
+        raise HTTPException(status_code=404, detail="论文不存在")
+
+    _delete_paper_record(session, paper)
     session.commit()
     return {"success": True}
+
+
+@router.post("/bulk-delete")
+def bulk_delete_papers(payload: BulkDeleteRequest, session: Session = Depends(get_session)) -> dict:
+    if not payload.paper_ids:
+        raise HTTPException(status_code=400, detail="paper_ids 不能为空")
+
+    deleted_ids: list[int] = []
+    missing_ids: list[int] = []
+    for paper_id in payload.paper_ids:
+        paper = session.get(Paper, paper_id)
+        if paper is None:
+            missing_ids.append(paper_id)
+            continue
+        _delete_paper_record(session, paper)
+        deleted_ids.append(paper_id)
+
+    session.commit()
+    return {"success": True, "deleted": deleted_ids, "missing": missing_ids}
 
 
 @router.get("/search", response_model=list[PaperResponse])

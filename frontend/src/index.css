@@ -2960,10 +2960,58 @@ textarea {
 
 .library-grid {
   display: grid;
-  grid-template-columns: minmax(300px, 390px) minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: minmax(280px, var(--library-list-width, 390px)) 6px minmax(0, 1fr);
+  gap: 10px;
   min-height: 0;
   overflow: hidden;
+}
+
+.library-resizer {
+  width: 6px;
+  border-radius: 999px;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  background: transparent;
+  touch-action: none;
+  transition: background 0.15s ease;
+}
+
+.library-resizer::after {
+  content: "";
+  width: 3px;
+  height: 44px;
+  border-radius: 999px;
+  background: var(--border-subtle, #d4d4d8);
+  transition: background 0.15s ease, height 0.15s ease;
+}
+
+.library-resizer:hover,
+.library-resizer:focus-visible {
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.library-resizer.is-dragging {
+  background: rgba(37, 99, 235, 0.22);
+}
+
+.library-resizer:hover::after,
+.library-resizer:focus-visible::after,
+.library-resizer.is-dragging::after {
+  background: #2563eb;
+  height: 64px;
+}
+
+.library-resizer:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+body.library-resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .paper-library-list,
@@ -3646,6 +3694,10 @@ textarea {
   .library-grid {
     grid-template-columns: minmax(0, 1fr);
     overflow: auto;
+  }
+
+  .library-resizer {
+    display: none;
   }
 
   .library-sidebar {
@@ -4562,6 +4614,94 @@ textarea {
   color: var(--text-secondary, #334155);
   font-size: 0.82rem;
   font-weight: 600;
+}
+
+/* 已选论文操作栏 — 紧凑分组，弱化按钮存在感 */
+.library-selection-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle, #E2E8F0);
+  border-radius: 10px;
+  background: rgba(37, 99, 235, 0.03);
+}
+
+.library-selection-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.library-selection-bar .btn {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 8px;
+}
+
+.library-selection-bar .btn-primary-sm {
+  height: 30px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.library-selection-bar .btn-ghost-sm {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary, #475569);
+}
+
+.library-selection-bar .btn-ghost-sm:hover:not(:disabled) {
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--accent-blue, #2563eb);
+}
+
+.library-selection-bar .btn-ghost-sm.danger {
+  color: #DC2626;
+}
+
+.library-selection-bar .btn-ghost-sm.danger:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.08);
+  color: #B91C1C;
+}
+
+.library-selection-bar .btn-ghost-sm.danger:disabled {
+  opacity: 0.6;
+}
+
+/* 列表行内的 SPIS 补救按钮 — 小型淡雅样式 */
+.paper-rescue-btn {
+  flex: 0 0 auto;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle, #E2E8F0);
+  border-radius: 999px;
+  background: #FFFFFF;
+  color: var(--text-secondary, #64748B);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.paper-rescue-btn:hover:not(:disabled) {
+  border-color: rgba(37, 99, 235, 0.4);
+  background: rgba(37, 99, 235, 0.06);
+  color: var(--accent-blue, #2563eb);
+}
+
+.paper-rescue-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .paper-selection-toggle {

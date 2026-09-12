@@ -265,6 +265,18 @@ export async function deletePaper(id: number): Promise<void> {
   await ensureOk(response, '删除失败')
 }
 
+export async function bulkDeletePapers(ids: number[]): Promise<{ deleted: number[]; missing: number[] }> {
+  const response = await fetch(`${API_BASE}/papers/bulk-delete`, {
+    method: 'POST',
+    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paper_ids: ids }),
+  })
+  if (!response.ok) {
+    await ensureOk(response, '批量删除失败')
+  }
+  return readJson<{ success: boolean; deleted: number[]; missing: number[] }>(response)
+}
+
 export async function searchPapers(params: { q?: string; status?: string; source?: string }): Promise<Paper[]> {
   const searchParams = new URLSearchParams()
   if (params.q) searchParams.append('q', params.q)

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
-import { createCategory, deletePaper, embedPaper, fetchPaperDetail, parsePaper, requestSpisRescue, summarizePaper, updatePaperCategory, updatePaperTags, uploadPaper, waitForTaskCompletion } from '../../lib/api'
+import { bulkDeletePapers, createCategory, deletePaper, embedPaper, fetchPaperDetail, parsePaper, requestSpisRescue, summarizePaper, updatePaperCategory, updatePaperTags, uploadPaper, waitForTaskCompletion } from '../../lib/api'
 import { SYSTEM_DEFAULT_MODEL_VALUE, useAiModelOptions } from '../../lib/aiModels'
 import type { Category, Paper, PaperDetail } from '../../types'
 import { runBulkPaperAction } from './libraryBulkActions'
@@ -135,6 +135,56 @@ export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibra
   function handleOpenAgentForSelected() {
     if (selectedPaperIds.length === 0) return
     navigate(`/agent?scope=papers&paper_ids=${selectedPaperIds.join(',')}`)
+  }
+
+  const [isDeletingSelected, setIsDeletingSelected] = useState(false)
+
+  async function handleBatchDeleteSelected() {
+    if (selectedPaperIds.length === 0 || isDeletingSelected) return
+    if (!window.confirm(`确定要删除选中的 ${selectedPaperIds.length} 篇论文吗？该操作不可恢复。`)) return
+    setIsDeletingSelected(true)
+    setErrorMessage('')
+    try {
+      const result = await bulkDeletePapers(selectedPaperIds)
+      setSelectedPaperId((current) => (current !== null && result.deleted.includes(current) ? null : current))
+      setSelectedPaperIds([])
+      if (detail && result.deleted.includes(detail.id)) {
+        setDetail(null)
+      }
+      await refreshLibrary()
+      const missingCount = result.missing.length
+      setFeedbackMessage(
+        missingCount > 0
+          ? `已删除 ${result.deleted.length} 篇论文，${missingCount} 篇不存在或已被删除。`
+          : `已删除 ${result.deleted.length} 篇论文。`,
+      )
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '批量删除失败')
+    } finally {
+      setIsDeletingSelected(false)
+    }
+  }
+
+  const MAX_AGENT_SELECTION = 50
+
+  function handleToggleSelectAllFiltered(filteredPapers: Paper[]) {
+    const ids = filteredPapers.map((paper) => paper.id)
+    const allSelected = ids.length > 0 && ids.every((id) => selectedPaperIds.includes(id))
+    if (allSelected) {
+      setErrorMessage('')
+      setSelectedPaperIds((current) => current.filter((id) => !ids.includes(id)))
+      return
+    }
+    const merged = [...ids, ...selectedPaperIds.filter((id) => !ids.includes(id))]
+    if (merged.length > MAX_AGENT_SELECTION) {
+      setSelectedPaperIds(merged.slice(0, MAX_AGENT_SELECTION))
+      setErrorMessage(
+        `最多支持选择 ${MAX_AGENT_SELECTION} 篇论文，已仅选中筛选结果中的前 ${MAX_AGENT_SELECTION} 篇。`,
+      )
+      return
+    }
+    setErrorMessage('')
+    setSelectedPaperIds(merged)
   }
 
   async function handleImport(payload: ImportConfirmPayload): Promise<boolean> {
@@ -315,7 +365,10 @@ export function LibraryPage({ papers, categories, isLoadingLibrary, refreshLibra
         onTagChange={setActiveTag}
         onSelectPaper={handleSelect}
         onTogglePaperSelection={handleTogglePaperSelection}
+        onToggleSelectAllFiltered={handleToggleSelectAllFiltered}
         onClearPaperSelection={() => setSelectedPaperIds([])}
+        onDeleteSelectedPapers={handleBatchDeleteSelected}
+        isDeletingSelectedPapers={isDeletingSelected}
         onOpenAgentForSelected={handleOpenAgentForSelected}
         selectedPaperIds={selectedPaperIds}
         onDeletePaper={async (paper) => {

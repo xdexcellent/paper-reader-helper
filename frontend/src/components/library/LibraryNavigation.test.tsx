@@ -179,6 +179,8 @@ describe('library navigation components', () => {
         statusFilter="ready"
         selectedPaperIds={[]}
         onToggleSelection={vi.fn()}
+        onToggleSelectAllFiltered={vi.fn()}
+        onDeleteSelected={vi.fn()}
         onClearSelection={vi.fn()}
         onOpenAgentForSelected={vi.fn()}
       />,
@@ -224,6 +226,8 @@ describe('library navigation components', () => {
         statusFilter="all"
         selectedPaperIds={[]}
         onToggleSelection={vi.fn()}
+        onToggleSelectAllFiltered={vi.fn()}
+        onDeleteSelected={vi.fn()}
         onClearSelection={vi.fn()}
         onOpenAgentForSelected={vi.fn()}
       />,
@@ -253,6 +257,8 @@ describe('library navigation components', () => {
         statusFilter="all"
         selectedPaperIds={[]}
         onToggleSelection={vi.fn()}
+        onToggleSelectAllFiltered={vi.fn()}
+        onDeleteSelected={vi.fn()}
         onClearSelection={vi.fn()}
         onOpenAgentForSelected={vi.fn()}
       />,
@@ -280,6 +286,8 @@ describe('library navigation components', () => {
         statusFilter="all"
         selectedPaperIds={[]}
         onToggleSelection={vi.fn()}
+        onToggleSelectAllFiltered={vi.fn()}
+        onDeleteSelected={vi.fn()}
         onClearSelection={vi.fn()}
         onOpenAgentForSelected={vi.fn()}
       />,
